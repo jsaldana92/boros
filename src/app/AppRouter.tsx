@@ -4,6 +4,7 @@ import { AppShell } from '../components/layout/AppShell'
 import { PlaceholderPage } from '../components/layout/PlaceholderPage'
 import { SettingsPage } from '../features/profiles/SettingsPage'
 import { CreatePage } from '../features/create/CreatePage'
+import { TrainPage } from '../features/train/TrainPage'
 import { pages } from './pages'
 import { useWorkspace } from './workspace-context'
 import { WorkspaceProvider } from './WorkspaceProvider'
@@ -32,7 +33,8 @@ export function AppRouter({ initialScreen }: { initialScreen: Screen }) {
     <Route element={<AppShell />}>
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/create" element={<CreatePage />} />
-      {pages.filter((page) => !['/settings', '/create'].includes(page.path)).map((page) => <Route key={page.path} path={page.path} element={<PlaceholderPage page={page} />} />)}
+      <Route path="/train" element={<TrainPage />} />
+      {pages.filter((page) => !['/settings', '/create', '/train'].includes(page.path)).map((page) => <Route key={page.path} path={page.path} element={<PlaceholderPage page={page} />} />)}
       <Route path="*" element={<Navigate to="/train" replace />} />
     </Route>
   </Routes></NavigationProvider></WorkspaceProvider></MemoryRouter>

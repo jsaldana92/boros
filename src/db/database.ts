@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie'
 import type { Measurement, PhotoAsset, Profile, WorkspaceSettings } from '../schemas/profile.ts'
 import type { Plan } from '../schemas/plan.ts'
 import type { Exercise, Tag } from '../schemas/exercise.ts'
+import type { CompletedSession, RestTimer, SessionDraft } from '../schemas/session.ts'
 
 export class BorosDatabase extends Dexie {
   profiles!: Table<Profile, string>
@@ -11,6 +12,9 @@ export class BorosDatabase extends Dexie {
   exercises!: Table<Exercise, [string, string]>
   tags!: Table<Tag, [string, string]>
   plans!: Table<Plan, [string, string]>
+  drafts!: Table<SessionDraft, [string, string]>
+  sessions!: Table<CompletedSession, [string, string]>
+  restTimers!: Table<RestTimer, string>
 
   constructor(name = 'boros') {
     super(name)
@@ -29,6 +33,11 @@ export class BorosDatabase extends Dexie {
     })
     // Additive v3: prescriptions live inside one atomically saved plan record.
     this.version(3).stores({ plans: '[profileId+id], profileId, &[profileId+activeNameKey]' })
+    this.version(4).stores({
+      drafts: '[profileId+id], profileId, &[profileId+activeSourceKey]',
+      sessions: '[profileId+id], profileId, &[profileId+draftId]',
+      restTimers: 'id, profileId',
+    })
   }
 }
 

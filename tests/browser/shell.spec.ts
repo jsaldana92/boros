@@ -17,7 +17,7 @@ test('navigation, remembered refresh, unchanged address, and runtime errors', as
     await expect(page).toHaveURL(address)
     await expect(link).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    if (!['settings', 'create'].includes(path)) await expect(page.getByText('Not available yet', { exact: true })).toBeVisible()
+    if (!['settings', 'create', 'train'].includes(path)) await expect(page.getByText('Not available yet', { exact: true })).toBeVisible()
     await page.reload()
     await expect(link).toHaveAttribute('aria-current', 'page')
     await expect(page).toHaveTitle(`${label} | Boros`)

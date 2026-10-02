@@ -31,14 +31,14 @@ export function profileService(database: BorosDatabase) {
   return {
     async initialize() {
       await database.open()
-      return database.transaction('rw', [...tables, database.exercises, database.tags, database.plans], async () => {
+      return database.transaction('rw', database.tables, async () => {
         const settings = await database.settings.get('workspace')
         if (settings) {
           workspaceSettingsSchema.parse(settings)
           await getProfile(settings.activeProfileId)
           return settings
         }
-        if (await database.profiles.count() || await database.measurements.count() || await database.photos.count() || await database.exercises.count() || await database.tags.count() || await database.plans.count()) {
+        if ((await Promise.all(database.tables.map((table) => table.count()))).some(Boolean)) {
           throw new Error('Workspace settings are missing but records exist. No data was replaced. Keep this browser data and seek recovery assistance.')
         }
         const now = new Date().toISOString()

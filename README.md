@@ -1,8 +1,8 @@
 # Boros
 
-A React / TypeScript / Vite workout tracker. Phases 1-4 provide a themed shell with single-address navigation,
+A React / TypeScript / Vite workout tracker. Phases 1-5 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, manual plans, and validated external AI paste imports. Training sessions and backup tools are not implemented yet. See TODO.md for
+Create Workout, manual plans, validated external AI paste imports, training drafts/timers, and saved-session review. Calendar scheduling, progress screens, and backup tools are not implemented yet. See TODO.md for
 the authoritative plan and verification record.
 
 ## Local development
@@ -54,8 +54,9 @@ navigation are centralized in `src/app/`; feature screens do not construct URLs.
 The last successfully opened screen is stored as one allowlisted screen ID in
 `sessionStorage` (`boros.navigation.screen`). Refresh in the same tab restores
 that screen. Missing, invalid, or inaccessible storage falls back to Train.
-This preference contains no records or form input: unsaved editors are not
-recovered on refresh. Existing discard confirmations and browser-unload warnings
+This preference contains no records or form input: unsaved Create/Settings editors are not
+recovered on refresh. Successfully saved training drafts are recovered separately
+from IndexedDB using Resume in Train. Existing discard confirmations and browser-unload warnings
 remain in place. Canceling navigation preserves the current screen and preference.
 
 Internal navigation adds no browser history entries. Browser Back/Forward moves
@@ -83,7 +84,7 @@ not transfer data between origins.
 
 ## Local persistence and migrations
 
-`src/db/database.ts` defines IndexedDB database `boros`, schema version 3 (additive plan store; v1/v2 records retained).
+`src/db/database.ts` defines IndexedDB database `boros`, schema version 4 (additive drafts, sessions, and restTimers stores; all v1-v3 records retained).
 Profiles use UUIDs and unique normalized names (NFKC, trimmed/collapsed
 whitespace, lowercase). Photos and measurements use `[profileId, id]` keys.
 Plans retain this same owner boundary; future schedules and sessions must also retain it. Profile photos are JPEG/PNG/WebP blobs, capped at 5 MB and 4096px
@@ -196,7 +197,7 @@ checks for orphaned plan records before creating Guest. Schema extensions follow
 All editing stays at the same public address. Unsaved-change confirmations and
 native browser-unload warnings apply to the plan and its nested prescription
 editor. Drafts are held in memory, not recovered after refresh. No scheduling,
-training/timers, progress, or backup workflow is provided by this phase.
+progress or backup workflow is provided by the manual plan builder. Training is described below.
 
 ## External AI formatting and paste import
 
@@ -216,7 +217,7 @@ extraction or numeric type coercion. Pasted HTML/code is inert plain text; tutor
 URLs are never automatically fetched or embedded.
 
 The public v1 contract in `src/schemas/interchange.ts` is separate from database
-schema v3. Its fully populated shape is:
+schema v4. Its fully populated shape is:
 
 ```ts
 type Range = { min: number; max: number }
@@ -282,3 +283,107 @@ progress feature is introduced by the import workflow. Automated tests use only
 isolated databases/contexts. Physical-device keyboards, Safari/Firefox, screen
 readers, actual clipboard permissions on those devices, live Ko-fi, real storage
 exhaustion, and large-data performance still need the checks recorded in TODO.md.
+
+## Training, persistent drafts, and session history
+
+Train lists the active profile's saved active plans and unfinished sessions.
+Choose a plan/day and Start session, or Resume an unfinished session. Starting
+the same day reuses its unfinished draft, including across tabs. After completion,
+starting another session is a deliberate action. Archived/changed source plans
+do not prevent resuming an existing draft from the unfinished list.
+
+Each start copies the complete training-day prescription: names, order, set
+targets, rest, instructions, tutorial, tags, notes, and source references. Later
+source edits/archiving cannot rewrite drafts or completed logs. Drafts/sessions
+use stable profile-owned IDs and revisions. Database v4 adds only `drafts`,
+`sessions`, and `restTimers`; the populated v3 migration test checks every prior
+store and photo bytes. Initialization also checks these stores before creating
+Guest, so orphaned records never cause silent replacement.
+
+Set rows show their own reps/RIR targets, actual load/repetitions, and optional
+actual RIR. Zero is an explicit result; blanks remain missing. Load accepts
+nonnegative decimal numbers; actual repetitions/RIR require nonnegative whole
+numbers, bounded by safe numeric representation. Partial/invalid input can be
+retained in a draft with field errors, but cannot become completed results.
+Either correct an incompatible partly entered set or explicitly mark it skipped.
+No results are fabricated. Session and exercise Note icons open editable dialogs;
+Apply places the note in the autosaved draft. The information icon shows plain-text
+instructions and an optional validated external tutorial link. There are no inline
+instructions/tag chips or unit selectors in Train.
+
+Weight units belong in Settings. A draft keeps each load's original input/unit;
+display conversion uses the canonical kg value and shows up to six decimal places.
+Changing the preferred display unit alone never rewrites the stored measurement.
+Editing a load records that new value in the current preferred unit. Completed
+sets store both canonical kilograms and the explicitly recorded load/unit, and
+history displays the recording unit even if Settings later changes. Different sets
+may have different recording units without changing their meaning.
+
+### Autosave and concurrent tabs
+
+Results and applied notes autosave after **400 ms without further edits**, plus
+the database write time. Wait for **Draft saved locally** before relying on
+recovery. Pending, saving, and failed feedback are distinct; failures keep current
+input and offer Retry draft save. Unapplied note text stays in its dialog and is
+protected by discard/unload prompts, but is not persisted until Apply and a
+successful autosave. Abrupt termination can lose input inside this window.
+
+The draft controller in `src/features/train/draft-controller.ts` serializes
+autosaves, Save, Clear, and timer actions for one immutable profile/draft identity.
+Save incorporates the latest current input even before debounce expires. Clear
+waits for already queued work and resets the current draft; old autosaves cannot
+recreate cleared values. Navigation with unpersisted input requires confirmation.
+Confirmed departure cancels scheduled work; a transaction already in flight may
+finish, always for its original owner/draft. No delayed write can follow the
+currently selected profile into a different workspace.
+
+Every result update/Clear compares the draft revision inside its write transaction.
+Stale tabs keep their input and report the conflict. Copy any needed edits, choose
+Reload saved draft, and confirm to discard local edits and load the latest version.
+The app never merges stale results automatically. Completed drafts reject further
+updates, Clear, or new timers. Services live in `src/db/sessions.ts`; transaction
+success means the write committed, following [Dexie's transaction semantics](https://dexie.org/docs/Dexie/Dexie.transaction()).
+
+### Rest timers
+
+REST controls occur between consecutive sets and after an exercise's final set
+before the next exercise. Each uses its own prescribed duration in seconds.
+Missing rest offers manual duration entry; explicit zero is labeled no timed rest.
+One active timer exists per local database, with an owning profile/draft, unique
+token, configured duration, and UTC end timestamp. Starting another timer replaces
+it. Switching profiles hides another profile's timer; stop/reset require its owner
+and current token. Returning to the owning draft restores the timer.
+
+Remaining seconds are calculated from the end timestamp, refreshed on display ticks
+and visibility changes. Backgrounding/reload does not extend the duration. Stop,
+reset, Clear, and completion are persisted. An expired timer displays Rest finished
+until stopped, reset, or replaced. This is an on-screen timer, not a background
+alarm/notification service; changing the device clock can affect the countdown.
+
+### Completion, partial sessions, and Clear
+
+Save and Clear sit together above bottom navigation. Save requires at least one
+valid recorded set. If any sets are blank or explicitly skipped, a confirmation
+reports recorded/omitted counts; accepting records the omitted sets as skipped
+and marks the session Partial. Cancel keeps input. Incompatible partially entered
+sets must first be corrected or explicitly skipped.
+
+The complete snapshot/results/notes and draft finalization commit in one transaction,
+which also clears that draft's timer. The draft ID is the completion identity:
+double clicks, retries after uncertain success, and competing tabs return one saved
+log. Success appears only after commit. `startedAt` records session start,
+`completedAt` captures the confirmed Save action, and `loggedAt` records the log
+write time, all UTC. These sessions have no calendar occurrence association yet.
+
+Clear confirms its exact scope: reset only the open draft's results, session/exercise
+notes, and timer while retaining its prescription. It does not delete logs, plans,
+library exercises, or another draft. A failed Clear rolls back completely and keeps
+recoverable input. Saved sessions are read-only: Train's history shows snapshot
+targets, actual recorded units/results, skipped sets, notes, partial status, and
+timestamps. Completed-session editing/deletion is not implemented.
+
+Physical-phone keyboards/safe areas, Safari/Firefox, screen readers, actual storage
+exhaustion, and large-data performance remain unverified. The build currently emits
+Vite's advisory for a roughly 511 kB minified JavaScript chunk (154 kB gzip);
+code splitting/performance measurement remains future work. No warning threshold
+was suppressed. No calendar scheduling, progress UI, or backup workflow was added.
