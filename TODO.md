@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-02  
-Status: Phase 3 complete; manual plan creation, editing, and management verified.  
-Current phase: Phase 3 complete; Phase 4 has not started.
+Status: Phase 4 complete; external AI formatting and paste import verified.
+Current phase: Phase 4 complete; Phase 5 has not started.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -158,7 +158,7 @@ Nested prescriptions are acceptable; do not normalize every set into its own dat
 | 2     | Exercise library and Create Workout                               | 1                 | Complete    |
 | 2.5   | Single-address navigation and refresh recovery                    | 2                 | Complete |
 | 3     | Manual plan builder and plan editing                              | 2                 | Complete |
-| 4     | AI formatting instructions, strict paste import, editable preview | 3                 | Not started |
+| 4     | AI formatting instructions, strict paste import, editable preview | 3                 | Complete |
 | 5     | Training, rest timers, draft recovery, saved sessions             | 3                 | Not started |
 | 6     | Calendar scheduling and weekly completion                         | 5                 | Not started |
 | 7     | Progress weights/photos and profile synchronization               | 1, 5              | Not started |
@@ -313,17 +313,17 @@ Acceptance: save and reopen a four-day plan, change one copied exercise, and con
 
 Goal: AI output becomes an editable plan/exercise only after strict validation.
 
-- [ ] Define a versioned public interchange schema shared by prompt generation, parser validation, preview, and import tests.
-- [ ] Provide Copy Formatting Instructions for both a plan and a single workout. Clipboard failure must leave selectable text available.
-- [ ] Tell the external model to produce only the specified JSON, preserve requested targets, include tags/instructions when available, and use `null` for missing optional values or unknown tutorials.
-- [ ] Accept raw JSON or one fenced JSON block. Reject ambiguous multiple blocks, surrounding prose, malformed JSON, wrong versions, wrong types, unknown fields, and invalid nested values with useful errors.
-- [ ] Do not execute pasted code, render raw HTML, or silently guess/rewrite invalid structures. Report errors using paths such as `plan.days[1].exercises[0].sets[2].reps.max`.
-- [ ] Validate the entire payload before opening an editable preview. No database writes occur on parse failure or preview cancellation.
-- [ ] Reuse the manual builders for preview/editing; generate internal IDs locally and apply the same naming/tag rules.
-- [ ] Save the whole validated import atomically and clearly explain duplicate-name resolution.
-- [ ] Add fixtures for valid plans/workouts, heterogeneous sets, missing optional fields, malicious text/links, malformed ranges, and mismatched day counts.
+- [x] Define a versioned public interchange schema shared by prompt generation, parser validation, preview, and import tests.
+- [x] Provide Copy Formatting Instructions for both a plan and a single workout. Clipboard failure must leave selectable text available.
+- [x] Tell the external model to produce only the specified JSON, preserve requested targets, include tags/instructions when available, and use `null` for missing optional values or unknown tutorials.
+- [x] Accept raw JSON or one fenced JSON block. Reject ambiguous multiple blocks, surrounding prose, malformed JSON, wrong versions, wrong types, unknown fields, and invalid nested values with useful errors.
+- [x] Do not execute pasted code, render raw HTML, or silently guess/rewrite invalid structures. Report errors using paths such as `plan.days[1].exercises[0].sets[2].reps.max`.
+- [x] Validate the entire payload before opening an editable preview. No database writes occur on parse failure or preview cancellation.
+- [x] Reuse the manual builders for preview/editing; generate internal IDs locally and apply the same naming/tag rules.
+- [x] Save the whole validated import atomically and clearly explain duplicate-name resolution.
+- [x] Add fixtures for valid plans/workouts, heterogeneous sets, missing optional fields, malicious text/links, malformed ranges, and mismatched day counts.
 
-Interchange contract to implement: `schemaVersion: 1`, `kind: "plan" | "workout"`, and exactly one matching payload (`plan` or `workout`). A plan has `name`, `trainingDaysPerWeek`, and ordered `days`; a day has `name` and `exercises`. Each exercise has `name`, ordered `sets`, nullable `restBetweenSetsSeconds`/`restAfterExerciseSeconds`, `instructions`, nullable `youtubeUrl`, and string `tags`. A set has `reps: { min, max }` and nullable `rir: { min, max }`. Omitted optional fields may be normalized to documented empty/null defaults; unknown fields are rejected. The number of sets is the array length, and the number of days must equal `trainingDaysPerWeek`.
+Implemented public interchange contract: `schemaVersion: 1`, `kind: "plan" | "workout"`, and exactly one matching payload (`plan` or `workout`). A plan has `name`, `trainingDaysPerWeek`, and ordered `days`; a day has `name` and `exercises`. Each exercise has `name`, ordered `sets`, nullable `restBetweenSetsSeconds`/`restAfterExerciseSeconds`, `instructions`, nullable `youtubeUrl`, and string `tags`. A set has `reps: { min, max }` and nullable `rir: { min, max }`. Omitted `rir`, rest fields, and `youtubeUrl` default to null; omitted instructions to an empty string; omitted tags to an empty array. Null instructions/tags are invalid. Unknown fields at every object level are rejected, including IDs/ownership/notes. Notes can be added in the preview. The number of sets is the array length, and the number of days must equal `trainingDaysPerWeek`. Names and prescriptions reuse existing limits; parsing is capped at 1,000,000 characters, with a visible error rather than truncation. Full shape and examples are in README and `src/schemas/interchange.ts`.
 
 Acceptance: a valid four-day payload produces the same editable structure as a manually built plan. Invalid input gives an actionable error and leaves the database unchanged. Editing and canceling the preview does not create hidden records.
 
@@ -522,19 +522,23 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-02 | Plan store v3 holds each complete plan as one nested record with revision checks | Atomic saves; additive migration preserves v1/v2 data |
 | 2026-10-02 | Plan prescriptions include tag names and optional source IDs as snapshots | Source edits/archive never rewrite copies; plan-only tags do not alter library tags |
 | 2026-10-02 | Derive training/rest counts from ordered days; use buttons and day selector for moves | Stable IDs and keyboard-accessible editing without drag-and-drop dependencies |
+| 2026-10-02 | Separate strict public JSON v1 schema; unknown keys rejected at every object level; no imported IDs | Keep interchange independent of internal database v3 and ownership boundaries |
+| 2026-10-02 | Missing optional numeric/tutorial fields use null, instructions use empty string, tags use empty array | Preserve missing versus explicit zero without coercing invalid targets |
+| 2026-10-02 | Import previews reuse builders and carry one profile-bound local creation UUID across retries | Prevent duplicate imports and cross-profile retargeting without a new database schema |
+| 2026-10-02 | Resolve imported plan/workout tags only in the final artifact transaction | Cancel/validation cannot create hidden tags; failed artifact writes roll back all new tags |
+| 2026-10-02 | Limit pasted input to 1,000,000 characters and preserve original JSON when canceling preview | Bound synchronous parsing; clearly separate pasted input from unsaved preview edits |
 
 ## 9. Current checkpoint
 
-- Read the attached Phase 3 request, root TODO, approved UI specification, and prior handoffs; inspected the actual Phase 2 exercise/services/UI and Phase 2.5 memory navigation. No applicable AGENTS.md found.
-- Phase 3 is complete; its acceptance checks passed in all available automated environments. Earlier Phases 0-2.5 retain their recorded completed status and historical handoffs. Phase 4 has not started.
-- Create now includes manual plans: ordered named days, independent exercise snapshots, source selection from library/saved active plans, full prescription editing, accessible ordering/movement, duplication, archive/restore, and explicit conflict recovery.
-- Database is schema v3: only the plans store is added. Profiles/settings/photos/measurements/exercises/tags are preserved. Plan writes use explicit profile IDs, unique active normalized names, revision checks, and one atomic transaction.
-- Reused the existing prescription editor/validation, extracted shared source filters, existing dialogs/dirty guards, and single-address navigation. Existing dependencies, lockfile, Vite, and routing configuration remain unchanged.
-- Final verification: build, typecheck, lint passed; data tests 29/29; development Edge 58 passed / 2 static-only skips; production-preview Edge 58 passed / 2 static-only skips; plain-static root/project Edge 120/120 with no skips. All Phase 3 acceptance checks passed. Canceled native reload retains plan input.
-- Tests use uniquely named fake databases and isolated browser contexts, never the owner's records. No data cleared, no dependency install, no publish/push, and no later-phase workflow implemented.
-- Carry-forward limitations: physical-phone keyboard/safe areas, Safari/Firefox, screen readers, live Ko-fi, real quota exhaustion, and large-dataset performance remain unverified. Drafts are in memory and not recovered after reload.
-- Next step: Phase 4 external AI formatting/paste import only when requested. Import AI Output remains disabled; training/calendar/progress/backup implementations remain assigned to later phases.
-- Git currently reports the project itself as the repository root, with files untracked. No Git initialization, staging, commit, reset, or push was performed by this task; unrelated work preserved.
+- Read the attached Phase 4 request, root TODO, approved UI specification, and prior handoffs; inspected the actual builders, validation, services, navigation, configuration, package scripts, and verification records. No applicable AGENTS.md found. Working tree was clean at the start of this phase.
+- Phase 4 is complete; acceptance passed in data tests and desktop/emulated-phone Edge development, preview, and static root/project hosting. Earlier phases retain their recorded status and unchanged historical handoffs. Phase 5 has not started.
+- Create now offers separate plan/workout formatting instructions, selectable clipboard fallback, strict raw/fenced JSON validation with field paths, and editable unsaved previews using the manual builders. Imported artifacts reopen in the same editors/source picker.
+- Database stays at schema v3; no records or stores are migrated or cleared. Profile-bound creation IDs make retries idempotent. Artifact and resolved/created profile tags commit atomically; plans do not create library exercises. Existing revision/name checks and dirty/unload guards remain intact.
+- Reused dependencies, configuration, themes, dialogs, editors, validation, and services. No provider connection, automatic tutorial fetch/embed, or later-phase implementation.
+- Final verification: build, typecheck, lint passed; data 38/38; focused import browser tests 10/10; full development Edge 68 passed / 2 static-only skips; production preview 68 passed / 2 static-only skips; plain-static root/project hosting 140/140 with no skips. Dark desktop and light 320px screenshots inspected; no overflow and focused Save above navigation verified.
+- Tests use uniquely named fake databases and isolated browser contexts, never the owner's records. No dependency install, publication, push, staging, or commit.
+- Carry-forward limitations: physical-phone keyboard/safe areas, Safari/Firefox, screen readers, live Ko-fi, actual quota exhaustion, and large-data performance remain unverified. Pasted input and previews are memory-only; confirmed preview cancellation preserves original JSON but discards preview edits.
+- Next step: Phase 5 training/timers/drafts only when requested. The manual/device/performance checks below remain explicitly unverified.
 
 ## 10. Handoff entry template
 
@@ -856,3 +860,35 @@ the combined Save/Clear session-action requirement remains pending Phase 5.
 - Remaining implementation limitations: unsaved plans/nested edits are memory-only; source choices/filtering scan the active profile's local records in memory. No drag-and-drop, tag management, AI import, training/timers, scheduling, progress, or backup workflow is claimed.
 - Next action: Phase 4 external AI formatting/paste import only when requested. No Phase 3 acceptance item remains pending in the available test environments. Phase 4 and later workflows were not implemented.
 - Commit/reference: none; no publication, push, or dependency installation.
+
+### 2026-10-02 - Phase 4: external AI formatting and paste import
+
+- Status: Complete. Phase 4 acceptance passed in isolated data tests and desktop/emulated-phone Edge development, production preview, and plain-static root/project hosting. Previous handoffs above remain historical records, including their then-current unavailable features and unverified manual checks. Phase 5 has not started.
+- Public contract: strict Zod `schemaVersion: 1` discriminated plan/workout envelope, exactly one matching payload, no unknown keys at any object level. Public data contains no internal IDs, profile ownership, revisions, timestamps, or provenance. Plan/day/exercise/set validation reuses existing name, number, range, tag, and supported HTTPS YouTube rules. Day count must equal trainingDaysPerWeek. Omitted RIR/rest/tutorial become null, instructions empty string, tags empty array; explicit zero remains zero. Public notes are not accepted, but users may add them in the preview. README documents the full shape/defaults and a minimal example.
+- Formatting UI: Create > Import AI Output provides separate plan/workout formatting options, JSON-only instructions and schema-validated illustrative examples. Copy uses the clipboard API; failure focuses/selects the still-visible instructions with a manual-copy message. Prompts require preservation of requested targets, no invented tutorials, and explicit missing-value defaults. There is no provider connection, external transmission, or automatic example persistence.
+- Parser: accepts the whole raw JSON value or exactly one JSON fenced block; rejects prose, extra blocks, malformed JSON, unsupported versions, mismatched payloads, unknown nested fields, invalid types/ranges/day counts, and unsafe links. No fragment extraction or numeric coercion. Errors identify array-index field paths and receive focus; the pasted input remains editable. Limit: 1,000,000 characters, rejected with an error rather than truncated. Pasted code/HTML stays plain text; no tutorial fetch, preview, or embed.
+- Preview: only a fully validated payload opens the shared PrescriptionEditor or PlanEditor as an explicitly unsaved import, with all fields, ordering, tags, source picker, dialogs, and validation retained. Canceling even an untouched preview requires confirmation, writes nothing, and returns to original pasted JSON. Closing the import confirms before discarding text. Preview edits are memory-only; cancel/reload does not recover them. Dirty navigation and native unload warnings preserve input when canceled. Public address stays unchanged.
+- Persistence: existing exercise/plan services retain explicit owner IDs, normalized active-name conflicts, and revisions. Import sessions bind one local creation UUID and profile to a validated preview; retries after failure or uncertain success reuse that ID. Concurrent/repeated saves return the committed artifact without duplicating or overwriting it. UI submission refs close the rapid-click gap before button disabling. Final edited values are revalidated. Name conflicts require explicit rename or cancellation. Existing records are never merged or overwritten by import.
+- Atomic tags/artifacts: shared tag resolution reuses NFKC/collapsed-whitespace/lowercase profile tag keys. Tags are resolved/created only during final save in the same transaction as the artifact. Failed writes roll back tags too. Imported plans store independent nested prescriptions and local day/occurrence UUIDs, with no automatic library exercises. Their tags become available for reuse; subsequent manual plan-only tag edits preserve the existing snapshot-only behavior. Saved imports use the ordinary library/plan editors and appear in the source picker.
+- Scope/files: new public schema, parser/prompt/draft adapters, import UI/session service, shared tag helper, minimal service/editor submission extensions and CSS, fixtures and import tests, one updated previous unavailable-action assertion, README and TODO. Database remains schema v3 with no migration or data clearing. Existing dependencies, lockfile, Vite, router, and configuration retained. No training, timer, schedule, progress, backup, provider integration, publish, or push.
+- Commands/results: `npm run build`, `npm run typecheck`, and `npm run lint` passed, with no lint warnings. `npm run test:data` passed 38/38 (9 new import tests plus 29 existing tests). `npm run test:browser -- tests/browser/imports.spec.ts` passed 10/10. Full `npm run test:browser` passed 68 with 2 skips; `npm run test:browser:preview` passed 68 with 2 skips. Skips are the two static-host-only 404 checks. `npm run test:browser:static` passed 140/140, no skips, using one build at `/` and `/project-check/` without SPA rewrites. All suites ran sequentially; no source edits during development browser verification.
+- Data evidence: valid four-day/workout fixtures with heterogeneous sets, zero/missing values, Unicode, multiline malicious-looking plain text and HTTPS tutorial; prompt examples parsed against the same schema; malformed/prose/blocks/version/payload/unknown-field/type/range/day/link rejection; specific nested errors; no writes from parse/draft/discarded sessions; local IDs; normalized profile tags, isolation, explicit duplicate rename, invalid edited input, atomic rollback and retry, concurrent saves and simulated uncertain-commit retry. Existing profile/exercise/plan/migration regression tests all pass in uniquely named fake databases.
+- Browser evidence: both instruction options with simulated clipboard success/denial and selected fallback text; invalid input retained with focused errors; plan/workout preview cancellation leaves all table counts unchanged; guarded navigation/native unload and unchanged address; four-day plan preview edits and saved reload; normal editor/source-picker reuse; standalone library import; duplicate-name rename; another tab selecting a profile cannot retarget a preview; injected quota failure retains edited input and rolls back tags; rapid repeated submission saves one artifact. No tutorial network requests or HTML execution observed. Contexts are isolated and never use the owner's browser data.
+- Visual/responsive evidence: light 320px failed-save preview and dark desktop imported-plan library screenshots inspected. Focused Save remains above navigation, with no horizontal overflow; existing shell/theme/keyboard checks pass. Artifacts remain in ignored `test-results`. Emulation is not a physical-phone or assistive-technology pass.
+- Resolved verification limitation: the first sandbox data command could not start any of its four Node test workers (`spawn EPERM`); the approved subprocess rerun passed all 38 tests. Build and browser subprocesses also used the established approved execution path. No application test failure remained.
+- Remaining limitations: raw input/preview edits are not autosaved across reload; clipboard tests simulate API permission outcomes rather than claiming OS clipboard/device coverage. Real quota exhaustion and large-library/plan/import performance are untested (injected failures verify rollback/input recovery). Physical phones, Safari/Firefox, screen readers, and live Ko-fi checks remain unverified. All available Phase 4 acceptance checks passed; these carry-forward manual checks are not labeled passed.
+- Next step: Phase 5 training, rest timers, persisted session drafts, and saved sessions only when requested. No later-phase implementation started. No staging, commit, dependency installation, publish, or push performed.
+
+#### Manual checks still required (not passed)
+
+Use a separate test browser profile for these checks; do not clear existing user data. To produce the four-day JSON fixture from the project root without writing records, run:
+
+```powershell
+node --experimental-strip-types --input-type=module -e "import {planFixture} from './tests/fixtures/interchange.ts'; console.log(JSON.stringify(planFixture(), null, 2))"
+```
+
+- Physical phone, portrait and landscape: Create > Import AI Output; copy both formatting options and paste into a text editor to confirm actual clipboard contents. Deny clipboard permission where supported and manually select/copy the instructions. Paste the four-day JSON, validate, edit a long day name and exercise reps/RIR/notes with the keyboard visible, use a move/removal dialog, and reach Apply, Save, and bottom navigation without controls being covered. Also retain the earlier Settings demographic and Create Workout keyboard checks.
+- Safari and Firefox: import/save/reload/reopen that plan and the README minimal workout. Confirm zero RIR/rest versus blank optionals, same address on every screen, duplicate-name rename, cancellation without extra records, and isolation after switching between two local test profiles. Cancel dirty navigation and native reload; repeat plan/workout edit, duplicate, archive, and restore from earlier handoffs.
+- Screen reader: verify Formatting instructions for, read-only instructions, AI output JSON, error paths, unsaved preview status, editor field names, move controls, source choices, and confirmation announcements. Use Tab/Enter/Space/Escape; check focus moves to validation errors/editor headings and returns to Validate or Import AI Output after cancellation. Retain earlier profile/avatar and navigation/current-state checks.
+- Live Support: once the owner's real `VITE_KOFI_URL` is configured, open Settings > Support and confirm the intended Ko-fi page opens in a new tab.
+- Separate stress environment: test real storage exhaustion and representative large libraries/plans/imports. Confirm failed saves keep input and produce no partial artifact/tags; record timings before claiming large-data performance. These were not simulated as successful real-device/performance checks.

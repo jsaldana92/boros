@@ -13,19 +13,20 @@ function reorder<T>(items: T[], index: number, offset: number) {
   const [item] = result.splice(index, 1); result.splice(index + offset, 0, item)
   return result
 }
-export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void }) {
+export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false, title }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput) => Promise<{ name: string }>; initialDirty?: boolean; title?: string }) {
   const { setDirty, dirty } = useWorkspace()
   const [form, setForm] = useState<PlanInput>(() => initial ? structuredClone(initial) : { name: '', days: [newDay(1)] })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
   const [picker, setPicker] = useState<string>()
   const [editing, setEditing] = useState<{ dayId: string; exercise: PlanExercise }>()
   const [confirm, setConfirm] = useState<{ title: string; action: () => void }>()
   const heading = useRef<HTMLHeadingElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const trigger = useRef<HTMLElement | null>(null)
-  useEffect(() => { heading.current?.focus(); return () => setDirty(false) }, [setDirty])
+  useEffect(() => { heading.current?.focus(); if (initialDirty) setDirty(true); return () => setDirty(false) }, [setDirty, initialDirty])
   const change = (update: (current: PlanInput) => PlanInput) => { setForm(update); setDirty(true); setErrors({}) }
   const days = (update: (current: TrainingDay[]) => TrainingDay[]) => change((current) => ({ ...current, days: update(current.days) }))
   const exerciseList = (dayId: string, update: (items: PlanExercise[]) => PlanExercise[]) => days((items) => items.map((day) => day.id === dayId ? { ...day, exercises: update(day.exercises) } : day))
@@ -35,20 +36,20 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
     if (value < form.days.length) setConfirm({ title: `Reduce to ${value} training days?`, action: apply }); else apply()
   }
   return <section className="plan-editor" aria-label="Plan editor">
-    <h2 ref={heading} tabIndex={-1}>{original ? 'Edit Plan' : 'Create Plan'}</h2>
+    <h2 ref={heading} tabIndex={-1}>{title ?? (original ? 'Edit Plan' : 'Create Plan')}</h2>
     {original?.archivedAt && <p className="muted">Archived plan. Rename here to resolve a conflict, then restore from the plan list.</p>}
     {picker && <ExercisePicker choices={choices} onClose={closeSubeditor} onChoose={(choice) => { exerciseList(picker, (items) => [...items, copyExercise(choice.prescription, choice.source)]); closeSubeditor() }} />}
     {editing && <PrescriptionEditor initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply to plan" onDirty={() => setDirty(true)} onClose={closeSubeditor} onSubmit={async (prescription) => { exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription } : item)); closeSubeditor() }} />}
     <form ref={formRef} hidden={!!picker || !!editing} noValidate onSubmit={async (event) => {
-      event.preventDefault(); setError('')
+      event.preventDefault(); if (submitting.current) return; setError('')
       const parsed = planInputSchema.safeParse(form)
       if (!parsed.success) {
         setErrors(Object.fromEntries(parsed.error.issues.map((issue) => [issue.path.join('.'), issue.message])))
         requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"]')?.focus()); return
       }
-      setBusy(true)
-      try { const saved = await plans.save(profileId, parsed.data, original); setDirty(false); onSaved(saved.name) }
-      catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+      submitting.current = true; setBusy(true)
+      try { const saved = await (onSave ? onSave(parsed.data) : plans.save(profileId, parsed.data, original)); setDirty(false); onSaved(saved.name) }
+      catch (e) { setError((e as Error).message) } finally { submitting.current = false; setBusy(false) }
     }}><fieldset disabled={busy}>
       <legend className="sr-only">Plan details</legend>
       <Field label="Plan name" required maxLength={120} value={form.name} error={errors.name} onChange={(e) => change((current) => ({ ...current, name: e.target.value }))} />

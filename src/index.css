@@ -117,3 +117,9 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .source-list { list-style: none; padding: 0; }
 .source-list li { padding: 18px 0; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-wrap: anywhere; }
 .plan-day .actions button { flex: 1 1 auto; }
+
+.import-panel > label { margin-top: 20px; }
+.import-panel > textarea { min-height: 220px; }
+.import-panel .formatting-instructions { min-height: 260px; }
+#import-errors { overflow-wrap: anywhere; }
+#import-errors ul { padding-left: 24px; }

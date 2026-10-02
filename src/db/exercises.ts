@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { resolveTags } from './tags.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { exerciseInputSchema, type Exercise, type ExerciseInput, type Tag } from '../schemas/exercise.ts'
 import { nameKey } from '../schemas/profile.ts'
@@ -27,27 +29,19 @@ export function exerciseService(database: BorosDatabase) {
         return { exercises: await database.exercises.where('profileId').equals(profileId).toArray(), tags: await database.tags.where('profileId').equals(profileId).toArray() }
       })
     },
-    async save(profileId: string, raw: ExerciseInput, existing?: { id: string; revision: number }) {
+    async save(profileId: string, raw: ExerciseInput, existing?: { id: string; revision: number }, creationId?: string) {
       const input = exerciseInputSchema.parse(raw)
+      if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing exercise.') }
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
+        if (creationId) { const committed = await database.exercises.get([profileId, creationId]); if (committed) return committed }
         const old = existing ? await get(profileId, existing.id) : undefined
         if (old) checkRevision(old, existing!.revision)
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
         const now = new Date().toISOString()
-        const tagIds: string[] = []
-        for (const displayName of input.tagNames) {
-          const key = nameKey(displayName)
-          let tag = await database.tags.where('[profileId+nameKey]').equals([profileId, key]).first()
-          if (tag?.archivedAt) throw new Error(`Tag "${displayName}" is archived. Choose another tag.`)
-          if (!tag) {
-            tag = { id: crypto.randomUUID(), profileId, name: displayName, nameKey: key, createdAt: now, updatedAt: now }
-            await database.tags.add(tag)
-          }
-          if (!tagIds.includes(tag.id)) tagIds.push(tag.id)
-        }
+        const tagIds = await resolveTags(database, profileId, input.tagNames, now)
         const { tagNames: _tagNames, ...fields } = input
-        const result: Exercise = { ...fields, profileId, id: old?.id ?? crypto.randomUUID(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), tagIds, archivedAt: old?.archivedAt, createdAt: old?.createdAt ?? now, updatedAt: now, revision: (old?.revision ?? 0) + 1 }
+        const result: Exercise = { ...fields, profileId, id: old?.id ?? creationId ?? crypto.randomUUID(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), tagIds, archivedAt: old?.archivedAt, createdAt: old?.createdAt ?? now, updatedAt: now, revision: (old?.revision ?? 0) + 1 }
         await database.exercises.put(result)
         return result
       })

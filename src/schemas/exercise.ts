@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { nameKey } from './profile.ts'
 
 const integer = (minimum: number) => z.number().finite().int('Use a whole number.').min(minimum, `Must be at least ${minimum}.`).max(Number.MAX_SAFE_INTEGER)
-const range = (minimum: number) => z.object({ min: integer(minimum), max: integer(minimum) }).refine((value) => value.max >= value.min, { message: 'Maximum must be at least the minimum.', path: ['max'] })
+export const range = (minimum: number) => z.object({ min: integer(minimum), max: integer(minimum) }).strict().refine((value) => value.max >= value.min, { message: 'Maximum must be at least the minimum.', path: ['max'] })
 export const setSchema = z.object({ reps: range(1), rir: range(0).optional() })
 export const tagNameSchema = z.string().trim().min(1, 'Enter a tag name.').max(80, 'Use at most 80 characters.').refine((value) => !!nameKey(value), 'Enter a tag name.')
 

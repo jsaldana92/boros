@@ -1,8 +1,8 @@
 # Boros
 
-A React / TypeScript / Vite workout tracker. Phases 1-3 provide a themed shell with single-address navigation,
+A React / TypeScript / Vite workout tracker. Phases 1-4 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, plus manual plan creation and editing. Training sessions and backup tools are not implemented yet. See TODO.md for
+Create Workout, manual plans, and validated external AI paste imports. Training sessions and backup tools are not implemented yet. See TODO.md for
 the authoritative plan and verification record.
 
 ## Local development
@@ -169,7 +169,7 @@ together. Date sorting uses the source exercise's or source plan's creation date
 Each choice copies the full prescription, including tag names and optional fields,
 into a new occurrence. Optional provenance IDs record the source; they are never
 used to render or update a saved prescription. Repeated selections are independent.
-The same picker will include AI-created plans after Phase 4 implements import.
+The same picker includes imported plans and standalone imported workouts.
 
 Use day/exercise move buttons and the destination-day selector to change order.
 Renaming, editing, and moving retain IDs; added occurrences and duplicated plans
@@ -196,4 +196,89 @@ checks for orphaned plan records before creating Guest. Schema extensions follow
 All editing stays at the same public address. Unsaved-change confirmations and
 native browser-unload warnings apply to the plan and its nested prescription
 editor. Drafts are held in memory, not recovered after refresh. No scheduling,
-training/timers, AI import, progress, or backup workflow is provided by this phase.
+training/timers, progress, or backup workflow is provided by this phase.
+
+## External AI formatting and paste import
+
+In Create, open **Import AI Output**, choose Plan or Single workout, and use
+**Copy Formatting Instructions** with your own request in an external chatbot.
+The instructions include a schema-validated illustrative example. They remain
+selectable if clipboard permission is unavailable. Boros has no AI connection
+and sends no prompt or pasted data to an external provider. Examples are never
+saved automatically; review generated targets yourself before saving.
+
+Paste one raw JSON object or one JSON fenced block (up to 1,000,000 characters).
+Validation accepts the complete payload or reports field paths such as
+`plan.days[1].exercises[0].sets[2].reps.max`. Surrounding prose, multiple blocks,
+wrong versions/types, unknown fields at every level, invalid ranges, and unsupported
+tutorial links fail without writes or loss of pasted text. There is no fragment
+extraction or numeric type coercion. Pasted HTML/code is inert plain text; tutorial
+URLs are never automatically fetched or embedded.
+
+The public v1 contract in `src/schemas/interchange.ts` is separate from database
+schema v3. Its fully populated shape is:
+
+```ts
+type Range = { min: number; max: number }
+type Exercise = {
+  name: string
+  sets: { reps: Range; rir: Range | null }[]
+  restBetweenSetsSeconds: number | null
+  restAfterExerciseSeconds: number | null
+  instructions: string
+  youtubeUrl: string | null
+  tags: string[]
+}
+type Plan = {
+  name: string
+  trainingDaysPerWeek: number
+  days: { name: string; exercises: Exercise[] }[]
+}
+type Interchange =
+  | { schemaVersion: 1; kind: 'plan'; plan: Plan }
+  | { schemaVersion: 1; kind: 'workout'; workout: Exercise }
+```
+
+Exactly one matching payload is required. No IDs, ownership fields, revisions,
+timestamps, provenance, or notes are accepted in this format; notes can be added
+in the preview. Name, sets/reps, and the plan/day structure are required. Names
+are trimmed, nonempty, and at most 120 characters. Plans have 1-7 ordered days,
+exactly matching `trainingDaysPerWeek`, with 1-100 exercises per day. Exercises
+have 1-100 ordered sets. All numbers are safe integers; reps are positive, RIR
+and rest are nonnegative, and `max >= min`. Equal bounds mean a fixed target.
+Rest uses seconds. Instructions allow 20,000 characters, and tags allow up to
+50 strings of 1-80 characters. Tutorial URLs follow the supported HTTPS YouTube
+rules described above.
+
+Omitted `rir`, either rest field, or `youtubeUrl` defaults to `null`; omitted
+`instructions` defaults to `""`; omitted `tags` defaults to `[]`. Null instructions
+or tags are invalid. Missing RIR/rest remains unspecified internally; explicit
+zero survives unchanged. Numeric strings, missing range bounds, and empty sets
+are errors, not repaired values. Example minimal workout using these defaults:
+
+```json
+{"schemaVersion":1,"kind":"workout","workout":{"name":"Example","sets":[{"reps":{"min":5,"max":8}}]}}
+```
+
+Only a fully valid payload opens an **unsaved import preview** using the existing
+workout/plan editors. Canceling a preview creates no artifact or tags and returns
+to the original pasted JSON. Confirming discard loses preview edits. Closing the
+import asks before discarding pasted text. Navigation and browser-unload guards
+also apply; drafts are memory-only and do not recover after reload.
+
+Final saves revalidate edited values and bind to the preview's original profile.
+Active name conflicts require renaming or cancellation, never overwriting.
+Workouts become library exercises; plans retain independent nested snapshots
+without creating library exercises. Final import saves resolve/create normalized
+profile tags in the same transaction as the artifact. This registers imported
+plan tags for reuse; subsequent manual plan-only tag edits retain the existing
+snapshot-only behavior. Local UUIDs identify all imported records. One artifact
+creation UUID is reused across retries: simultaneous saves or an uncertain prior
+commit return the existing artifact without duplicating or overwriting it. Failed
+writes roll back artifact/tags, retain edited input, and allow retry.
+
+No database migration, new dependency, backup merge, scheduling, training, or
+progress feature is introduced by the import workflow. Automated tests use only
+isolated databases/contexts. Physical-device keyboards, Safari/Firefox, screen
+readers, actual clipboard permissions on those devices, live Ko-fi, real storage
+exhaustion, and large-data performance still need the checks recorded in TODO.md.

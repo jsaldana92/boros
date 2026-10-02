@@ -225,5 +225,5 @@ test('plan name conflicts and archive restoration offer explicit rename recovery
   await page.getByLabel('Plan name', { exact: true }).fill('Older Strength'); await save(page, 'Older Strength')
   await card(page, 'Older Strength').getByRole('button', { name: 'Restore plan', exact: true }).click()
   await page.getByLabel('Show archived plans').uncheck(); await expect(card(page, 'Older Strength')).toBeVisible()
-  await expect(button(page, 'Import AI Output')).toBeDisabled()
+  await expect(button(page, 'Import AI Output')).toBeEnabled()
 })

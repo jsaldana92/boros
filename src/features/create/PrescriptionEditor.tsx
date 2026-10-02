@@ -5,13 +5,14 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { blankSet, parseForm, toForm, type SetFields } from './form'
 
-export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save workout', onDirty, onSubmit, onClose }: { initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; onDirty: () => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void }) {
-  const [dirty, markDirty] = useState(false)
+export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save workout', initialDirty = false, onDirty, onSubmit, onClose }: { initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: () => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void }) {
+  const [dirty, markDirty] = useState(initialDirty)
   const setDirty = (value: boolean) => { markDirty(value); if (value) onDirty() }
   const [form, setForm] = useState(() => toForm(initial))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
   const [tag, setTag] = useState('')
   const [confirm, setConfirm] = useState<{ title: string; message: string; action: () => void }>()
   const formRef = useRef<HTMLFormElement>(null)
@@ -37,12 +38,12 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
     <h2 ref={heading} tabIndex={-1}>{title}</h2>
     {archived && <p className="muted">Archived exercise. Editing keeps it archived; restore it from the archived library.</p>}
     <form ref={formRef} noValidate onSubmit={async (event) => {
-      event.preventDefault(); setError('')
+      event.preventDefault(); if (submitting.current) return; setError('')
       const parsed = parseForm(form); setErrors(parsed.errors)
       if (!parsed.value) { requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); return }
-      setBusy(true)
+      submitting.current = true; setBusy(true)
       try { await onSubmit(parsed.value) }
-      catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+      catch (e) { setError((e as Error).message) } finally { submitting.current = false; setBusy(false) }
     }}>
       <fieldset disabled={busy}>
         <legend className="sr-only">Exercise prescription</legend>

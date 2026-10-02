@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { resolveTags } from './tags.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { exerciseToInput } from './exercises.ts'
 import { nameKey } from '../schemas/profile.ts'
@@ -9,7 +11,7 @@ export interface PrescriptionChoice {
   label: string; prescription: ExerciseInput; source: ExerciseSource
 }
 export function planService(database: BorosDatabase) {
-  const tables = [database.profiles, database.plans]
+  const tables = [database.profiles, database.plans, database.tags]
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => {
     const plan = await database.plans.get([profileId, id])
@@ -26,7 +28,7 @@ export function planService(database: BorosDatabase) {
   return {
     get,
     async library(profileId: string) {
-      return database.transaction('r', [...tables, database.exercises, database.tags], async () => {
+      return database.transaction('r', [...tables, database.exercises], async () => {
         await owner(profileId)
         const plans = await database.plans.where('profileId').equals(profileId).toArray()
         const tags = await database.tags.where('profileId').equals(profileId).toArray()
@@ -42,15 +44,18 @@ export function planService(database: BorosDatabase) {
         return { plans, choices, tags }
       })
     },
-    async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }) {
+    async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }, creationId?: string) {
       const input = planInputSchema.parse(raw)
+      if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing plan.') }
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
+        if (creationId) { const committed = await database.plans.get([profileId, creationId]); if (committed) return committed }
         const old = existing ? await get(profileId, existing.id) : undefined
         if (old) checkRevision(old, existing!.revision)
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
         const now = new Date().toISOString()
-        const result: Plan = { ...input, profileId, id: old?.id ?? crypto.randomUUID(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
+        if (creationId) await resolveTags(database, profileId, input.days.flatMap((day) => day.exercises.flatMap((exercise) => exercise.prescription.tagNames)), now)
+        const result: Plan = { ...input, profileId, id: old?.id ?? creationId ?? crypto.randomUUID(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.plans.put(result)
         return result
       })
