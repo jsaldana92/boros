@@ -160,3 +160,13 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .schedule-editor label { margin-top: 18px; }
 @media (max-width: 1050px) { .calendar-grid { grid-template-columns: 1fr; } .calendar-view-month { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .calendar-view-month { grid-template-columns: 1fr; } }
+
+.weight-chart { margin: 26px 0; padding: 16px; border: 1px solid var(--border); border-radius: 6px; }
+.weight-chart svg { display: block; width: 100%; height: auto; color: var(--text); overflow: visible; }
+.chart-dates { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 14px; }
+.weight-chart figcaption { font-weight: 600; }
+.measurement-editor label { margin-top: 20px; }
+.measurement-editor .actions { margin-bottom: 24px; }
+.progress-photo { display: block; max-width: 100%; max-height: 55dvh; width: auto; height: auto; margin: 16px auto; object-fit: contain; }
+.progress-photo-preview > .progress-photo { max-height: 240px; }
+.measurement-card time, .measurement-card details { overflow-wrap: anywhere; }

@@ -1,8 +1,8 @@
 # Boros
 
-A React / TypeScript / Vite workout tracker. Phases 1-6 provide a themed shell with single-address navigation,
+A React / TypeScript / Vite workout tracker. Phases 1-7 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, and recurring calendar schedules. Progress screens and backup tools are not implemented yet. See TODO.md for
+Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, and Progress weight history/charts/photos. Backup tools and profile Clear Data are not implemented yet. See TODO.md for
 the authoritative plan and verification record.
 
 ## Local development
@@ -54,7 +54,7 @@ navigation are centralized in `src/app/`; feature screens do not construct URLs.
 The last successfully opened screen is stored as one allowlisted screen ID in
 `sessionStorage` (`boros.navigation.screen`). Refresh in the same tab restores
 that screen. Missing, invalid, or inaccessible storage falls back to Train.
-This preference contains no records or form input: unsaved Create/Settings editors are not
+This preference contains no records or form input: unsaved Create/Settings/Calendar/Progress editors are not
 recovered on refresh. Successfully saved training drafts are recovered separately
 from IndexedDB using Resume in Train. Existing discard confirmations and browser-unload warnings
 remain in place. Canceling navigation preserves the current screen and preference.
@@ -480,3 +480,76 @@ Calendar tests use isolated contexts/databases: dates, DST, device-zone changes,
 v4 preservation, remap/repair/stop history, concurrent start/save, rollback,
 overlapping schedules, partial/late completion, reload, and profile isolation.
 See TODO.md for exact run results and physical-device/browser checks still pending.
+
+## Progress weights and photos (Phase 7)
+
+Progress adds dated weights, optional photos, chronological history, and a simple
+SVG chart. Add measurement defaults to the current instant; a local date/time
+field permits backdating. Edit keeps the entry ID and measured time unless
+**Change measurement date/time** is selected. Confirmed entry deletion removes
+the entry and only its unshared photo. Removing a photo in the editor is staged:
+confirm **Remove photo from entry**, then **Save measurement** to commit it.
+Canceling the editor keeps the saved photo and weight.
+
+The existing measurements table is the single weight source. Current weight uses
+the greatest measured timestamp, then greatest ID for tied timestamps (the
+existing IndexedDB index order). Backdated entries stay in history without
+replacing a newer current weight. Correction/deletion recalculates the latest,
+including **No recorded weight** when none remain. Settings and Progress observe
+the same saved records. A changed Settings weight appends through the shared
+measurement service, retaining its established timestamp of now or 1 ms after
+the previous latest measurement, whichever is later. Blank Settings weight keeps
+the previous entry; unit-only changes add nothing. Kilograms remain canonical;
+untouched weight/photo edits preserve the original value without conversion drift.
+
+Database version remains **5**: no new table/index or migration is needed.
+Measurements add optional revision, update time, mutation ID, photo reference,
+and measured-local/time-zone/offset fields. Existing records remain readable
+without rewriting them (revision defaults to 1, update time to creation time).
+Measured time is separate from creation/update time. New records retain a UTC
+instant and validated local wall time/IANA zone/offset; history retains that zone
+after a device-zone change. Legacy records without context are explicitly shown
+in UTC. Default timestamps retain the exact instant during repeated DST hours;
+explicitly entered ambiguous times use the earlier occurrence, and nonexistent
+local times are rejected. These native date semantics follow
+[MDN's Date documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date#date_components_and_time_zones).
+
+Measurement edits/deletes compare revisions transactionally. Every measurement
+mutation also increments its owner's profile revision, so an already-open stale
+Settings form cannot overwrite a newer measurement with unrelated edits. Its
+untouched weight display updates live; explicitly edited input is retained until
+save/reload. Conflict messages explain how to reopen the latest record; copy
+needed input before discarding it. One entry/mutation UUID pair is reused for
+save retries. Failed writes preserve form/photo input, with no success notice.
+Editor input is memory-only and guarded on navigation/unload; refresh restores
+the screen, not the unsaved editor. Each editor keeps its opening weight unit.
+
+Progress photos use the existing decoded JPEG/PNG/WebP checks (5 MB, 4096px per
+side), local profile-owned blobs, and explicit measurement references. They do
+not change the avatar. Entry/asset/reference writes and cleanup share one
+transaction; replaced/deleted assets survive while any measurement or avatar
+still refers to them. No upload or external image fetch occurs. Full photo blobs
+load only when an editor/viewer opens; previews revoke object URLs on replacement
+and unmount. Photos are not resized or thumbnailed. Delayed decoding cannot move
+input into another profile.
+
+The chart uses elapsed measurement time horizontally, explicit endpoint dates
+and weight units, and every recorded point, including irregular/repeated dates.
+Coincident points can overlap; history retains every record with accessible exact
+values, canonical kilograms, dates, and record details. Empty and single-entry
+states work in both themes. History currently reads all profile measurements;
+large-dataset rendering performance has not been benchmarked.
+
+Phase 7 checks passed: `npm run build`, `npm run typecheck`, `npm run lint`,
+`git diff --check`, and `npm run test:data` (66/66). Full development and production
+preview each passed 96 tests with two expected static-only skips; the final focused
+Progress development suite passed 10/10. Plain-static root/project hosting passed
+196/196 with no skips. The first full development run exposed a final-entry
+deletion focus race; it was corrected and the full rerun passed. Vite retains its
+bundle-size advisory: 547.10 kB minified / 163.88 kB gzip JavaScript.
+
+Exact verification commands and remaining manual checks are recorded in TODO.md.
+Physical phones, Safari/Firefox, screen readers/voice control, live Ko-fi,
+real storage exhaustion, background-device behavior, and large-data performance
+remain unverified. Backup export/import and profile Clear Data remain future work;
+the next requested implementation phase is Phase 8 export.

@@ -1,12 +1,11 @@
 import { useLayoutEffect, type ReactNode } from 'react'
 import { MemoryRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { AppShell } from '../components/layout/AppShell'
-import { PlaceholderPage } from '../components/layout/PlaceholderPage'
 import { SettingsPage } from '../features/profiles/SettingsPage'
 import { CreatePage } from '../features/create/CreatePage'
 import { TrainPage } from '../features/train/TrainPage'
 import { CalendarPage } from '../features/calendar/CalendarPage'
-import { pages } from './pages'
+import { ProgressPage } from '../features/progress/ProgressPage'
 import { useWorkspace } from './workspace-context'
 import { WorkspaceProvider } from './WorkspaceProvider'
 import { NavigationContext } from './navigation-context'
@@ -36,7 +35,7 @@ export function AppRouter({ initialScreen }: { initialScreen: Screen }) {
       <Route path="/create" element={<CreatePage />} />
       <Route path="/train" element={<TrainPage />} />
       <Route path="/calendar" element={<CalendarPage />} />
-      {pages.filter((page) => !['/settings', '/create', '/train', '/calendar'].includes(page.path)).map((page) => <Route key={page.path} path={page.path} element={<PlaceholderPage page={page} />} />)}
+      <Route path="/progress" element={<ProgressPage />} />
       <Route path="*" element={<Navigate to="/train" replace />} />
     </Route>
   </Routes></NavigationProvider></WorkspaceProvider></MemoryRouter>

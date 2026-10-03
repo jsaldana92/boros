@@ -11,13 +11,13 @@ test('navigation, remembered refresh, unchanged address, and runtime errors', as
   page.on('console', (message) => { if (message.type() === 'error') errors.push(`${message.text()} ${message.location().url}`) })
   await page.goto('./')
   const address = page.url()
-  for (const [label, path] of destinations) {
+  for (const [label] of destinations) {
     const link = page.getByRole('button', { name: label, exact: true })
     await link.click()
     await expect(page).toHaveURL(address)
     await expect(link).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    if (!['settings', 'create', 'train', 'calendar'].includes(path)) await expect(page.getByText('Not available yet', { exact: true })).toBeVisible()
+    await expect(page.getByText('Not available yet', { exact: true })).toHaveCount(0)
     await page.reload()
     await expect(link).toHaveAttribute('aria-current', 'page')
     await expect(page).toHaveTitle(`${label} | Boros`)

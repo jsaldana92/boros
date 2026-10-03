@@ -47,7 +47,7 @@ export interface PhotoAsset {
   width: number
   height: number
   createdAt: string
-  role: 'avatar'
+  role: 'avatar' | 'progress'
 }
 export interface Measurement {
   profileId: string
@@ -55,6 +55,14 @@ export interface Measurement {
   weightKg: number
   measuredAt: string
   loggedAt: string
+  // Optional metadata keeps legacy v5 records readable without rewriting them.
+  updatedAt?: string
+  revision?: number
+  photoId?: string
+  measuredLocal?: string
+  timeZone?: string
+  offsetMinutes?: number
+  lastMutationId?: string
 }
 export const photoSchema = z.object({
   blob: z.instanceof(Blob).refine((blob) => ['image/jpeg', 'image/png', 'image/webp'].includes(blob.type) && blob.size > 0 && blob.size <= 5 * 1024 * 1024, 'Choose a JPEG, PNG, or WebP image up to 5 MB.'),
@@ -65,6 +73,9 @@ export type PreparedPhoto = z.infer<typeof photoSchema>
 export const measurementSchema = z.object({
   weightKg: z.number().finite().positive().max(1000),
   measuredAt: z.string().datetime(),
+  measuredLocal: z.string().optional(),
+  timeZone: z.string().optional(),
+  offsetMinutes: z.number().int().optional(),
 })
 
 export const toKg = (value: number, unit: WeightUnit) => unit === 'lb' ? value * 0.45359237 : value

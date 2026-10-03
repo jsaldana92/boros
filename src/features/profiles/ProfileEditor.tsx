@@ -54,7 +54,7 @@ export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
   }
   const changeWeightUnit = (unit: WeightUnit) => {
     try {
-      const kg = weightChanged ? weightKg() : baseline.measurement?.weightKg
+      const kg = weightChanged ? weightKg() : latest.measurement?.weightKg
       setForm((current) => ({ ...current, weightUnit: unit, weight: kg === undefined ? '' : displayNumber(fromKg(kg, unit)) }))
       setDirty(true)
       setStatus('')
@@ -94,10 +94,10 @@ export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
         <label>Height unit<select value={form.heightUnit} onChange={(e) => changeHeightUnit(e.target.value as HeightUnit)}><option value="cm">cm</option><option value="ft">ft / in</option></select></label>
         {form.heightUnit === 'cm' ? <label>Height (cm, optional)<input inputMode="decimal" value={form.height} onChange={(e) => { change('height', e.target.value); setHeightChanged(true) }} /></label> : <div className="field-grid"><label>Height (feet)<input inputMode="numeric" value={form.feet} onChange={(e) => { change('feet', e.target.value); setHeightChanged(true) }} /></label><label>Height (inches)<input inputMode="decimal" value={form.inches} onChange={(e) => { change('inches', e.target.value); setHeightChanged(true) }} /></label></div>}
         <label>Weight unit<select value={form.weightUnit} onChange={(e) => changeWeightUnit(e.target.value as WeightUnit)}><option value="kg">kg</option><option value="lb">lb</option></select></label>
-        <label>Weight ({form.weightUnit}, optional)<input inputMode="decimal" value={form.weight} onChange={(e) => { change('weight', e.target.value); setWeightChanged(true) }} /></label>
+        <label>Weight ({form.weightUnit}, optional)<input inputMode="decimal" value={weightChanged ? form.weight : latest.measurement ? displayNumber(fromKg(latest.measurement.weightKg, form.weightUnit)) : ''} onChange={(e) => { change('weight', e.target.value); setWeightChanged(true) }} /></label>
       </div>
       <p className="muted">A changed weight adds a dated measurement. Blank keeps the previous weight; changing units preserves the measurement.</p>
-      {baseline.measurement && <p className="muted">Last weight recorded: {new Date(baseline.measurement.measuredAt).toLocaleString()}</p>}
+      {latest.measurement ? <p className="muted">Last weight recorded: {new Date(latest.measurement.measuredAt).toLocaleString()}</p> : <p className="muted">No recorded weight.</p>}
       {error && <p role="alert">{error}</p>}
       <p role="status">{status}</p>
       <div className="actions"><button className="primary" type="submit">{busy ? 'Saving...' : 'Save profile'}</button><button type="button" onClick={() => { if (window.confirm('Discard your unsaved input and load the latest saved profile?')) { reset(latest); setStatus('Latest saved profile loaded.') } }}>Reload saved profile</button></div>

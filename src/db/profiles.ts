@@ -1,5 +1,7 @@
 import { type BorosDatabase, db } from './database.ts'
-import { measurementSchema, nameKey, photoSchema, profileInputSchema, themeSchema, workspaceSettingsSchema } from '../schemas/profile.ts'
+import { nameKey, photoSchema, profileInputSchema, themeSchema, workspaceSettingsSchema } from '../schemas/profile.ts'
+import { appendSettingsWeight, latestMeasurement } from './measurements.ts'
+import { removeUnusedPhoto } from './photos.ts'
 import type { PreparedPhoto, Profile, ProfileInput, Theme } from '../schemas/profile.ts'
 
 export class ConflictError extends Error {
@@ -8,7 +10,7 @@ export class ConflictError extends Error {
 
 export function profileService(database: BorosDatabase) {
   const tables = [database.profiles, database.settings, database.photos, database.measurements]
-  const latestWeight = (profileId: string) => database.measurements.where('[profileId+measuredAt]').between([profileId, ''], [profileId, '\uffff']).last()
+  const latestWeight = (profileId: string) => latestMeasurement(database, profileId)
   const getProfile = async (id: string) => {
     const profile = await database.profiles.get(id)
     if (!profile) throw new Error('The selected profile is missing. No replacement workspace was created.')
@@ -18,15 +20,6 @@ export function profileService(database: BorosDatabase) {
     if (!nameKey(displayName)) throw new Error('Enter a profile name.')
     const existing = await database.profiles.where('nameKey').equals(nameKey(displayName)).first()
     if (existing && existing.id !== ownId) throw new Error('A profile with that name already exists.')
-  }
-  const appendMeasurement = async (profileId: string, weightKg: number) => {
-    const last = await latestWeight(profileId)
-    if (last && Math.abs(last.weightKg - weightKg) < 0.000001) return
-    const now = new Date().toISOString()
-    // Monotonic timestamp for same-millisecond saves; latest is deterministic.
-    const measuredAt = new Date(Math.max(Date.now(), last ? Date.parse(last.measuredAt) + 1 : 0)).toISOString()
-    const measurement = measurementSchema.parse({ weightKg, measuredAt })
-    await database.measurements.add({ ...measurement, profileId, id: crypto.randomUUID(), loggedAt: now })
   }
   return {
     async initialize() {
@@ -96,12 +89,12 @@ export function profileService(database: BorosDatabase) {
         const { weightKg, ...fields } = input
         const next: Profile = { ...original, ...fields, name: displayName, nameKey: nameKey(displayName), kind: input.name ? 'named' : original.kind, revision: original.revision + 1, updatedAt: new Date().toISOString() }
         if (photo !== undefined) {
-          if (original.photoId) await database.photos.delete([profileId, original.photoId])
           next.photoId = photo ? crypto.randomUUID() : undefined
           if (photo) await database.photos.add({ ...photo, profileId, id: next.photoId!, createdAt: next.updatedAt, role: 'avatar' })
         }
-        if (weightKg !== undefined) await appendMeasurement(profileId, weightKg)
+        if (weightKg !== undefined) await appendSettingsWeight(database, profileId, weightKg)
         await database.profiles.put(next)
+        if (photo !== undefined) await removeUnusedPhoto(database, profileId, original.photoId)
         return next
       })
     },
