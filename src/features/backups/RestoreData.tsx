@@ -77,7 +77,7 @@ export function RestoreData() {
     </section>}
     {plan && <section aria-label="Restore preview"><h3 ref={heading} tabIndex={-1}>{labels[plan.choice]}: {plan.targetName ?? plan.result.profile.name}</h3>
       <p>{plan.choice === 'new' ? `New profile: ${plan.result.profile.name}. Existing profiles stay unchanged.` : 'Only this identified profile is affected. Other profiles stay unchanged.'}</p>
-      {plan.choice === 'clear' && <p>Deletes this profile’s exercises, tags, plans, schedules, saved drafts, completed logs, measurements and photos, and resets demographics. Keeps its name and unit preferences. Use Download data above before confirming if you need a copy.</p>}
+      {plan.choice === 'clear' && <p>Deletes this profile’s exercises, tags, plans, schedules, Train selections, saved drafts, completed logs, measurements and photos, and resets demographics. Keeps its name, time zone and unit preferences. Use Download data above before confirming if you need a copy.</p>}
       <p>Removes {plan.counts.sessions.removed} saved sessions, {plan.counts.drafts.removed} saved drafts and {plan.counts.schedules.removed} schedules from this device.</p>
       <p className="muted">Scroll the table horizontally to see all change counts.</p>
       <div className="table-scroll" tabIndex={0} aria-label="Proposed record changes"><table><caption>Changes before saving</caption><thead><tr><th>Records</th><th>Add</th><th>Conflict</th><th>Replace</th><th>Remove</th><th>Skip</th></tr></thead><tbody>{ownedStores.map((key) => <tr key={key}><th scope="row">{key}</th>{Object.values(plan.counts[key]).map((count, i) => <td key={i}>{count}</td>)}</tr>)}</tbody></table></div>

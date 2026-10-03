@@ -67,7 +67,7 @@ test('new profile and rename restore recover photos, null fields, saved drafts/h
   await page.reload(); await expect(page.getByLabel('Active profile')).toHaveValue(id)
   await button(page, 'Train').click(); await page.getByRole('button', { name: /Resume Plan.*Day 3/ }).click(); await expect(page.getByRole('status').filter({ hasText: 'Draft saved locally' })).toBeVisible()
   await expect(page.getByRole('textbox', { name: /set 1 Weight/ }).first()).toHaveValue('12.')
-  await button(page, 'Calendar').click(); await expect(page.getByLabel('Displayed time zone')).toHaveValue('America/New_York')
+  await button(page, 'Calendar').click(); await expect(page.getByRole('article', { name: /^Schedule/ }).first()).toContainText('America/New_York')
   await button(page, 'Progress').click(); await expect(button(page, 'View progress photo').first()).toBeVisible(); await button(page, 'View progress photo').first().click(); await expect(page.getByRole('dialog').getByRole('img')).toBeVisible(); await button(page, 'Close photo').click()
   await button(page, 'Settings').click(); await button(page, 'Light').click(); await upload(page, f.bytes)
   await page.getByLabel('Import choice').selectOption('new'); await page.getByLabel('Imported profile name').fill('Renamed copy'); await preview(page)
@@ -106,7 +106,7 @@ test('clear cancellation and confirmation, failure rollback and stale preview re
   await button(page, 'Cancel').click(); await page.reload(); await button(page, 'Clear data').click(); const id = await confirm(page), after = await records(page)
   expect(table(after, 'profiles').find((p) => p.id === id)!.name).toBe(table(original, 'profiles').find((p) => p.id === f.id)!.name)
   for (const name of ['drafts', 'sessions', 'photos', 'measurements', 'exercises', 'plans', 'tags', 'schedules']) expect(table(after, name).filter((r) => r.profileId === id)).toHaveLength(0)
-  expect(scoped(after, f.otherId)).toEqual(other); await page.reload(); await expect(page.getByLabel('Active profile')).toHaveValue(id); await button(page, 'Train').click(); await expect(page.getByText('No saved sessions.')).toBeVisible()
+  expect(scoped(after, f.otherId)).toEqual(other); await page.reload(); await expect(page.getByLabel('Active profile')).toHaveValue(id); await button(page, 'Train').click(); await expect(page.getByText('No active plan(s) selected.')).toBeVisible()
 })
 
 test('invalid ZIP and failed image decoding remain recoverable; cancel/navigation/profile-switch abandon temporary uploads', async ({ page }) => {
@@ -114,7 +114,7 @@ test('invalid ZIP and failed image decoding remain recoverable; cancel/navigatio
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'bad.zip', mimeType: 'application/zip', buffer: Buffer.from('not zip') }); await expect(page.getByRole('alert')).toContainText('Invalid ZIP'); expect(await records(page)).toEqual(before)
   const zip = await JSZip.loadAsync(f.bytes), manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = 99; zip.file('manifest.json', JSON.stringify(manifest))
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'future.zip', mimeType: 'application/zip', buffer: await zip.generateAsync({ type: 'nodebuffer' }) }); await expect(page.getByRole('alert')).toContainText('Update Boros')
-  manifest.backupSchemaVersion = 2
+  manifest.backupSchemaVersion = 3
   const data = JSON.parse(await zip.file('data.json')!.async('string')); data.assets[0].width = 2; manifest.assets.find((a) => a.id === data.assets[0].id).width = 2
   const payload = new TextEncoder().encode(JSON.stringify(data)), entry = manifest.inventory.find((i) => i.path === 'data.json'); entry.bytes = payload.length; entry.sha256 = await sha256(payload)
   zip.file('data.json', payload); zip.file('manifest.json', JSON.stringify(manifest))

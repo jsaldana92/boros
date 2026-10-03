@@ -229,7 +229,7 @@ extraction or numeric type coercion. Pasted HTML/code is inert plain text; tutor
 URLs are never automatically fetched or embedded.
 
 The public v2 contract in `src/schemas/interchange.ts` is separate from database
-schema v5 and backup schema v2. Valid v1 payloads remain accepted; a v1 plan requires
+schema v5 and backup schema v3. Valid v1 payloads remain accepted; a v1 plan requires
 the owner to supply duration in the editable preview. Nothing is inferred from its
 name. The v2 shape is:
 
@@ -311,11 +311,37 @@ exhaustion, and large-data performance still need the checks recorded in TODO.md
 
 ## Training, persistent drafts, and session history
 
-Train lists the active profile's saved active plans and unfinished sessions.
-Choose a plan/day and Start session, or Resume an unfinished session. Starting
+Train uses a persistent, profile-scoped **Select Plans** preference. With none
+selected it shows **No active plan(s) selected.** One selected plan opens its
+day interface directly; multiple plans show cards with **Back to plans** after
+opening one. Selection never schedules or archives anything. An archived selection
+is hidden, with its ID retained so restoring that plan restores the selection;
+saving a new selection replaces the old list with the currently checked usable
+plans. Missing references are ignored in Train, never replaced with another plan.
+No session is created by rendering a card or selecting a plan.
+
+Choose a day and Start session, or Resume an unfinished session. Starting
 the same day reuses its unfinished draft, including across tabs. After completion,
 starting another session is a deliberate action. Archived/changed source plans
 do not prevent resuming an existing draft from the unfinished list.
+Unselected plans' drafts also remain resumable. A compact **Saved sessions**
+action appears when history exists. Calendar entry opens the exact occurrence,
+even for an unselected plan, without changing the selection preference.
+
+Scheduled cards show the latest saved session's actual completion date (displayed
+in the profile zone) and the earliest pending date, labeled with its schedule zone.
+Overdue occurrences take priority (**PAST DUE**, red plus text), then **DUE TODAY**,
+then future work (**ON GOING**). A finite workload with all occurrences saved is
+**COMPLETED**; a saved partial counts, an unscheduled session does not clear a
+scheduled occurrence. Multiple current schedules combine by their distinct keys;
+stopped-only and unscheduled plans omit a status claim. Effective stopped schedules
+remain accessible in Calendar/history but leave the combined current-schedule
+status. Stopped schedules must also have their original workload saved before
+another schedule can make the combined plan COMPLETED. A pending duration-truncated occurrence prevents a fabricated COMPLETED
+claim. Unbounded or mapping-repair schedules cannot be declared completed.
+Status checks visit effective schedule segments and saved completions rather than
+enumerating every elapsed week. They refresh at minute boundaries and immediately
+on window focus/visibility changes; each occurrence compares today in its own zone.
 
 Each start copies the complete training-day prescription: names, order, set
 targets, rest, instructions, tutorial, tags, notes, and source references. Later
@@ -416,8 +442,10 @@ was suppressed. Progress UI and backup workflows remain future phases.
 
 ## Calendar and recurring schedules
 
-Calendar opens in Monday–Sunday week view, with Day, Month, Today, Previous,
-Next, and a date input for direct navigation. There is no rolling history cutoff.
+Calendar opens to the current named month with complete Monday–Sunday weeks,
+dim adjacent-month dates and actionable events. Previous/Next advances calendar
+months. Day/week views retain their own navigation, with Today and a date input.
+There is no rolling history cutoff. Only the visible date range is generated.
 Wide screens show seven columns; narrow screens use chronological cards with
 reachable controls above the bottom navigation. Completed events stay actionable,
 greyed and struck through with explicit Completed/Partial text. Past uncompleted
@@ -436,16 +464,21 @@ duration** explicitly previews that change, anchored to the original start week
 and applied only from a selected Monday. Earlier missed dates stay incomplete;
 started/completed sessions remain on their original dates with frozen prescriptions.
 Multiple schedules can use the same plan, with independent IDs and completions.
-When schedules coexist in a zone, event labels show their short schedule IDs.
+When schedules coexist, event labels show their short schedule IDs and saved zones.
+Calendar schedules existing plans only; create plans in Create.
 
 ### Dates and time zones
 
-Creation stores the browser's IANA time-zone identifier. It never follows a later
-device-zone change automatically. Calendar defaults to the first stored schedule's
-zone (the browser zone when none exist). **Displayed time zone** selects which
-zone's schedules appear; other schedules remain listed with their own zones.
-Today, view boundaries, and missed/incomplete status use that displayed context.
-Refresh restores Calendar as a screen, then defaults to week view and Today;
+Profile Settings stores a validated IANA **Time zone** for new schedules and Calendar
+Today. New profiles use the browser zone. An older profile missing this preference
+receives it once at startup or profile selection; only its profile revision/update
+time changes. Reviewed legacy imports initialize the missing preference in their
+proposed new profile. Neither operation rewrites schedules, logs or measurements.
+Existing schedules keep their original zones when this preference or device zone
+changes. Calendar displays all zones together on each schedule's saved local date,
+with a read-only zone label. Event lateness uses the schedule zone, while Today
+and the default month use the profile preference. No editable zone is in Calendar.
+Refresh restores Calendar as a screen, then defaults to month view and Today;
 the selected date, view, and open editor are not persisted as navigation state.
 
 Events are all-day Gregorian civil dates (`YYYY-MM-DD`), separate from UTC start,
@@ -595,8 +628,8 @@ or password-protected. The app reports **Download started**; check your browser'
 downloads to confirm the file was saved. Filenames include a sanitized profile
 name and UTC export timestamp.
 
-Backup schema **1** is separate from AI interchange and database schema **5**.
-The archive contains `manifest.json`, authoritative `data.json`, 21 linked CSVs,
+Backup schema **3** (strict v1/v2 reading retained) is separate from AI interchange and database schema **5**.
+The archive contains `manifest.json`, authoritative `data.json`, 24 linked CSVs,
 and original photo files. App version comes from the actual package.json value,
 currently `0.0.0`. See [the backup contract](docs/backup-format.md) for the full
 layout, fields, units, joins, timestamp meanings, and Phase 9 compatibility rules.
@@ -606,7 +639,7 @@ exercises and plans, ordered prescriptions and historical snapshots, schedules
 and all mapping revisions, saved unfinished/finalized drafts, completed full/partial
 sessions/results/notes, measurements, and photo references/assets. Stable IDs and
 canonical units are preserved. Shared photos are written once per asset ID.
-Browser-wide appearance/selection/notice preferences, active timers, navigation,
+Profile time-zone and Train selections are included. Browser-wide appearance/active-profile/notice preferences, active timers, navigation,
 object URLs, unsaved forms, unapplied notes and pending/failed autosaves are excluded.
 
 Before exporting, save edits/apply notes and wait for **Draft saved locally** in
@@ -694,8 +727,8 @@ are preserved; the successful result becomes active only after commit.
 
 **Clear data** previews the selected profile's entire deletion scope and points to
 Download data first. Confirmation removes its exercises, tags, plans, schedules,
-drafts, completed logs, measurements, photos/timer and demographics. Its name and
-unit preferences remain as an empty workspace. This is separate from training's
+drafts, completed logs, Train selections, measurements, photos/timer and demographics. Its name,
+time zone and unit preferences remain as an empty workspace. This is separate from training's
 draft Clear. Cancel leaves records and selection untouched.
 
 An isolated export → renamed-profile import → export comparison passed for canonical
@@ -742,7 +775,7 @@ Publishing is an owner action; this preparation did not commit, push or deploy.
 As of 2026-10-03, Phase 10 is **Verification pending** for Blob-capable WebKit/Safari
 photo/restore coverage and Phase 11 remains **In progress**. The owner reports the
 public site works and HTTPS is resolved. Earlier Edge/Node certificate failures
-are historical. The changed Group 2 candidate has local verification; no new
+are historical. The changed Group 3 candidate has local verification; no new
 independent production certificate/runtime or artifact comparison is claimed here.
 The Ko-fi URL was supplied during Group 1 and is now configured for production;
 its automated live visit encounters a Cloudflare challenge. These checks have not
@@ -793,8 +826,8 @@ Settings button with an accessible name/tooltip. Both brand images use guarded T
 navigation. Height/weight units stay beside inputs; Age remains separate. Filters
 are compact; displayed date/time values stop at minutes, while stored timestamps,
 time-zone context and backups keep their original precision on unrelated edits.
-That Group 1 handoff predates Group 2 below. Groups 3–4 (Calendar/Train redesign and
-Progress analytics) remain unimplemented. No Group 1 deployment was performed.
+That Group 1 handoff predates Groups 2–3 below. Group 4's Progress redesign and
+analytics remain unimplemented. No Group 1 deployment was performed.
 
 ## Group 2: supersets, repeated occurrences and duration
 
@@ -822,10 +855,25 @@ history remain in use. Saved history represents group rounds without adding
 Group 4 analytics.
 
 Database schema stays **v5**, with optional nested additions and no record rewrite.
-AI and backup contracts are **v2**, with validated v1 compatibility. Backups retain
+Group 2 introduced AI and backup contracts **v2**, with validated v1 compatibility. Backups retain
 stable group membership/order, repeated results, original time precision and
 schedule boundary history. See [backup format](docs/backup-format.md) and
 [Group 2 verification](docs/group2-verification.md) for contracts, decisions and
 actual checks. The owner reports HTTPS resolved on 2026-10-03; this is owner
 verification, not a new automated production smoke test. No hosting changes or
 deployment were performed here.
+
+## Group 3: profile zones, month Calendar and selected Train plans
+
+The behavior above adds optional `timeZone` and `selectedPlanIds` profile fields;
+IndexedDB remains **v5**, with no store migration. Both preference writes share
+the profile revision check, so a concurrent Settings/selection save is rejected
+and keeps recoverable input. Stored dates, timestamps and units remain intact.
+New exports use **backup v3**, retaining strict v1/v2 reading and checksum/asset
+verification. Selected plan IDs follow independent ownership and plan-root merge
+remapping; the chosen whole-profile merge precedence also chooses preferences.
+Clear Data clears selections and retains the time zone and units. AI remains v2.
+
+See [Group 3 verification](docs/group3-verification.md) for actual checks and the
+remaining owner checklist. Group 4 Progress redesign is the next implementation
+group. HTTPS remains owner-confirmed resolved; this task does not publish changes.

@@ -33,10 +33,10 @@ export function sessionService(database: BorosDatabase) {
       })
     },
     async library(profileId: string) {
-      return database.transaction('r', [...tables, database.plans], async () => {
+      return database.transaction('r', [...tables, database.plans, database.schedules], async () => {
         await owner(profileId)
         const timer = await database.restTimers.get('active')
-        return { plans: (await database.plans.where('profileId').equals(profileId).toArray()).filter((plan) => !plan.archivedAt), drafts: (await database.drafts.where('profileId').equals(profileId).toArray()).filter((item) => !item.finalizedAt), sessions: (await database.sessions.where('profileId').equals(profileId).toArray()).sort((a, b) => b.completedAt.localeCompare(a.completedAt)), timer: timer?.profileId === profileId ? timer : undefined }
+        return { schedules: await database.schedules.where('profileId').equals(profileId).toArray(), plans: (await database.plans.where('profileId').equals(profileId).toArray()).filter((plan) => !plan.archivedAt), drafts: (await database.drafts.where('profileId').equals(profileId).toArray()).filter((item) => !item.finalizedAt), sessions: (await database.sessions.where('profileId').equals(profileId).toArray()).sort((a, b) => b.completedAt.localeCompare(a.completedAt)), timer: timer?.profileId === profileId ? timer : undefined }
       })
     },
     async start(profileId: string, planId: string, dayId: string) {

@@ -27,7 +27,7 @@ async function records(p: Page) {
   })
 }
 async function train(p: Page) {
-  await button(p, 'Train').click(); await field(p, 'Plan').selectOption({ label: 'Two-week supersets' }); await field(p, 'Training day').selectOption({ label: '1. Mixed day' }); await button(p, 'Start session').click()
+  await button(p, 'Train').click(); await button(p, 'Select Plans').click(); await p.getByRole('checkbox', { name: 'Two-week supersets', exact: true }).check(); await button(p, 'Save selection').click(); await expect(p.getByRole('dialog')).toHaveCount(0); await field(p, 'Training day').selectOption({ label: '1. Mixed day' }); await button(p, 'Start session').click()
 }
 async function saved(p: Page) { await expect(p.getByText('Draft saved locally.', { exact: true })).toBeVisible() }
 
@@ -106,25 +106,25 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await button(page, 'Settings').click(); await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
   const pending = page.waitForEvent('download'); await button(page, 'Download data').click()
   const bytes = await readFile((await (await pending).path())!), zip = await JSZip.loadAsync(bytes)
-  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(2)
+  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(3)
   expect(zip.file('csv/supersets.csv')).toBeTruthy()
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'groups.zip', mimeType: 'application/zip', buffer: bytes })
   await expect(page.getByRole('region', { name: 'Backup selection' })).toBeVisible()
   await page.getByLabel('Import choice').selectOption('new'); await page.getByLabel('Imported profile name').fill('Grouped restore')
   await button(page, 'Preview import').click(); await page.getByRole('checkbox', { name: /I confirm import under a new name/ }).check(); await button(page, 'Confirm and save').click()
   await expect(page.locator('input[name=name]')).toHaveValue('Grouped restore'); await page.reload()
-  await button(page, 'Train').click(); await expect(page.getByRole('article', { name: 'Session Two-week supersets / Mixed day', exact: true })).toHaveCount(2)
+  await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await expect(page.getByRole('article', { name: 'Session Two-week supersets / Mixed day', exact: true })).toHaveCount(2)
 })
 
 test('finite schedule preview freezes two-week boundary and explicit duration change preserves started/missed dates', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2025-01-02T12:00:00Z')); await importPlan(page)
-  await button(page, 'Calendar').click(); await button(page, 'Add Plan').click(); await field(page, 'Starting week (Monday)').fill('2024-12-30')
+  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await button(page, 'Add Plan').click(); await field(page, 'Starting week (Monday)').fill('2024-12-30')
   await button(page, 'Preview schedule').click(); await expect(page.getByRole('dialog')).toContainText('2025-01-12'); await button(page, 'Confirm schedule').click()
   await expect(page.locator('.calendar-event')).toHaveCount(1); await expect(page.locator('.calendar-event')).toContainText('Missed / incomplete')
   await field(page, 'Calendar date').fill('2025-01-06'); await page.locator('.calendar-event').click(); await field(page, 'Squat occurrence 2 set 1 Weight (kg)').fill('55'); await saved(page)
   await button(page, 'Create').click(); await card(page).getByRole('button', { name: 'Edit plan', exact: true }).click(); await field(page, 'Duration (weeks)').fill('1'); await button(page, 'Save plan').click()
   expect((await records(page)).schedules[0].endDate).toBe('2025-01-12')
-  await button(page, 'Calendar').click(); await field(page, 'Calendar date').fill('2025-01-13'); await expect(page.locator('.calendar-event')).toHaveCount(0)
+  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-13'); await expect(page.locator('.calendar-event')).toHaveCount(0)
   await button(page, 'Review plan duration').click(); await field(page, 'Effective from').fill('2025-01-06'); await button(page, 'Preview schedule').click()
   await expect(page.getByRole('dialog')).toContainText('2025-01-05'); await button(page, 'Confirm schedule').click(); await expect(page.getByRole('dialog')).toContainText('Confirm keeping')
   await page.getByLabel('Keep these sessions on their original dates, with all entered data.').check(); await button(page, 'Confirm schedule').click()

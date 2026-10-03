@@ -3,7 +3,10 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { Info, NotebookPen } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
-import { ScreenButton } from '../../app/ScreenButton'
+import { PlanSelection } from './PlanSelection'
+import { planStatus } from '../../lib/plan-status'
+import { useCurrentInstant } from '../../lib/use-current-instant'
+import { browserZone, localToday } from '../../lib/calendar-dates'
 import { useScreenNavigation } from '../../app/navigation-context'
 import { sessions } from '../../db/sessions'
 import { assessSession, displayedLoad, numericResult, timerRemaining, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
@@ -21,15 +24,19 @@ export function TrainPage() {
   return <TrainWorkspace key={snapshot.profile.id} profileId={snapshot.profile.id} unit={snapshot.profile.weightUnit} />
 }
 function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUnit }) {
-  const { allowLeave } = useWorkspace()
+  const { allowLeave, snapshot } = useWorkspace()
+  const instant = useCurrentInstant()
+  const [selecting, setSelecting] = useState(false), [history, setHistory] = useState(false)
   const { trainingEntry } = useScreenNavigation()
   const [attempt, setAttempt] = useState(0), [error, setError] = useState(''), [busy, setBusy] = useState(false)
-  const [planId, setPlan] = useState(''), [dayId, setDay] = useState('')
+  const [planId, setPlan] = useState(''), [days, setDays] = useState<Record<string, string>>({})
   const [opened, setOpened] = useState<SessionDraft>(), [review, setReview] = useState<CompletedSession>()
   const result = useLiveQuery(async () => {
     try { return { data: await sessions.library(profileId), error: '' } } catch (error) { return { data: undefined, error: (error as Error).message } }
   }, [profileId, attempt])
-  const data = result?.data, plan = data?.plans.find((item) => item.id === planId)
+  const data = result?.data, selected = data?.plans.filter((item) => snapshot.profile.selectedPlanIds?.includes(item.id)) ?? []
+  const plan = selected.find((item) => item.id === planId) ?? (selected.length === 1 ? selected[0] : undefined)
+  const dayId = plan && plan.days.some((day) => day.id === days[plan.id]) ? days[plan.id] : ''
   useEffect(() => {
     if (!trainingEntry || trainingEntry.profileId !== profileId) return
     let alive = true
@@ -37,8 +44,8 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
       if (!alive) return
       const session = saved.sessions.find((item) => item.id === trainingEntry.sessionId || item.draftId === trainingEntry.draftId)
       const draft = saved.drafts.find((item) => item.id === trainingEntry.draftId)
-      if (session) setReview(session)
-      else if (draft) setOpened(draft)
+      if (session) { setOpened(undefined); setReview(session) }
+      else if (draft) { setReview(undefined); setOpened(draft) }
       else setError('This scheduled session is unavailable. Open it again from Calendar.')
     }).catch((error: Error) => { if (alive) setError(error.message) })
     return () => { alive = false }
@@ -52,17 +59,28 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
         : <>
           {!result && <p role="status">Loading training days...</p>}
           {data && <>
-            <h2>Start or resume</h2>
-            {data.drafts.length > 0 && <section aria-label="Unfinished sessions"><h3>Unfinished sessions</h3>{data.drafts.map((draft) => <p key={draft.id}><button disabled={busy} onClick={() => { setOpened(draft); focus() }}>Resume {draft.planName} / {draft.day.name}{draft.occurrence && ` · ${draft.occurrence.scheduledDate} · ${draft.occurrence.timeZone}`}</button></p>)}</section>}
-            {!data.plans.length ? <p>No active plans. <ScreenButton to="create">Open Create</ScreenButton></p> : <fieldset disabled={busy}>
-              <label htmlFor="training-plan">Plan</label><select id="training-plan" value={planId} onChange={(event) => { setPlan(event.target.value); setDay('') }}><option value="">Choose a plan</option>{data.plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select>
-              <label htmlFor="training-day">Training day</label><select id="training-day" value={dayId} disabled={!plan} onChange={(event) => setDay(event.target.value)}><option value="">Choose a day</option>{plan?.days.map((day, index) => <option key={day.id} value={day.id}>{index + 1}. {day.name}</option>)}</select>
-              <p className="muted">This starts an unscheduled session. Open Calendar to train a scheduled date.</p>
-              <button className="primary" disabled={!dayId} onClick={() => void act(async () => { setOpened(await sessions.start(profileId, planId, dayId)); focus() })}>{data.drafts.some((draft) => !draft.occurrence && draft.sourcePlanId === planId && draft.sourceDayId === dayId) ? 'Resume selected day' : 'Start session'}</button>
-            </fieldset>}
-            <h2 className="library-heading">Saved sessions</h2>
-            {!data.sessions.length && <p className="muted">No saved sessions.</p>}
-            {data.sessions.map((session) => <article className="exercise-card" key={session.id} aria-label={`Session ${session.planName} / ${session.day.name}`}><h3>{session.planName} / {session.day.name}</h3><p>{session.partial ? 'Partial session' : 'Complete session'} · {displayDateTime(session.completedAt)}</p><button onClick={() => { setReview(session); focus() }}>Review session</button></article>)}
+            {!selected.length && <p>No active plan(s) selected.</p>}
+            <div className="actions"><button onClick={() => { if (allowLeave()) setSelecting(true) }}>Select Plans</button>
+              {!!data.sessions.length && <button aria-expanded={history} onClick={() => setHistory(!history)}>Saved sessions ({data.sessions.length})</button>}
+              {plan && selected.length > 1 && <button onClick={() => { if (allowLeave()) { setPlan(''); focus() } }}>Back to plans</button>}
+            </div>
+            {data.drafts.length > 0 && <section aria-label="Unfinished sessions"><h2>Unfinished sessions</h2>{data.drafts.map((draft) => <p key={draft.id}><button disabled={busy} onClick={() => { if (allowLeave()) { setPlan(draft.sourcePlanId); setDays((values) => ({ ...values, [draft.sourcePlanId]: draft.sourceDayId })); setOpened(draft); focus() } }}>Resume {draft.planName} / {draft.day.name}{draft.occurrence && ` · ${draft.occurrence.scheduledDate} · ${draft.occurrence.timeZone}`}</button></p>)}</section>}
+            {history ? <section aria-label="Saved sessions"><h2>Saved sessions</h2>{data.sessions.map((session) => <article className="exercise-card" key={session.id} aria-label={`Session ${session.planName} / ${session.day.name}`}><h3>{session.planName} / {session.day.name}</h3><p>{session.partial ? 'Partial session' : 'Complete session'} · {displayDateTime(session.completedAt)}</p><button onClick={() => { setReview(session); focus() }}>Review session</button></article>)}</section> : <>
+              <div className="train-plan-cards">{(plan ? [plan] : selected).map((item) => {
+                const summary = planStatus(item.id, data.schedules, data.sessions, data.drafts, instant)
+                return <article className="exercise-card train-plan-card" key={item.id} aria-label={`Train plan ${item.name}`}>
+                  <h2>{plan ? item.name : <button className="plan-open" onClick={() => { setPlan(item.id); focus() }}>Open {item.name}</button>}</h2>
+                  {summary.status && <span className={`schedule-status${summary.status === 'PAST DUE' ? ' past-due' : ''}`}>{summary.status}</span>}
+                  {summary.scheduled && <><p>Last workout: {summary.last ? localToday(snapshot.profile.timeZone ?? browserZone(), new Date(summary.last.completedAt)) : 'None saved'}</p><p>Next workout: {summary.next ? `${summary.next.scheduledDate} · ${summary.next.timeZone}` : 'None pending'}</p>{summary.scheduleCount > 1 && <p className="muted">Combined status across {summary.scheduleCount} schedules; overdue work takes priority.</p>}</>}
+                </article>
+              })}</div>
+              {plan && <fieldset disabled={busy}>
+                <label htmlFor="training-day">Training day</label><select id="training-day" value={dayId} onChange={(event) => { const value = event.target.value; setDays((values) => ({ ...values, [plan.id]: value })) }}><option value="">Choose a day</option>{plan.days.map((day, index) => <option key={day.id} value={day.id}>{index + 1}. {day.name}</option>)}</select>
+                <p className="muted">This starts an unscheduled session. Open Calendar to train a scheduled date.</p>
+                <button className="primary" disabled={!dayId} onClick={() => void act(async () => { setOpened(await sessions.start(profileId, plan.id, dayId)); focus() })}>{data.drafts.some((draft) => !draft.occurrence && draft.sourcePlanId === plan.id && draft.sourceDayId === dayId) ? 'Resume selected day' : 'Start session'}</button>
+              </fieldset>}
+            </>}
+            {selecting && <PlanSelection plans={data.plans} onClose={() => { setSelecting(false); setHistory(false); focus() }} />}
           </>}
         </>}
     {error && <p role="alert">{error}</p>}

@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-03
-Status: Owner revisions Group 2 complete in the available local verification environments: supersets, repeated occurrences and finite duration. Owner reports HTTPS resolved and the published site working (2026-10-03); no new independent production verification is claimed. Groups 3–4 remain unstarted. Earlier manual and live Support acceptance checks remain pending.
-Current scope: Group 2 across plans, training, scheduling, AI and backups. Preserve Group 1 and historical handoffs. No commit, push, deployment or DNS/GitHub settings change is authorized.
+Status: Owner revisions Group 3 complete in the available local verification environments. Profile time zones, month Calendar and persistent Train selection/status build on verified Group 1–2 work. Owner reports HTTPS resolved; no new independent production verification is claimed. Group 4 remains unstarted. Earlier manual and live Support acceptance checks remain pending.
+Current scope: Group 3 Calendar/Train/profile preferences and backup compatibility. Preserve Group 1–2 and historical handoffs. No commit, push, deployment or DNS/GitHub settings change is authorized.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -474,7 +474,7 @@ Goal: publish the tested SPA at a stable address when the owner authorizes deplo
 - [ ] Finish live Support acceptance: the real Ko-fi URL is supplied and configured for production, and protected opening passes local browser checks. Owner confirmation of the account page remains pending behind its Cloudflare challenge.
 - [x] Inspect and prepare the existing GitHub Pages release: public `jsaldana92/boros`, `origin`/`gh-pages`, `dist`, CLI-generated CNAME for `boros-app.com` and `.nojekyll`; retain exact gh-pages 6.1.1 and current scripts. Owner reports HTTPS resolved on 2026-10-03; earlier hostname failure is historical. No new independent production check is claimed.
 - [x] Document local setup, actual scripts, supported backup versions, storage scope, single-address navigation, and release steps in README and docs/release-preparation.md.
-- [x] Produce the release build and verify unchanged-address navigation, remembered-screen refresh, asset paths, and startup at both static root and project subpath. Current Group 2 candidate: 296/296 static browser checks and 23/23 resource hashes per mount. Earlier release/Group 1 results remain historical. No screen-specific server routes are required.
+- [x] Produce the release build and verify unchanged-address navigation, remembered-screen refresh, asset paths, and startup at both static root and project subpath. Current Group 3 candidate: 312/312 static browser checks and 23/23 resource hashes per mount. Earlier release/Group 1 results remain historical. No screen-specific server routes are required.
 - [x] Explain separate origin ownership and the original-ZIP export/import procedure; preserve source records until target reload, photos/history and isolation are checked.
 - [ ] Deploy only when instructed, then run the short release smoke test on the published origin.
 - [ ] Create a profile, save/reopen a plan/session, reload, export a backup, and confirm persistence from the published site. Check a phone-sized viewport and the Support link.
@@ -482,7 +482,7 @@ Goal: publish the tested SPA at a stable address when the owner authorizes deplo
 
 Preparation evidence is in docs/release-preparation.md; the current candidate fingerprint and verification are in docs/group2-verification.md.
 Phase 11 remains incomplete: Phase 10's required Safari check, live Ko-fi acceptance,
-and the changed Group 2 artifact's separately authorized publication/smoke are pending.
+and the changed Group 3 artifact's separately authorized publication/smoke are pending.
 The owner's HTTPS resolution and working published site are recorded without claiming a fresh automated production check.
 
 Acceptance: the published app passes the release smoke test, data survives reload at its stable address, and backups work. Offline cold start remains outside the release promise unless separately implemented and verified.
@@ -525,16 +525,16 @@ Compatibility decisions: retain IndexedDB v5 and all existing records without a 
 - [x] Export backup v2 JSON/manifest/linked CSVs and restore both v1/v2. Validate original v1 archive integrity/strict fields/assets before changing only the in-memory envelope. Verify duration-history/group round trips, repeated results, both whole-family merge priorities and root remapping.
 - [x] Verify build/type/lint, data 108/108, static browsers 296/296, development Group 2 8/8, Firefox 138 passes + 2 cleanup-failure reruns passing (2 expected skips), and 23/23 resource hashes per static mount. Actual commands and initial failures are in docs/group2-verification.md. Physical/Safari/manual release gates remain explicitly unverified.
 
-### Group 3 — Calendar and Train (not started; depends on Group 2)
+### Group 3 — Calendar and Train (complete in available local checks)
 
-- [ ] Move editable time-zone preference to profile Settings; existing schedules retain their recorded zone and dates when the preference changes.
-- [ ] Remove Calendar's Create Plan action; retain Add Plan for existing plans. Default to the current calendar month with complete Monday–Sunday weeks and dim adjacent-month dates while retaining events.
-- [ ] Inspect/reuse the existing distinct-weekday mapping and preview before changing it. Add Plan maps each training day to a distinct Monday–Sunday weekday and repeats for the explicit plan duration.
-- [ ] Train empty state: “Train” and “No active plan(s) selected.” Preserve access to saved history through the redesigned Progress flow; coordinate that move with Group 4 rather than hiding existing history prematurely.
-- [ ] Persist active-plan selection per profile. One selected plan opens directly; multiple selected plans show selectable cards and clear internal Back navigation.
-- [ ] Scheduled cards show last completed workout date and next pending scheduled date, with PAST DUE (red), DUE TODAY, COMPLETED or ON GOING status pills.
-- [ ] Define status precedence using actual pending/completed occurrences. An expired plan with missed sessions is not automatically completed; do not infer history from display names.
-- [ ] Preserve draft recovery, partial completion, notes, timers, edit guards and immutable session history at every drill-down level; keep the public address unchanged.
+- [x] Move editable time-zone preference to profile Settings; existing schedules retain their recorded zone and dates when the preference changes.
+- [x] Remove Calendar's Create Plan action; retain Add Plan for existing plans. Default to the current calendar month with complete Monday–Sunday weeks and dim adjacent-month dates while retaining events.
+- [x] Inspect/reuse the existing distinct-weekday mapping and preview before changing it. Add Plan maps each training day to a distinct Monday–Sunday weekday and repeats for the explicit plan duration.
+- [x] Train empty state: “Train” and “No active plan(s) selected.” Preserve access to saved history through the redesigned Progress flow; coordinate that move with Group 4 rather than hiding existing history prematurely.
+- [x] Persist active-plan selection per profile. One selected plan opens directly; multiple selected plans show selectable cards and clear internal Back navigation.
+- [x] Scheduled cards show last completed workout date and next pending scheduled date, with PAST DUE (red), DUE TODAY, COMPLETED or ON GOING status pills.
+- [x] Define status precedence using actual pending/completed occurrences. An expired plan with missed sessions is not automatically completed; do not infer history from display names.
+- [x] Preserve draft recovery, partial completion, notes, timers, edit guards and immutable session history at every drill-down level; keep the public address unchanged.
 
 ### Group 4 — Progress redesign (not started; depends on identities from Group 2)
 
@@ -547,8 +547,8 @@ Compatibility decisions: retain IndexedDB v5 and all existing records without a 
 - [ ] Define multiple-set and tied-date presentation. For supersets use separate member sections/graphs/dividers without combining different exercises' loads. Distinguishable point colors need accessible labels; an additional repetition graph is optional.
 - [ ] Keep saved-session history reachable through Progress and add Back controls at each level without changing the public URL. Add integrity, accessible graph and navigation tests before calling the redesign complete.
 
-Next dependency group: Group 3's Calendar/time-zone preference and active-plan Train
-flow, only when requested. Group 4 analytics remains later work.
+Group 3 verification closeout is complete in available local environments. Next: Group 4 Progress
+redesign, only when requested; its analytics remain unstarted.
 
 ## 6. Required test fixtures
 
@@ -644,17 +644,22 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-03 | Retain database v5; publish AI v2 and backup v2 contracts with v1 compatibility | Nested optional fields require no index migration; legacy AI gets owner-entered duration, legacy backups retain unbounded meaning after original checksum/strict validation |
 | 2026-10-03 | Record owner's HTTPS resolution separately from automated production checks | Latest owner report supersedes the prior warning; no fresh certificate/API/mixed-content capture or new-candidate deployment was performed by this task |
 | 2026-10-03 | Preserve external commit 40e5c74 appearing during Group 2 work | No reset/staging/commit/push/deploy by this agent; final artifact receipt names the current HEAD plus dirty working tree |
+| 2026-10-03 | Group 3 profile preferences remain optional fields in database v5 | Initialize a missing zone once in startup/selection or reviewed restore, not inside liveQuery; preserve schedule zones and historical timestamps/units |
+| 2026-10-03 | Train selection is independent of scheduling and archive state | Remember archived IDs but hide them until restore; explicit selection save replaces the list, no automatic substitution; use profile revision protection |
+| 2026-10-03 | Calendar defaults to a complete named month and displays saved local dates from all zones | Today follows the profile zone; each event/card evaluates lateness in its saved schedule zone and refreshes on minute/focus/visibility events |
+| 2026-10-03 | Combined card status uses exact pending occurrence keys | Overdue > today > future; partial logs count, unscheduled logs do not clear occurrences; stopped/unbounded/repair/truncated-pending work cannot manufacture completion; bounded segment search avoids infinite generation |
+| 2026-10-03 | Backup v3 adds profile preferences while retaining strict v1/v2 compatibility | Validate original bytes/CSV/CRC/SHA/assets before envelope conversion; remap selected plan IDs with restore families, preserve merge precedence, clear selections with plans; AI remains v2 |
 
 ## 9. Current checkpoint
 
-- Group 2 is implemented and verified in available local environments: repeated occurrences, stable supersets/editor order, unequal rounds/rest/notes/results, immutable history and explicit finite duration across plans, schedules, AI and backups. Group 1 protections/UI/configuration are preserved. Groups 3–4 are unstarted. Phases 0–9 keep their historical completion; Phase 10 remains **Verification pending**, Phase 11 **In progress**.
-- Database **v5**, no migration or rewritten defaults. AI **v2** accepts **v1**, with owner-supplied duration before saving old AI plans. Backup **v2** accepts strict **v1** after original CRC/SHA-256/field/CSV/asset checks; legacy unbounded meaning, stored precision, whole-family precedence and source IDs remain intact.
-- New schedules freeze inclusive end dates using civil weeks. **Review plan duration** explicitly applies a reviewed change from a selected Monday; unrelated plan edits/refresh do not shorten schedules. Earlier missed dates and started/completed sessions remain. Superset numbers do not define identity; occurrence/group UUIDs survive edits and are copied independently on duplication.
-- Final build/typecheck/lint and diff checks pass; data **108/108**; static root/project Edge desktop/phone **296/296**, no skips; development Group 2 **8/8**. Firefox **138 passed / 2 trace-cleanup ENOENT failures / 2 expected static-only skips**, then both affected checks **2/2 passed** with overlapping output cleanup stopped. This is combined Firefox evidence, not a fresh full-suite pass. Both static mounts return **23/23** exact resource hashes.
-- Candidate: **23 files / 2,099,946 bytes**, inventory SHA-256 `dd8b25b6231d48ff56c387b7fd5b2bdfde68a151c9c7c0bc84ca711c7bf4bd95`. Entry **274.38 kB / 88.04 kB gzip**, shared **166.07 kB**, workers **201.36/204.68 kB**, Create **50.52 kB**, Train **21.23 kB**, CSS **19.82 kB**; no size warning. Exact evidence and owner test: [docs/group2-verification.md](docs/group2-verification.md). Older fingerprints remain historical.
-- Owner reports HTTPS resolved and the public site fully working on 2026-10-03. This supersedes the previous blocker claim, without a new independent certificate/API/mixed-content capture or changed-candidate production smoke. An external commit appeared during work: `40e5c74d3e94dcdbadf6b82e955aceb5a0ae2eae`; it was preserved. This agent did not stage/commit/push/deploy or change hosting. Receipt refers to that HEAD plus working tree.
-- Live Ko-fi account content, Blob-capable Safari photo/restore, physical phones/keyboards/download sheets, screen readers/voice control, real quota, spreadsheet applications and suspended timers remain unverified. Unchanged Windows WebKit probes/capacity benchmarks were not rerun. See [current owner checklist](docs/release-preparation.md#current-owner-checklist); screenshots/emulation are not physical-device evidence.
-- Next: Group 3's Calendar/time-zone preference and active-plan Train flow, only when requested. Keep Group 4 analytics out of scope. New-candidate publication and full release acceptance remain separate owner actions; do not clear source records to test them.
+- Group 3 is complete in available local verification environments. Settings owns profile time zones, Calendar defaults to a complete named month, and Train has persistent zero/one/multiple-plan selection and occurrence-based status cards. Group 1 and 2 behavior is preserved; Group 4 is unstarted. Phases 0-9 retain their historical completion; Phase 10 remains **Verification pending**, Phase 11 **In progress**.
+- Database **v5**, no store/index migration. Optional profile timeZone and selectedPlanIds use revision protection; missing zones initialize once without rewriting schedule/session/measurement records. Backup **v3** retains strict **v1/v2** reading after original CRC/SHA-256/field/CSV/asset checks; selection IDs follow restore family remapping. AI remains **v2** with v1 support.
+- Calendar displays each schedule's recorded local dates/zones; Today uses the profile preference. Add Plan reuses weekday mapping and finite duration previews. Train selection does not schedule, archive or remove history. Archived IDs remain remembered but hidden. Calendar opens exact occurrences independently of selection; saved drafts and a compact saved-session action remain available.
+- Cards prioritize overdue, due today, future, then fully completed finite workload. Partial saved logs complete exact occurrences; unscheduled logs do not. Stopping/truncating unfinished work cannot manufacture completion. Status refreshes on minute boundaries and focus/visibility changes without scanning an infinite series.
+- Final build/typecheck/lint and diff checks pass; data **116/116**; development Group 3 **8/8**; final static root/project desktop/phone **312/312** (4.8m), including the mixed-stopped-schedule guard and screenshots. Firefox **148 passed / 2 expected static-host-only skips / 0 failures** (4.9m). Resource comparison: **23/23 exact byte/hash matches at each mount**, zero audit findings. Candidate: **23 files / 2,108,868 bytes**, inventory SHA-256 `383e9335b63ad9c6621f3b1db92c18a113a7c6e861f7890da51a7d9cb8044dea`. Details: [docs/group3-verification.md](docs/group3-verification.md).
+- Starting/current HEAD is `a4b0e204c72790e21370e417d03f60bfc05cda69` plus this task's uncommitted changes. The tree was initially clean. No dependency installation, commit, push, deployment, hosting change or owner-data clearing was performed. HTTPS remains owner-confirmed resolved; no new production smoke is claimed.
+- Live Ko-fi account content, Blob-capable Safari photo/restore, physical phones/keyboards/download sheets, screen readers/voice control, real quota, spreadsheet applications and suspended-device timers remain unverified. Unchanged Windows WebKit probes/capacity benchmarks were not rerun. Emulation and simulated clocks are not physical-device evidence.
+- Next: **Group 4 Progress redesign**, only when requested. Publication and release acceptance remain separate owner actions.
 
 ## 10. Handoff entry template
 
@@ -1271,3 +1276,29 @@ Fresh verification against the final build (isolated contexts/test databases):
 - Short owner test: in a disposable profile, make a two-week plan with Squat standalone plus Squat/Row/Press in one three-member group; use 3/2/1 member sets and distinct reps/RIR. Save/reopen, enter different weights/notes for the repeated Squat, start rest and reload/resume, save/review. Schedule from a Monday and confirm the second-Sunday boundary/no week-3 occurrence; change plan duration and verify the schedule changes only after its separate preview. Export/restore under a new name and compare. Exact steps and remaining checks: [docs/group2-verification.md](docs/group2-verification.md#owner-check-and-remaining-boundaries).
 - Remaining: physical phones/keyboards/download sheets/safe areas, screen reader/voice control, live Ko-fi account content, Blob-capable Safari photo/restore, real quota, spreadsheet applications and suspended timers remain unverified. Existing Windows WebKit Blob limitation was not reprobed; prior capacity measurements were not repeated or generalized to supersets. Full release acceptance remains separate.
 - Next: **Group 3**, only when requested—Calendar month/default/time-zone preference and active-plan Train flow. Do not begin Group 4 analytics or publication from this handoff.
+
+### 2026-10-03 — Owner revisions Group 3: profile zones, Calendar month and Train plans
+
+- Status: **Complete in available local verification environments**, including fresh Edge/static and Firefox suites. Group 4 is not started. Earlier phase/Group 1–2 handoffs remain historical; physical Safari/device release gates stay unverified.
+- Implemented: per-profile validated IANA time zone in Settings; one-time browser-zone initialization for legacy profiles, preserving saved schedule/session/measurement dates; full named month with Monday–Sunday weeks, dim actionable adjacent dates, retained Day/Week navigation, all schedule zones visible and no Calendar Create Plan/zone editor. Existing mapping/duration/stop previews are reused.
+- Train: persistent guarded zero/one/multiple-plan selection independent of scheduling/archive; archived IDs hidden but remembered for restore; cards and Back to plans, local per-plan day selection, exact Calendar occurrence entry, saved draft recovery and compact saved-session review. Existing superset execution, notes, timers, partial/full Save, failed-input guards and frozen history remain intact.
+- Status: overdue > today > future > fully completed finite workload, based on distinct occurrence keys and each schedule's zone. Last uses actual saved completion time; Next includes overdue pending dates. Unscheduled logs never complete scheduled work. Stopped/truncated unfinished work, legacy unbounded schedules and mapping repair cannot manufacture completion. Segment searches avoid infinite generation; minute/focus/visibility events refresh the display.
+- Data/contracts: database **v5**, optional profile `timeZone`/`selectedPlanIds`, no store/index migration. Backup **v3**, strict **v1/v2** compatibility after original CRC/SHA-256/field/reference/CSV/photo validation. Merge precedence includes profile preferences and selected IDs remap with plan roots; Clear Data clears selections and retains zone/units. AI remains **v2** with v1 support. Existing timestamp precision, canonical measurements and atomic restore boundaries are preserved.
+- Changed areas: profile schema/service/editor; Calendar; Train selection/editor integration; schedule/session library services; new bounded status and current-time helpers; backup schema/CSV/read/restore and Clear preview text; focused data/browser tests and affected earlier fixtures; TODO/README/backup/release documentation. Dependencies/configuration/hosting and unrelated source were preserved.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run build`, `npm run typecheck`, `npm run lint`, `git diff --check` | Passed on final source; no large-chunk warning |
+| `npm run test:data` | **116/116 passed**, no skips/failures; 8 new Group 3 tests |
+| `npm run test:browser -- tests/browser/group3.spec.ts --workers=2` | **8/8 passed**, 34.7s; desktop/emulated phone |
+| `npm run test:browser:static` | Final **312/312 passed**, no skips/failures, 4.8m; root/project static mounts × desktop/phone |
+| Firefox desktop/phone production suite | **148 passed / 2 expected static-host-only skips / 0 failures**, 4.9m; exact command in docs/group3-verification.md |
+| `node scripts/release-audit.mjs` | Passed, zero findings; 23 files / 2,108,868 bytes |
+| Same audit with `--url http://127.0.0.1:4174/` and `/project-check/` | **23/23 HTTP 200 and exact resource byte/hash matches at each mount** |
+
+- Candidate inventory SHA-256: `383e9335b63ad9c6621f3b1db92c18a113a7c6e861f7890da51a7d9cb8044dea`. Starting/current HEAD `a4b0e204c72790e21370e417d03f60bfc05cda69`, initially clean, plus this task's uncommitted changes. No dependency installation, staging, commit, push, deployment, hosting mutation or owner-data clearing.
+- Verification history: initial data **105/108** exposed obsolete version assertions/legacy fixture fields; fixed contracts plus new coverage pass **116/116**. Initial new browser **0/8** found a prohibited read/write liveQuery; default initialization now runs outside snapshot queries. A **4/8** rerun exposed the test's profile-label locator; accessible combobox selection passed **8/8**. Initial full static **307 passed / 5 failed** exposed canceled-navigation and dialog-close fixture assumptions; corrected full run **312/312**. A final status guard for mixed stopped/completed schedules received a data regression and a fresh build/full static **312/312**. Full details: [docs/group3-verification.md](docs/group3-verification.md).
+- Reviewed screenshots: month Calendar and plan cards in both themes, desktop/phone; automated checks cover 320px overflow/fixed-navigation clearance, keyboard focus, exact unselected occurrence/draft reload/partial save, profile switching/isolation, timezone changes, failed preference/autosave writes and simulated midnight/background resume. Simulation is not physical-device evidence.
+- Owner checks: on the test build, save/reload a Settings zone and compare old/new schedule zones; inspect full month/adjacent dates and event controls on a physical phone in both themes; select two plans and use Back, start an occurrence, wait for **Draft saved locally**, reload/Resume/save and confirm card/Calendar status; switch profiles and back. On Blob-capable Safari/iOS, repeat photo-backed export/restore under a new name while preserving originals.
+- Carry-forward limitations: physical keyboard/safe areas/download sheets, screen readers/voice control, native Safari photo/restore, live Ko-fi account content, actual quota, spreadsheet apps and suspended-device timers remain unverified. No new Windows WebKit Blob probe, capacity benchmark or production smoke is claimed. HTTPS remains owner-confirmed resolved.
+- Next: **Group 4 Progress redesign**, only when requested. No analytics work or publication was started.

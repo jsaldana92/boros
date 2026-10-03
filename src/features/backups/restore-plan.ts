@@ -6,6 +6,7 @@ import { sha256 } from './integrity.ts'
 import { displayDateTime } from '../../lib/display-dates.ts'
 import { canonicalSnapshot, validateRestoreRecords } from './restore-records.ts'
 import type { ValidatedBackup } from './restore-format.ts'
+import { browserZone } from '../../lib/calendar-dates.ts'
 
 export type RestoreChoice = 'new' | 'replace' | 'device' | 'import' | 'clear'
 export const ownedStores = ['tags', 'exercises', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'photos'] as const
@@ -44,9 +45,9 @@ function matches<T extends Named>(incoming: T[], local: T[], label: string) {
   return result
 }
 
-// Pure: all snapshots, the new ownership ID and time are inputs. No DB or clocks.
+// No DB writes; the optional default zone is captured for a reviewed legacy import.
 // Hash-derived collision IDs are stable across repeated imports and owner rotations.
-export async function buildRestorePlan(backup: ValidatedBackup | undefined, local: ProfileSnapshot | undefined, choice: RestoreChoice, newId: string, displayName: string, at: string): Promise<RestorePlan> {
+export async function buildRestorePlan(backup: ValidatedBackup | undefined, local: ProfileSnapshot | undefined, choice: RestoreChoice, newId: string, displayName: string, at: string, defaultTimeZone = browserZone()): Promise<RestorePlan> {
   if ((choice !== 'new') !== !!local || (choice !== 'clear' && !backup)) throw new Error('Choose an available profile and restore operation.')
   const counts = Object.fromEntries(ownedStores.map((key) => [key, { added: 0, conflicts: 0, replaced: 0, removed: 0, skipped: 0 }])) as RestorePlan['counts']
   const warnings: string[] = [], conflicts: string[] = [], merging = choice === 'device' || choice === 'import', preferImport = choice !== 'device'
@@ -56,9 +57,10 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   if (choice !== 'new' && input && nameKey(input.profile.name) !== nameKey(local!.profile.name)) throw new Error('Restore target must match the imported profile name.')
   const source = choice === 'clear' || choice === 'device' ? local!.profile : input!.profile
   const profile: Profile = choice === 'clear'
-    ? { id: newId, name: source.name, nameKey: source.nameKey, kind: source.kind, weightUnit: source.weightUnit, heightUnit: source.heightUnit, revision: 1, createdAt: at, updatedAt: at }
+    ? { id: newId, name: source.name, nameKey: source.nameKey, kind: source.kind, weightUnit: source.weightUnit, heightUnit: source.heightUnit, ...(source.timeZone ? { timeZone: source.timeZone } : {}), revision: 1, createdAt: at, updatedAt: at }
     : { ...structuredClone(source), id: newId, ...(choice === 'new' ? { name: displayName.trim(), nameKey: nameKey(displayName), kind: input!.profile.kind === 'guest' && displayName === 'Guest' ? 'guest' as const : 'named' as const } : {}) }
   if (!profile.nameKey || profile.name.length > 80) throw new Error('Enter an unused profile name of 1–80 characters.')
+  profile.timeZone ??= defaultTimeZone
   const result: ProfileSnapshot = { databaseVersion: 5, capturedAt: at, profile, tags: [], exercises: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
   const plan: RestorePlan = { id: newId, choice, targetId: local?.profile.id, targetName: local?.profile.name, targetFingerprint: local && snapshotFingerprint(local), targetPhotoFingerprint: local && await photoFingerprint(local.photos), result, counts, warnings, conflicts }
   if (choice === 'clear') { for (const key of ownedStores) counts[key].removed = local![key].length; return plan }
@@ -76,6 +78,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   }
   const tags = mergeNamed(file.tags, localTags, tagMatches, 'tags'), exercises = mergeNamed(file.exercises, localExercises, exerciseMatches, 'exercises'), plans = mergeNamed(file.plans, localPlans, planMatches, 'plans')
   result.tags = tags.all; result.exercises = exercises.all; result.plans = plans.all
+  if (profile.selectedPlanIds) profile.selectedPlanIds = [...new Set(profile.selectedPlanIds.map((id) => choice === 'device' ? id : planIds.get(id)!).filter((id) => result.plans.some((p) => p.id === id)))]
   for (const exercise of exercises.imported) exercise.tagIds = exercise.tagIds.map((id) => tagIds.get(id)!)
   const importedPlanIds = new Set(file.plans.filter((p) => preferImport || !planMatches.has(p.id)).map((p) => p.id)), removedLocalPlans = new Set(preferImport ? [...planMatches.values()].map((p) => p.id) : [])
   const retained = <T extends { sourcePlanId: string }>(rows: T[]) => rows.filter((row) => !removedLocalPlans.has(row.sourcePlanId))

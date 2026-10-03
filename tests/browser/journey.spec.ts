@@ -14,7 +14,7 @@ async function download(p: Page) {
   return { bytes, zip, data: JSON.parse(await zip.file('data.json')!.async('string')) }
 }
 async function schedule(p: Page, name: string) {
-  await button(p, 'Calendar').click(); await button(p, 'Add Plan').click()
+  await button(p, 'Calendar').click(); await button(p, 'Week').click(); await button(p, 'Add Plan').click()
   await field(p, 'Schedule plan').selectOption({ label: name })
   await field(p, 'Starting week (Monday)').fill('2025-01-06')
   await button(p, 'Preview schedule').click(); await button(p, 'Confirm schedule').click()
@@ -85,7 +85,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await button(page, 'REST Journey squat after set 1').click()
   await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('30 seconds configured'); await button(page, 'Stop timer').click()
   await button(page, 'Save').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Complete session')
-  await button(page, 'Calendar').click(); await field(page, 'Calendar date').fill('2025-01-06')
+  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-06')
   await expect(page.locator('.calendar-event.completed')).toHaveCount(1)
   await button(page, 'Next period').click(); await expect(page.locator('.calendar-event.completed')).toHaveCount(0)
   await button(page, 'Create').click()
@@ -106,7 +106,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await field(page, 'AI row set 1 Weight (lb)').fill('50'); await field(page, 'AI row set 1 Repetitions').fill('10')
   await note(page, 'Session Note', 'AI uses the shared history'); await button(page, 'Save').click()
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('AI uses the shared history')
-  await button(page, 'Calendar').click(); await field(page, 'Calendar date').fill('2025-01-06')
+  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-06')
   await page.locator('.calendar-event').filter({ hasText: 'Manual four / Day 3' }).click()
   await field(page, 'Journey squat set 1 Weight (lb)').fill('12.')
   await note(page, 'Session Note', 'Resume me after restore')

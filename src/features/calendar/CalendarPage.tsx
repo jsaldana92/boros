@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
 import { useScreenNavigation } from '../../app/navigation-context'
-import { ScreenButton } from '../../app/ScreenButton'
+import { useCurrentInstant } from '../../lib/use-current-instant'
 import { schedules, type CalendarEvent, type ChangePreview } from '../../db/schedules'
 import { sessions } from '../../db/sessions'
 import { dateRange, addDays, browserZone, localToday, monday, monthStart, nextMonday, validDate, viewRange, weekdays, weekday, type CalendarView } from '../../lib/calendar-dates'
@@ -18,26 +18,25 @@ export function CalendarPage() {
   return <CalendarWorkspace key={snapshot.profile.id} profileId={snapshot.profile.id} />
 }
 function CalendarWorkspace({ profileId }: { profileId: string }) {
-  const { allowLeave } = useWorkspace(), { openScreen } = useScreenNavigation()
-  const [selection, setSelection] = useState<{ zone?: string; date?: string }>({}), [view, setView] = useState<CalendarView>('week')
+  const { allowLeave, snapshot } = useWorkspace(), { openScreen } = useScreenNavigation()
+  const instant = useCurrentInstant()
+  const [selection, setSelection] = useState<{ date?: string }>({}), [view, setView] = useState<CalendarView>('month')
   const [editor, setEditor] = useState<{ plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop' | 'duration' }>()
   const [error, setError] = useState(''), [attempt, setAttempt] = useState(0), [busy, setBusy] = useState(false)
   const library = useLiveQuery(async () => {
     try { return { data: await schedules.library(profileId), error: '' } }
     catch (error) { return { error: message(error) } }
   }, [profileId, attempt])
-  const data = library?.data, zone = selection.zone ?? data?.schedules[0]?.timeZone ?? browserZone(), today = localToday(zone), date = selection.date ?? today
-  const setDate = (date: string) => setSelection({ zone, date })
-  const setZone = (zone: string) => setSelection({ zone, date: localToday(zone) })
+  const data = library?.data, zone = snapshot.profile.timeZone ?? browserZone(), today = localToday(zone, instant), date = selection.date ?? today
+  const setDate = (date: string) => setSelection({ date })
   const range = viewRange(date, view)
   const result = useLiveQuery(async () => {
-    try { return { events: await schedules.events(profileId, range.start, range.end, zone), error: '' } }
+    try { return { events: await schedules.events(profileId, range.start, range.end), error: '' } }
     catch (error) { return { error: message(error) } }
-  }, [profileId, zone, range.start, range.end, attempt])
-  const zones = [...new Set([browserZone(), zone, ...(data?.schedules.map((item) => item.timeZone) ?? [])])]
+  }, [profileId, range.start, range.end, attempt])
   const close = () => { if (allowLeave()) { setEditor(undefined); requestAnimationFrame(() => document.getElementById('calendar-heading')?.focus()) } }
   const openEvent = async (event: CalendarEvent) => {
-    if (busy) return; setBusy(true); setError('')
+    if (busy || !allowLeave()) return; setBusy(true); setError('')
     try {
       const opened = await sessions.openOccurrence(profileId, event.ref.scheduleId, event.ref.dayId, event.ref.scheduledDate)
       openScreen('train', { profileId, draftId: opened.draft?.id, sessionId: opened.session?.id })
@@ -45,31 +44,32 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   }
   const shift = (direction: number) => { try { setDate(view === 'month' ? monthStart(date, direction) : addDays(date, direction * (view === 'week' ? 7 : 1))); setError('') } catch (error) { setError(message(error)) } }
   return <><h1 id="calendar-heading" tabIndex={-1}>Calendar</h1>
-    {editor ? <ScheduleEditor profileId={profileId} {...editor} onCancel={close} onSaved={(saved) => { setEditor(undefined); setSelection({ zone: saved.timeZone, date: saved.startWeek }); requestAnimationFrame(() => document.getElementById('calendar-heading')?.focus()) }} /> : <>
+    {editor ? <ScheduleEditor profileId={profileId} profileZone={zone} {...editor} onCancel={close} onSaved={(saved) => { setEditor(undefined); setSelection({ date: saved.startWeek }); requestAnimationFrame(() => document.getElementById('calendar-heading')?.focus()) }} /> : <>
       {!result && <p role="status">Loading calendar…</p>}
       {(result?.error || library?.error) && <p role="alert">Could not load Calendar. {result?.error || library?.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry calendar</button></p>}
       <div className="calendar-toolbar"><div className="segmented" aria-label="Calendar view">{(['day', 'week', 'month'] as const).map((item) => <button key={item} aria-pressed={view === item} onClick={() => setView(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div>
         <div className="actions"><button aria-label="Previous period" onClick={() => shift(-1)}>Previous</button><button onClick={() => setDate(localToday(zone))}>Today</button><button aria-label="Next period" onClick={() => shift(1)}>Next</button></div>
-        <div className="field-grid"><Field label="Calendar date" type="date" value={date} onChange={(e) => { if (validDate(e.target.value)) setDate(e.target.value) }} /><div><label htmlFor="calendar-zone">Displayed time zone</label><select id="calendar-zone" value={zone} onChange={(e) => setZone(e.target.value)}>{zones.map((item) => <option key={item}>{item}</option>)}</select></div></div>
+        <div className="field-grid"><Field label="Calendar date" type="date" value={date} onChange={(e) => { if (validDate(e.target.value)) setDate(e.target.value) }} /></div>
       </div>
-      <p>Dates and Today use {zone}. {zones.length > 1 && 'Select a zone to view its schedules; schedules in other zones are listed below.'}</p>
-      <h2 className="calendar-range" aria-live="polite">{range.start}{range.end !== range.start && ` – ${range.end}`}</h2>
+      <p>Today uses {zone}. Events keep their schedule’s local dates and time zone.</p>
+      <h2 className="calendar-range" aria-live="polite">{view === 'month' ? new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)) : `${range.start}${range.end !== range.start ? ` – ${range.end}` : ''}`}</h2>
       {data && !data.schedules.length && <p>No schedules. Add an active plan to begin.</p>}
       <div className={`calendar-grid calendar-view-${view}`} aria-label={`${view} calendar`}>
-        {dateRange(range.start, range.end).map((day) => <section key={day} className="calendar-day" aria-label={day} aria-current={day === today ? 'date' : undefined}>
+        {dateRange(range.start, range.end).map((day) => <section key={day} className={`calendar-day${view === 'month' && day.slice(0, 7) !== date.slice(0, 7) ? ' adjacent-month' : ''}`} aria-label={day} aria-current={day === today ? 'date' : undefined}>
           <h3><time dateTime={day}>{weekdays[weekday(day)]} {day.slice(5)}</time>{day === today && ' · Today'}</h3>
           {result?.events?.filter((event) => event.ref.scheduledDate === day).map((event) => <button key={event.ref.key} className={`calendar-event${event.session ? ' completed' : ''}`} disabled={busy} onClick={() => void openEvent(event)}>
-            <span className="event-name">{event.planName} / {event.day.name}</span><span>{event.session ? `✓ Completed${event.session.partial ? ' · Partial' : ''}` : event.draft ? 'In progress' : day < today ? 'Missed / incomplete' : 'Incomplete'}</span>
-            {(data?.schedules.filter((item) => item.timeZone === zone).length ?? 0) > 1 && <span>Schedule {event.ref.scheduleId.slice(0, 8)}</span>}
+            <span className="event-name">{event.planName} / {event.day.name}</span><span>{event.session ? `✓ Completed${event.session.partial ? ' · Partial' : ''}` : event.draft ? 'In progress' : day < localToday(event.ref.timeZone, instant) ? 'Missed / incomplete' : 'Incomplete'}</span>
+            <span>{event.ref.timeZone}</span>
+            {(data?.schedules.length ?? 0) > 1 && <span>Schedule {event.ref.scheduleId.slice(0, 8)}</span>}
             {event.retained && <span>Kept original session</span>}
           </button>)}
-          {data?.schedules.filter((item) => item.timeZone === zone && scheduleActiveOn(item, day)).map((item) => {
+          {data?.schedules.filter((item) => scheduleActiveOn(item, day)).map((item) => {
             const revision = revisionAt(item, day)
             return revision?.needsRepair ? <p className="muted" key={item.id}>{revision.planName}: mapping needs repair</p> : revision && !revision.mapping.some((assignment) => assignment.weekday === weekday(day)) ? <p className="muted" key={item.id}>{revision.planName}: Rest</p> : null
           })}
         </section>)}
       </div>
-      {data && <section aria-label="Schedules"><div className="actions"><button className="primary" disabled={!data.plans.some((plan) => !plan.archivedAt)} onClick={() => setEditor({ kind: 'create', plans: data.plans.filter((plan) => !plan.archivedAt) })}>Add Plan</button>{!data.plans.some((plan) => !plan.archivedAt) && <ScreenButton to="create">Create a plan</ScreenButton>}</div>
+      {data && <section aria-label="Schedules"><div className="actions"><button className="primary" disabled={!data.plans.some((plan) => !plan.archivedAt)} onClick={() => setEditor({ kind: 'create', plans: data.plans.filter((plan) => !plan.archivedAt) })}>Add Plan</button></div>
         {data.schedules.map((schedule) => <article className="exercise-card" key={schedule.id} aria-label={`Schedule ${schedule.revisions.at(-1)!.planName}`}>
           <h3>{schedule.revisions.at(-1)!.planName}</h3><p>{schedule.timeZone} · Started {schedule.startWeek} · Schedule {schedule.id.slice(0, 8)}</p>
           <p>{(schedule.durationChanges?.at(-1) ?? schedule).endDate ? `Ends ${(schedule.durationChanges?.at(-1) ?? schedule).endDate} · ${(schedule.durationChanges?.at(-1) ?? schedule).durationWeeks} weeks from the original start` : 'Legacy unbounded schedule'}</p>
@@ -84,10 +84,10 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   </>
 }
 
-function ScheduleEditor({ profileId, plans, schedule, kind, onCancel, onSaved }: { profileId: string; plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop' | 'duration'; onCancel: () => void; onSaved: (schedule: Schedule) => void }) {
+function ScheduleEditor({ profileId, profileZone, plans, schedule, kind, onCancel, onSaved }: { profileId: string; profileZone: string; plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop' | 'duration'; onCancel: () => void; onSaved: (schedule: Schedule) => void }) {
   const { setDirty } = useWorkspace()
   const [planId, setPlanId] = useState(schedule?.planId ?? plans[0]?.id ?? '')
-  const plan = plans.find((item) => item.id === planId), [zone] = useState(() => schedule?.timeZone ?? browserZone())
+  const plan = plans.find((item) => item.id === planId), [zone] = useState(() => schedule?.timeZone ?? profileZone)
   const initialDate = kind === 'create' ? monday(localToday(zone)) : [nextMonday(localToday(zone)), schedule!.startWeek].sort().at(-1)!
   const [date, setDate] = useState(initialDate), [mapping, setMapping] = useState<Mapping>(() => plan?.days.map((day, index) => ({ dayId: day.id, weekday: schedule?.revisions.at(-1)?.mapping.find((item) => item.dayId === day.id)?.weekday ?? index })) ?? [])
   const [preview, setPreview] = useState<{ create?: ScheduleInput; change?: ChangePreview }>(), [keep, setKeep] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false)

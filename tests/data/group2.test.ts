@@ -182,7 +182,7 @@ test('populated v5 reopen leaves every store and original photo bytes unchanged'
   const before = await read(); db.close(); await db.open(); assert.equal(db.verno, 5); assert.deepEqual(await read(), before)
 })
 
-test('v2 backup round trip retains groups/repeated results/duration and both whole-family merge priorities', async (t) => {
+test('current backup round trip retains Group 2 groups/repeated results/duration and both whole-family merge priorities', async (t) => {
   const { db, id, plans, schedules, sessions } = await setup(t), plan = await plans.save(id, groupedPlan())
   const schedule = await schedules.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: '2025-01-06', timeZone: 'UTC', mapping: [{ dayId: plan.days[0].id, weekday: 0 }] })
   await plans.save(id, { ...planToInput(plan), durationWeeks: 3 }, plan)
@@ -190,7 +190,7 @@ test('v2 backup round trip retains groups/repeated results/duration and both who
   const draft = await sessions.start(id, plan.id, plan.days[0].id); await sessions.complete(id, draft.id, draft.revision, filled(draft), false)
   await sessions.start(id, plan.id, plan.days[0].id)
   const original = await captureProfile(id, db), output = await generateBackup(original, 'test'), backup = await readBackup(output.bytes)
-  assert.equal(backup.manifest.backupSchemaVersion, 2); assert.ok(backup.manifest.csvRows['csv/supersets.csv'] > 0)
+  assert.equal(backup.manifest.backupSchemaVersion, 3); assert.ok(backup.manifest.csvRows['csv/supersets.csv'] > 0)
   const restore = restoreService(db), preview = await restore.preview(backup, 'new', 'Roundtrip'), owner = await restore.commit(preview, true)
   const round = await captureProfile(owner, db); assert.equal(family(round), family(original))
   assert.deepEqual((await readBackup((await generateBackup(round, 'test')).bytes)).data.plans[0].days, plan.days)
@@ -218,12 +218,12 @@ test('validated v1 archives transform only after checksums; unbounded meaning an
   delete raw.days[0].groups
   const plan = await plans.save(id, raw); delete plan.durationWeeks; await db.plans.put(plan)
   await schedules.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: '2025-01-06', timeZone: 'UTC', mapping: [{ dayId: plan.days[0].id, weekday: 0 }] })
-  const snapshot = await captureProfile(id, db), generated = await generateBackup(snapshot, 'legacy-fixture'), data = canonicalSnapshot(snapshot); data.backupSchemaVersion = 1; validateBackupData(data)
+  const snapshot = await captureProfile(id, db), generated = await generateBackup(snapshot, 'legacy-fixture'), data = canonicalSnapshot(snapshot); data.backupSchemaVersion = 1; delete data.profile.timeZone; delete data.profile.selectedPlanIds; validateBackupData(data)
   const zip = new JSZip(), payload = [['data.json', JSON.stringify(data)], ...csvTables(data).map((table) => [table.path, table.text])]
   const manifest = { ...generated.manifest, backupSchemaVersion: 1, csvRows: Object.fromEntries(csvTables(data).map((table) => [table.path, table.rows])), inventory: await Promise.all(payload.map(async ([path, text]) => ({ path, bytes: new TextEncoder().encode(text).length, sha256: await sha256(new TextEncoder().encode(text)), mediaType: path.endsWith('json') ? 'application/json' : 'text/csv; charset=utf-8' }))) }
   for (const [path, text] of payload) zip.file(path, text, { createFolders: false }); zip.file('manifest.json', JSON.stringify(manifest))
   const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }), checksum = await sha256(bytes), restored = await readBackup(bytes)
-  assert.equal(restored.manifest.backupSchemaVersion, 1); assert.equal(restored.data.backupSchemaVersion, 2)
+  assert.equal(restored.manifest.backupSchemaVersion, 1); assert.equal(restored.data.backupSchemaVersion, 3)
   assert.equal(restored.data.plans[0].durationWeeks, undefined); assert.equal(restored.data.schedules[0].endDate, undefined)
   assert.deepEqual(restored.data.plans[0].days, JSON.parse(JSON.stringify(plan.days))); assert.equal(await sha256(bytes), checksum)
   zip.file('data.json', JSON.stringify({ ...data, profile: { ...data.profile, name: 'Tampered' } }))

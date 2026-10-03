@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import { validZone } from '../lib/calendar-dates.ts'
+
+export const timeZoneSchema = z.string().refine(validZone, 'Choose a supported IANA time zone, such as America/New_York.')
+export const selectedPlanIdsSchema = z.array(z.string().uuid()).refine((ids) => new Set(ids).size === ids.length, 'Select each plan only once.')
 
 export const weightUnitSchema = z.enum(['kg', 'lb'])
 export const heightUnitSchema = z.enum(['cm', 'ft'])
@@ -22,6 +26,7 @@ export const profileInputSchema = z.object({
   weightKg: z.number().finite().positive().max(1000).optional(),
   weightUnit: weightUnitSchema,
   heightUnit: heightUnitSchema,
+  timeZone: timeZoneSchema.optional(),
 })
 export type ProfileInput = z.infer<typeof profileInputSchema>
 
@@ -35,6 +40,8 @@ export interface Profile {
   weightUnit: WeightUnit
   heightUnit: HeightUnit
   photoId?: string | null
+  timeZone?: string
+  selectedPlanIds?: string[]
   revision: number
   createdAt: string
   updatedAt: string

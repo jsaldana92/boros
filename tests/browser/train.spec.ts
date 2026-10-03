@@ -13,7 +13,7 @@ async function open(page: Page) {
   await button(page, 'Import AI Output').click(); await input(page, 'AI output JSON').fill(JSON.stringify(fixture()))
   await button(page, 'Validate and preview').click(); await input(page, 'Duration (weeks)').fill('2'); await button(page, 'Save plan').click()
   await expect(page.getByRole('article', { name: 'Plan Training plan', exact: true })).toBeVisible()
-  await button(page, 'Train').click(); await input(page, 'Plan').selectOption({ label: 'Training plan' }); await input(page, 'Training day').selectOption({ label: '1. Upper' }); await button(page, 'Start session').click()
+  await button(page, 'Train').click(); await button(page, 'Select Plans').click(); await page.getByRole('checkbox', { name: 'Training plan', exact: true }).check(); await button(page, 'Save selection').click(); await input(page, 'Training day').selectOption({ label: '1. Upper' }); await button(page, 'Start session').click()
 }
 async function saved(page: Page) { await expect(page.getByText('Draft saved locally.', { exact: true })).toBeVisible() }
 async function resume(page: Page) { await button(page, 'Resume Training plan / Upper').click() }
@@ -59,7 +59,7 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   await plan.getByRole('button', { name: 'Edit plan', exact: true }).click(); await page.locator('.plan-day').first().getByRole('button', { name: 'Edit prescription', exact: true }).first().click()
   await input(page, 'Exercise name').fill('Changed source'); await button(page, 'Apply to plan').click(); await button(page, 'Save plan').click()
   await plan.getByRole('button', { name: 'Archive plan', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
-  await button(page, 'Train').click(); await button(page, 'Review session').click(); await expect(page.getByRole('heading', { name: 'Press', exact: true })).toBeVisible(); await expect(page.getByText('Changed source', { exact: true })).toHaveCount(0)
+  await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await button(page, 'Review session').click(); await expect(page.getByRole('heading', { name: 'Press', exact: true })).toBeVisible(); await expect(page.getByText('Changed source', { exact: true })).toHaveCount(0)
 })
 
 test('cancel Clear and partial Save preserve input; explicit skips and Clear affect only this draft', async ({ page }) => {
@@ -107,7 +107,7 @@ test('profile switching and unit changes recover canonical loads; light theme an
   await button(page, 'Settings').click(); await button(page, 'Light').click()
   await page.getByRole('combobox', { name: 'Weight unit', exact: true }).selectOption('lb'); await button(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
   await input(page, 'New profile name').fill('Other'); await button(page, 'Create profile').click(); await expect(page.locator('input[name="name"]')).toHaveValue('Other'); await button(page, 'Train').click()
-  await expect(page.getByText('No saved sessions.')).toBeVisible(); await expect(button(page, 'Resume Training plan / Upper')).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
+  await expect(page.getByText('No active plan(s) selected.')).toBeVisible(); await expect(button(page, 'Resume Training plan / Upper')).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
   await button(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await button(page, 'Train').click(); await resume(page)
   await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100'); await expect(page.getByRole('region', { name: 'Rest timer' })).toBeVisible()
   await expect(page.getByRole('combobox')).toHaveCount(0)

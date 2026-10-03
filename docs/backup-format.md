@@ -1,9 +1,9 @@
-# Boros profile backup, schema 2 (schema 1 supported)
+# Boros profile backup, schema 3 (schemas 1 and 2 supported)
 
 Export was implemented in Phase 8; reviewed restore and profile Clear Data are
 implemented in Phase 9. This remains separate from the external AI interchange
-format. Group 2 writes backup schema 2; database version 5 stays unchanged. Strict
-schema 1/database v5 backups remain supported through the compatibility path below. An isolated
+format. Group 3 writes backup schema 3; database version 5 stays unchanged. Strict
+schema 1 and 2/database v5 backups remain supported through the compatibility path below. An isolated
 export → import under a new name → export comparison verifies canonical records,
 relationships and original image bytes, with the identity exceptions below.
 
@@ -13,6 +13,7 @@ relationships and original image bytes, with the identity exceptions below.
 manifest.json
 data.json
 csv/profiles.csv
+csv/train_selections.csv
 csv/tags.csv
 csv/library_exercises.csv
 csv/library_sets.csv
@@ -48,7 +49,7 @@ fields rather than write null. Record timestamps/revisions are not regenerated.
 
 `src/schemas/backup.ts` defines the executable payload/manifest schema and required
 reference checks. Database version stays 5: exporting adds no tables, migrations,
-or writes. The manifest separately records backup schema `2`, database schema `5`,
+or writes. The manifest separately records backup schema `3`, database schema `5`,
 and the real `package.json` app name/version (`boros`, currently `0.0.0`). That
 package value is not an invented release number.
 
@@ -56,7 +57,7 @@ package value is not an invented release number.
 
 | Field | Meaning |
 | --- | --- |
-| `format`, `backupSchemaVersion` | `boros-profile-backup`, 2 for new exports; independent of AI/database versions |
+| `format`, `backupSchemaVersion` | `boros-profile-backup`, 3 for new exports; independent of AI/database versions |
 | `databaseSchemaVersion`, `app` | Actual supported source database version and package name/version |
 | `profile` | The captured profile's ID, name, and Guest/named kind; no active-profile selection reference |
 | `snapshotAt` | UTC timestamp at the end of the consistent read transaction |
@@ -83,7 +84,7 @@ or resizing. ZIP compression is STORE for images and DEFLATE for text.
 
 | Key | Fields and relationships |
 | --- | --- |
-| `profile` | ID, kind, name/nameKey, optional age/heightCm/photoId, weightUnit/heightUnit, revision, createdAt/updatedAt. Current weight is derived, never a copied field. |
+| `profile` | ID, kind, name/nameKey, optional age/heightCm/photoId/timeZone/selectedPlanIds, weightUnit/heightUnit, revision, createdAt/updatedAt. Current weight is derived, never a copied field. Train selections are unique UUID references to owned plans, including archived ones. |
 | `tags` | Profile-owned ID, name/nameKey, creation/update time, optional archivedAt. |
 | `exercises` | Profile-owned library ID, name keys, archive/revision/timestamps, ordered sets, tagIds, optional rest/instructions/notes/tutorial URL. |
 | `plans` | Profile-owned ID, name keys, archive/revision/timestamps, optional durationWeeks (absent means legacy unbounded), ordered days and exercise occurrences. Each occurrence has its own ID, complete prescription, optional provenance source and groupId. Days optionally contain groups with stable ID, positive day-local number and optional restBetweenRoundsSeconds/restAfterGroupSeconds. |
@@ -140,14 +141,38 @@ validated in increasing Monday order and select the applicable boundary without
 rewriting earlier occurrences. Started/completed exceptions remain valid beyond
 a later end date. Plan edits do not alter the frozen schedule boundary.
 
-Upload accepts versions 1 and 2 with matching manifest/data versions and database
+Upload accepts versions 1, 2 and 3 with matching manifest/data versions and database
 v5. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
 before validating records against the version-specific strict field set, linked
 references, CSV inventory/counts and original assets. Only after all checks pass,
-v1 canonical data is cloned with a v2 envelope; no group/duration is inserted and
+v1/v2 canonical data is cloned with a v3 envelope; no group/duration/preference is inserted and
 the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
 The returned manifest remains the original validated version for provenance.
 Checksums and photo decoding are never bypassed.
+
+### Group 3 profile preferences
+
+Schema 3 adds optional profile `timeZone` (supported IANA identifier) and
+`selectedPlanIds` (unique, owned plan UUIDs). `csv/profiles.csv` adds `timeZone`;
+`csv/train_selections.csv` has profileId, planId and selectionOrder. There are
+24 linked CSVs. The v1 and v2 schemas freeze their original strict profile fields
+and CSV contracts; they reject new preferences masquerading as an old version.
+
+Archived selections remain valid references and stay hidden in Train until the
+plan is restored. An explicit selection save replaces the list with checked,
+usable plans. Missing/foreign references fail canonical validation, rather than
+silently choosing an unrelated plan. Independent import keeps child plan IDs in
+the new ownership scope; merges remap imported selection IDs through the same
+plan-root map used by the winning family. Device/import precedence chooses the
+entire profile's preferences. Replacement uses the imported preferences.
+
+A validated older archive retains missing preferences until restore preview.
+The proposed profile initializes only a missing time zone from the browser zone;
+it does not invent a Train selection. Existing time zones are preserved, including
+all schedule and measurement zones. This documented preference default is an
+additional permitted semantic round-trip normalization for legacy profiles.
+The committed operation remains one atomic, stale-checked ownership rotation.
+Clear Data removes selections with plans but retains the time zone and units.
 
 Whole-plan-family precedence is unchanged. Group/occurrence IDs are scoped by the
 winning plan/day and its snapshots; they remain together through root ownership,
@@ -247,7 +272,7 @@ permissions and physical mobile save-sheet behavior still need manual checks.
 
 ## Upload validation and limits (Phase 9)
 
-Settings → Data → **Backup ZIP** accepts an original Boros schema 1 or 2/database v5
+Settings → Data → **Backup ZIP** accepts an original Boros schema 1, 2 or 3/database v5
 export. Unsupported versions explain that the user must update Boros or choose a
 supported export. Import never guesses at a future schema or reads AI interchange
 as a backup. Parsing, hashing, CSV row checks and image decoding run in a worker,
@@ -378,7 +403,7 @@ stable record matching prevent an identical merge producing extra copies.
 Clear Data uses the same preview, confirmation, stale-state checks, ownership
 retirement and atomic transaction. It identifies the selected profile, offers
 Download data first, deletes its owned records/assets/timer and demographic fields,
-and retains its name/kind and weight/height unit preferences as an empty usable
+and retains its name/kind, time zone and weight/height unit preferences as an empty usable
 workspace. It is separate from clearing one training draft. Cancel changes neither
 records nor selection. Once Confirm and save starts, it is an atomic commit, not a
 cancelable preparation step.
@@ -416,7 +441,7 @@ remove them. Do not delete the source to test a move.
    actual original ZIP is present/readable on disk; “Download started” cannot
    confirm filesystem success. Repeat separately for each desired profile.
 2. At the verified target address, use Settings → Data → Backup ZIP. Select the
-   original schema 1 or 2/database v5 ZIP; do not unpack/repackage it or import CSVs.
+   original schema 1, 2 or 3/database v5 ZIP; do not unpack/repackage it or import CSVs.
    Review validation and counts. Prefer **Import under a new name** with an unused
    name if a name conflict exists; merge/replace have the destructive whole-family
    semantics documented above. Review, acknowledge and Confirm and save.

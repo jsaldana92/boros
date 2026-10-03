@@ -67,17 +67,17 @@ export function scheduleService(database: BorosDatabase) {
         await database.schedules.put(result); return result
       })
     },
-    async events(profileId: string, start: string, end: string, zone: string): Promise<CalendarEvent[]> {
+    async events(profileId: string, start: string, end: string, zone?: string): Promise<CalendarEvent[]> {
       dateSchema.parse(start); dateSchema.parse(end)
       return database.transaction('r', tables, async () => {
         await owner(profileId)
-        const schedules = (await database.schedules.where('profileId').equals(profileId).toArray()).filter((item) => item.timeZone === zone)
+        const schedules = (await database.schedules.where('profileId').equals(profileId).toArray()).filter((item) => !zone || item.timeZone === zone)
         const events = new Map<string, CalendarEvent>(schedules.flatMap((item) => occurrences(item, start, end)).map((item) => [item.ref.key, item]))
         const drafts = await database.drafts.where('profileId').equals(profileId).toArray(), logs = await database.sessions.where('profileId').equals(profileId).toArray()
         // Started/completed snapshots remain visible even after a future remap or stop.
         for (const record of [...drafts.filter((item) => !item.finalizedAt), ...logs]) {
           const ref = record.occurrence
-          if (!ref || ref.timeZone !== zone || ref.scheduledDate < start || ref.scheduledDate > end) continue
+          if (!ref || (zone && ref.timeZone !== zone) || ref.scheduledDate < start || ref.scheduledDate > end) continue
           const generated = events.get(ref.key)
           events.set(ref.key, { ref, planId: record.sourcePlanId, planName: record.planName, day: record.day, retained: !generated || generated.ref.scheduleRevisionId !== ref.scheduleRevisionId, ...('completedAt' in record ? { session: record } : { draft: record }) })
         }

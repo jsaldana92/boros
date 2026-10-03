@@ -4,9 +4,9 @@
 restore in Blob-capable WebKit/Safari. Phase 11 is **In progress: preparation only**.
 The owner reports HTTPS resolved and the site working on 2026-10-03; the earlier
 hostname failure below is historical, not a current blocker claim. No independent
-Group 2 production certificate/runtime smoke was performed. Group 1 supplies the owner's Ko-fi destination in `.env.production`;
+Group 3 production certificate/runtime smoke was performed. Group 1 supplies the owner's Ko-fi destination in `.env.production`;
 its live account content is blocked by a Cloudflare challenge in automation.
-See [Group 2 verification](group2-verification.md) for the current candidate and
+See [Group 3 verification](group3-verification.md) for the current candidate and
 local checks, and [Group 1 verification](group1-verification.md) for historical TLS
 evidence. The artifact/test observations below are
 the **historical pre-Group-1 preparation**, not verification of the revised build.
@@ -137,7 +137,7 @@ profiles; preserve an original exported ZIP before any destructive experiment.
    Group 1 configures `https://ko-fi.com/jhonatansaldana` in `.env.production`; confirm
    the intended account page in an ordinary browser because automation encounters a
    Cloudflare challenge. Do not bypass either a browser security warning or the
-   challenge to claim a passing live check. Use the current Group 2 fingerprint,
+   challenge to claim a passing live check. Use the current Group 3 fingerprint,
    not the historical preparation fingerprint above, for the next owner release.
 3. **Device checks, still unverified:** on a physical phone in both themes, portrait/
    landscape and enlarged text, edit with the keyboard open and reach Save/Clear
