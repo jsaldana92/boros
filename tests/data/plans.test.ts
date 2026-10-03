@@ -173,7 +173,7 @@ test('v2-to-v3 migration retains all populated stores including photo bytes and 
   const upgraded = new BorosDatabase(name)
   t.after(() => upgraded.delete())
   await upgraded.open()
-  assert.equal(upgraded.verno, 4)
+  assert.equal(upgraded.verno, 5)
   for (const [table, record] of Object.entries(records)) {
     const retained = (await upgraded.table(table).toArray())[0]
     assert.deepEqual(retained, record)

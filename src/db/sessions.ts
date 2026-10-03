@@ -1,6 +1,7 @@
 import { db, type BorosDatabase } from './database.ts'
 import { z } from 'zod'
 import { daySchema } from '../schemas/plan.ts'
+import { occurrences, occurrenceKey, dateSchema } from '../schemas/schedule.ts'
 import { assessSession, blankSession, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
 
 export function sessionService(database: BorosDatabase) {
@@ -14,6 +15,22 @@ export function sessionService(database: BorosDatabase) {
   const stopOwned = async (profileId: string, draftId: string) => { const timer = await database.restTimers.get('active'); if (timer?.profileId === profileId && timer.draftId === draftId) await database.restTimers.delete('active') }
   return {
     getDraft: draft,
+    async openOccurrence(profileId: string, scheduleId: string, dayId: string, date: string) {
+      dateSchema.parse(date)
+      return database.transaction('rw', [...tables, database.schedules], async () => {
+        const profile = await owner(profileId), key = occurrenceKey(scheduleId, dayId, date)
+        const session = await database.sessions.where('[profileId+occurrenceKey]').equals([profileId, key]).first()
+        if (session) return { session }
+        const existing = await database.drafts.where('[profileId+occurrenceKey]').equals([profileId, key]).first()
+        if (existing) return { draft: existing }
+        const schedule = await database.schedules.get([profileId, scheduleId])
+        const event = schedule && occurrences(schedule, date, date).find((item) => item.ref.dayId === dayId)
+        if (!event) throw new Error('This occurrence changed or needs mapping repair. Refresh Calendar.')
+        const now = new Date().toISOString(), day = daySchema.parse(structuredClone(event.day))
+        const value: SessionDraft = { id: crypto.randomUUID(), profileId, revision: 1, sourcePlanId: event.planId, sourceDayId: dayId, occurrence: event.ref, occurrenceKey: key, activeSourceKey: `scheduled:${key}`, planName: event.planName, day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
+        await database.drafts.add(value); return { draft: value }
+      })
+    },
     async library(profileId: string) {
       return database.transaction('r', [...tables, database.plans], async () => {
         await owner(profileId)
@@ -59,7 +76,11 @@ export function sessionService(database: BorosDatabase) {
         z.string().datetime().parse(completedAt)
         if (Date.parse(completedAt) < Date.parse(value.startedAt)) throw new Error('Completion time must be no earlier than the session start.')
         const loggedAt = new Date().toISOString()
-        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, sourcePlanId: value.sourcePlanId, sourceDayId: value.sourceDayId, planName: value.planName, day: structuredClone(value.day), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
+        if (value.occurrenceKey) {
+          const existing = await database.sessions.where('[profileId+occurrenceKey]').equals([profileId, value.occurrenceKey]).first()
+          if (existing) return existing
+        }
+        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, sourcePlanId: value.sourcePlanId, sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), planName: value.planName, day: structuredClone(value.day), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
         await database.sessions.add(result)
         await database.drafts.put({ ...value, input, finalizedAt: completedAt, activeSourceKey: undefined, updatedAt: loggedAt, revision: value.revision + 1 })
         await stopOwned(profileId, id); return result

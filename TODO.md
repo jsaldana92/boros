@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-02  
-Status: Phase 5 complete; training, persistent drafts, timers, and saved-session review verified.
-Current phase: Phase 5 complete; Phase 6 has not started.
+Status: Phase 6 complete; calendar scheduling, occurrence completion, and history verified.
+Current phase: Phase 6 complete; Phase 7 has not started.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -160,7 +160,7 @@ Nested prescriptions are acceptable; do not normalize every set into its own dat
 | 3     | Manual plan builder and plan editing                              | 2                 | Complete |
 | 4     | AI formatting instructions, strict paste import, editable preview | 3                 | Complete |
 | 5     | Training, rest timers, draft recovery, saved sessions             | 3                 | Complete |
-| 6     | Calendar scheduling and weekly completion                         | 5                 | Not started |
+| 6     | Calendar scheduling and weekly completion                         | 5                 | Complete |
 | 7     | Progress weights/photos and profile synchronization               | 1, 5              | Not started |
 | 8     | Complete ZIP/CSV/JSON export                                      | 1–7               | Not started |
 | 9     | Backup restore, overwrite, merge, rename, and clear data          | 8                 | Not started |
@@ -351,18 +351,18 @@ Acceptance: complete an exercise, use both timer types, reload mid-session, and 
 
 Goal: a recurring weekly plan connects to the correct completed training sessions.
 
-- [ ] Add week view by default, day/month views, Today, and previous/next navigation without an arbitrary history window.
-- [ ] Add Plan flow: select plan, choose starting week, assign each training day to a distinct weekday, and preview the schedule.
-- [ ] Calculate occurrences only for the displayed/relevant date range; do not pre-create infinite future database rows.
-- [ ] Show scheduled training days and their completed/incomplete state in Calendar and Train.
-- [ ] Connect a started session to its stable occurrence identity. Retrying/reopening that occurrence must not accidentally create duplicate completion records.
-- [ ] Grey out and strike through completed training days for the relevant week while keeping their saved details readable.
-- [ ] Leave other training days active. The next week's occurrences start incomplete automatically without deleting or modifying previous logs.
-- [ ] Leave missed prior occurrences visible as missed/incomplete history; do not silently move them into a different week.
-- [ ] Define schedule edits with effective dates/revisions so changing a future mapping does not rewrite historical occurrences.
-- [ ] Handle plan-day removal/count changes with an explicit remapping flow; preserve completed sessions and their prior schedule context.
-- [ ] Stop/remove future scheduling without deleting historical sessions. Support separate schedules without confusing their occurrence IDs.
-- [ ] Test Sunday/Monday, year boundaries, daylight-saving changes, and importing a schedule into a browser in another time zone.
+- [x] Add week view by default, day/month views, Today, and previous/next navigation without an arbitrary history window.
+- [x] Add Plan flow: select plan, choose starting week, assign each training day to a distinct weekday, and preview the schedule.
+- [x] Calculate occurrences only for the displayed/relevant date range; do not pre-create infinite future database rows.
+- [x] Show scheduled training days and their completed/incomplete state in Calendar and Train.
+- [x] Connect a started session to its stable occurrence identity. Retrying/reopening that occurrence must not accidentally create duplicate completion records.
+- [x] Grey out and strike through completed training days for the relevant week while keeping their saved details readable.
+- [x] Leave other training days active. The next week's occurrences start incomplete automatically without deleting or modifying previous logs.
+- [x] Leave missed prior occurrences visible as missed/incomplete history; do not silently move them into a different week.
+- [x] Define schedule edits with effective dates/revisions so changing a future mapping does not rewrite historical occurrences.
+- [x] Handle plan-day removal/count changes with an explicit remapping flow; preserve completed sessions and their prior schedule context.
+- [x] Stop/remove future scheduling without deleting historical sessions. Support separate schedules without confusing their occurrence IDs.
+- [x] Test Sunday/Monday, year boundaries, leap days, daylight-saving changes, and reading a stored schedule after a browser device-zone change. No backup import was implemented to test this.
 
 Acceptance: schedule four days, save one, and see only that occurrence crossed out. Visit the next week and see fresh incomplete days; revisit the prior week and see its completion/history. A future mapping edit changes future occurrences while prior session dates stay intact.
 
@@ -491,7 +491,7 @@ Build these fixtures as the relevant phase begins, using fictional people and ti
 - [ ] Backup with a new plan, standalone exercise, and progress entry to demonstrate that nonconflicting items survive both merge priorities.
 - [ ] Renamed records that retain stable IDs; records with the same normalized names; ambiguous ID/name matches; zero RIR/rest; empty optional values; Unicode; commas; multiline notes; and formula-like text.
 - [ ] Malformed/unsupported archives and AI payloads; missing or oversized assets; invalid references and ranges.
-- [ ] Calendar cases around Sunday/Monday, New Year, daylight-saving transitions, and different importing-device time zones.
+- [x] Calendar cases around Sunday/Monday, New Year, leap days, daylight-saving transitions, and retained schedule zones after simulated device-zone changes (backup import remains a later phase).
 
 ## 7. Inputs needed later
 
@@ -532,19 +532,24 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-02 | Serialize draft autosaves/actions; debounce 400 ms; compare revisions transactionally | Save includes latest input; Clear cannot be undone by queued writes; stale tabs keep input |
 | 2026-10-02 | Persist raw draft input and recording units, validate completed results strictly | Recover intermediate input without fabricating missing/zero values; preserve load measurements when display units change |
 | 2026-10-02 | One database-wide timer token with profile/draft ownership and UTC endAt | Start replaces the previous timer; only its owner can read/control it; elapsed time survives reload/backgrounding |
+| 2026-10-02 | Database v5 adds schedules and optional unique profile/occurrence indexes on drafts/logs; no existing record rewrite | Preserve all ten v4 stores and unscheduled history; one completed log per scheduled occurrence |
+| 2026-10-02 | Native all-day calendar controls; Gregorian civil-date field arithmetic plus explicit IANA Intl formatToParts for Today | No new calendar/timezone dependency needed; avoid elapsed-week arithmetic and ambiguous DST clock times |
+| 2026-10-02 | Show one stored zone context at a time, with all schedules/other zones listed; default to first stored schedule zone | Today and view boundaries remain consistent after device-zone changes; overlapping schedules keep separate IDs |
+| 2026-10-02 | Schedule revisions snapshot plan/day/mapping; ordinary edits require explicit future refresh; structural day edits atomically suspend future mapping | Reconstruct missed/history dates; default changes to next schedule-local Monday; never guess mappings |
+| 2026-10-02 | Remap/stop previews recheck schedule/plan/draft revisions and explicitly retain affected started sessions as dated exceptions | Preserve input and snapshots, reject stale previews, and never silently delete/reassign a draft |
 
 ## 9. Current checkpoint
 
-- Read the attached Phase 5 request, root TODO, approved UI specification, and Phase 4 handoff; inspected actual schemas/services/builders/navigation/configuration and verification records. No applicable AGENTS.md found. Working tree was clean at phase start. Earlier phase statuses and historical handoffs remain unchanged.
-- Phase 5 is complete; acceptance passed in isolated data tests and desktop/emulated-phone Edge development, preview, and static root/project hosting. Train supports selection/resume, complete prescription snapshots, results/notes/information, correctly positioned rest controls, persisted timestamp timers, autosaved drafts, partial/full completion, scoped Clear, and read-only history. Phase 6 has not started.
-- Database v4 adds drafts/sessions/restTimers without rewriting v3 records. Draft revisions reject stale writes; completion uses the draft identity and one transaction. Autosave/action serialization prevents delayed writes from restoring cleared/finalized data. Profile switches cannot retarget work.
-- Autosave: 400 ms after the last edit plus commit time. Raw intermediate input may be stored as a draft, with field errors; invalid/incompatible sets cannot be completed without correction or explicit skip. Unapplied notes and unpersisted edits remain guarded, but abrupt termination can lose uncommitted changes. Settings alone selects display units; original load/unit context remains intact.
-- Reused dependencies, configuration, theme tokens, dialogs, fields, unit converters, source schemas, and memory navigation. No scheduled occurrences, calendar flags, progress UI, backups, new provider, or automatic tutorial content.
-- Final verification: build/typecheck/lint passed (no lint warnings); data 48/48; full development Edge 78 passed / 2 static-only skips; production preview 78 passed / 2 static-only skips; plain-static root/project hosting 160/160, no skips. All 10 new training browser journeys passed in each environment. Final dark 320px and light desktop screenshots inspected; focused input and action-bar spacing assertions pass.
-- Build limitation: Vite reports a roughly 511 kB minified / 154 kB gzip JavaScript chunk above its advisory threshold. Build succeeds; no threshold suppressed. Large-data/loading performance and code splitting remain future work.
-- Tests use uniquely named fake databases and isolated contexts, never the owner's data. No dependency install, publication, push, staging, or commit.
-- Carry-forward limitations: physical-phone keyboards/safe areas, Safari/Firefox, screen readers, live Ko-fi, real quota exhaustion, and large-data performance remain unverified. Draft recovery covers successful writes only; timers provide no background alarms.
-- Next step: Phase 6 calendar scheduling only when requested. Carry-forward manual/device/performance checks remain explicitly unverified.
+- Phase 6 is complete; acceptance checks pass in data tests and development, production preview, and plain-static root/project hosting. Phase 7 has not started. Earlier phase statuses and historical handoffs remain unchanged.
+- Calendar supports week/day/month, Today/date navigation, recurring Add Plan previews, visible rest days, stored IANA zone contexts, missed/completed/partial status, and exact-occurrence entry into Train. Multiple schedules remain independent.
+- Database v5 is additive: schedules plus optional unique occurrence indexes on drafts/sessions. All ten populated v4 stores and photo bytes survive the tested migration. No owner data was cleared; only isolated databases/contexts were used.
+- Civil dates use calendar field arithmetic; Intl provides schedule-local Today. Stored zones survive simulated New York-to-Tokyo device changes. Schedule revisions retain plan snapshots and historical effective intervals; structural plan edits require future repair.
+- Remap/stop previews detect stale schedule/plan/draft revisions and require explicit retention of affected started drafts. Those original dated sessions remain resumable/completable. Unscheduled Train sessions remain independent. Phase 5 autosave, timers, notes, Clear, snapshots, and recovery continue to pass regression checks.
+- Final verification: build/typecheck/lint and diff checks passed, data 57/57, full development and production-preview browser suites each 86 passed / 2 static-only skips, plus final focused development Calendar suite 8/8. Plain-static root/project suite passed 176/176 without skips. Dark desktop and light desktop/320px Calendar screenshots inspected; navigation spacing and no-horizontal-overflow assertions pass.
+- Bundle advisory remains: 531.63 kB minified / 159.80 kB gzip JavaScript. No warning threshold changed and no unrelated optimization.
+- Reused installed configuration/dependencies and shared controls. No Progress UI, backup workflow, profile Clear Data, dependency installation, publication, push, staging, or commit.
+- Still unverified: physical-phone keyboards/safe areas and background behavior, Safari/Firefox, screen readers/voice control, live Ko-fi, actual storage exhaustion, and large-data performance. Schedule forms remain memory-only; successfully saved training drafts retain the existing recovery guarantee.
+- Next action: Phase 7 progress and profile measurements only when requested; carry forward the explicitly unverified manual/device/performance checks.
 
 ## 10. Handoff entry template
 
@@ -931,3 +936,28 @@ Use a separate test browser profile without clearing existing user data. Prepare
 - Source independence/recovery: while a draft exists, edit/archive its source plan in Create; resume and verify its original names/targets remain. Complete it, edit the source again, and verify read-only history remains unchanged. In two tabs, change the same draft; the stale tab must keep input with an error and require confirmed Reload before using current data. Confirmed Clear on another unfinished draft must leave existing history and other drafts untouched.
 - Screen reader: verify per-exercise/set field names, read-only unit labels, target versus actual RIR, autosave/error announcements, Note/Information dialogs, skipped-set checkboxes, timer labels, partial/Clear summaries, and UTC history timestamps. Check Tab/Enter/Space/Escape and focus after dialogs/reload. Timer ticks should not announce every fraction of a second. Earlier navigation/profile/import checks remain pending.
 - Once the real `VITE_KOFI_URL` is configured, verify Settings > Support opens the intended new-tab page. In a separate stress environment, test real quota exhaustion and representative large plan/session libraries; confirm failed writes keep recoverable input and no partial log/finalization, and record dataset sizes/loading/save timings before claiming performance.
+
+### 2026-10-02 — Phase 6: recurring calendar and occurrence completion
+
+- Status: Complete — Phase 6 acceptance passed in isolated data tests and Edge desktop/emulated-phone development, production preview, and plain-static root/project suites. Phase 7 not started.
+- Inspection: read the Phase 6 attachment, root TODO/date rules/approved UI, current v4 schema and profile/plan/session services, memory navigation, configuration, and verification records. No applicable AGENTS.md found; working tree was clean at phase start. Earlier phase statuses and historical hash-routing handoffs remain unchanged.
+- Implemented: Monday–Sunday week default; day/month/Today/previous/next/direct-date navigation; Add Plan with distinct weekday mapping, rest-day preview, weekly repetition and separate schedules; zone context; exact-occurrence Train entry/resume and saved-detail review; completed/partial styling; new-week independence and missed/late history; future remapping/plan refresh, structural repair, and confirmed stopping.
+- Files: added `src/lib/calendar-dates.ts`, `src/schemas/schedule.ts`, `src/db/schedules.ts`, and `src/features/calendar/CalendarPage.tsx`; extended database, plan/session services and session types; connected existing app navigation/Train; added calendar styling/tests and updated README. Existing package/configuration files unchanged; no dependency installation.
+- Migration: database v5 adds schedules and optional unique compound occurrence indexes on drafts/logs. The populated v4 preservation test compares all ten old stores and photo bytes. Legacy unscheduled records acquire no invented occurrence association. Initialization still refuses replacement of inconsistent/orphaned data.
+- Dates: all-day Gregorian labels with calendar field arithmetic on a UTC carrier; explicit IANA Intl `formatToParts` computes local Today. No UTC truncation of instants or elapsed-millisecond week division. Browser zone is stored at creation and retained. Calendar displays one selected zone context; all schedules and their zones remain listed. No arbitrary history cutoff, only the documented four-digit date-format boundary. FullCalendar was unnecessary for these native all-day views.
+- Revisions: schedule revisions store immutable prescription/mapping snapshots with effective intervals. Ordinary source edits require explicit future refresh. Plan day-ID/count changes atomically add a needs-repair segment from the next schedule-local Monday (or later start week); prior/missed dates survive. Source-plan archive does not stop existing schedules. Remap defaults to next local Monday; stop defaults there but allows Today or later. Superseded revision metadata is retained.
+- Conflicts: previews recheck schedule/plan revisions plus affected draft IDs/revisions in the commit transaction. Affected unfinished drafts require explicit keep-original-dates approval; they remain visible, resumable exceptions with entered input and prescription snapshots intact. Clear affects only draft input/timer. Saved future logs survive mapping changes/stopping. Stale edits and failed writes preserve form input. New schedules reuse a creation UUID across retries.
+- Data verification: `npm run test:data` passed **57/57** (9 calendar tests plus 48 prior). Includes validation/ownership, overlapping schedules, stable/range-only identities, Sunday/Monday/year/month/leap/DST boundaries, date-format limits, partial/late/unscheduled isolation, separate schedules, competing connections, idempotent starts/saves, rollback, Clear identity, stale previews, future remap, day removal/repair, stop with draft/history preservation, explicit plan refresh, and populated v4 migration. All test databases have unique test names; no owner records were cleared.
+- Browser verification: `npm run test:browser` passed **86 / 2 static-only skips**; after the final extreme-date guard, the affected command `npm run test:browser -- tests/browser/calendar.spec.ts` passed **8/8**. `npm run test:browser:preview` passed **86 / 2 static-only skips** against the final build. `npm run test:browser:static` passed **176/176**, no skips, using `/` and `/project-check/` with no SPA rewrite fallback. Desktop and emulated-phone Edge contexts are isolated.
+- Calendar browser journeys: four-day schedule/preview/rest days; one partial completion and saved-detail access; next-week incomplete/prior-week history; all views/Today/reload; two-profile isolation and theme; stale second-tab remapping; original future input retained after remap/stop; canceled navigation and Escape focus return; injected schedule-write failure plus successful retry; actual beforeunload cancellation; independent overlapping schedules. CDP device-zone change from New York to Tokyo retains the stored zone and verifies different Today dates at a Sunday/Monday boundary. No backup workflow was implemented for this check.
+- Regression coverage: existing profile/avatar/weight/theme, exercise and plan lifecycle/isolation, AI import, training autosave/timers/notes/Clear/snapshots, stale writes, navigation guards/focus, and same-address refresh checks passed. Dark desktop and light desktop/320px calendar screenshots were inspected. No horizontal overflow; schedule actions remain reachable above fixed navigation. A narrow desktop calendar was widened during visual review to avoid split status words.
+- Resolved verification failures: first focused browser run **4 passed / 2 failed** exposed preview-trigger focus loss caused by async disabled controls; explicit focus restoration fixed it and the rerun passed **6/6**. Initial lint reported two state-in-effect warnings; derived calendar selection and asynchronous entry loading removed both. An added unload test initially timed out in both projects because it awaited a reload that was deliberately canceled (**84 passed / 2 failed / 2 skips**); switching to the repository's event-based unload pattern fixed the test, and the full suite then passed **86 / 2 skips**. No outstanding failure is hidden by retries.
+- Build/static checks: `npm run build`, `npm run typecheck`, `npm run lint`, and `git diff --check` passed; lint has no warnings. Vite still reports its existing >500 kB advisory: final JavaScript **531.63 kB minified / 159.80 kB gzip**. No warning threshold suppressed; no unrelated optimization.
+- Remaining limitations: schedule editor input is memory-only and protected by navigation/unload warnings; refresh restores the screen, not that form or selected calendar range. Occurrences are generated for only the requested range, but profile records/revision history are read in memory; large-dataset performance is unbenchmarked. Training recovery covers committed autosaves only. No background alarm guarantee. Progress, backup import/export, and profile Clear Data remain unimplemented.
+- Manual checks still unverified (carry-forward, not claimed passed):
+  1. Physical phone: in portrait and landscape, Add Plan, choose four distinct weekdays and a Monday, preview/cancel/save, open a scheduled event, enter results with the keyboard visible, and reach Save/Clear and bottom navigation. Reload a saved draft, save partially, check next/prior week, and inspect month view in both themes. Also check the existing timer after real backgrounding.
+  2. Safari and Firefox: repeat that schedule/start/reload/partial-save/history journey; remap a future week with a started draft, check Keep original sessions, stop future scheduling, and confirm original input and prior history survive.
+  3. Screen reader/voice control: verify date/zone/weekday field names, event date/name/status, partial completion, preview/rest/conflict announcements, checkbox label, keyboard Escape, trigger focus return, and fixed-navigation reachability.
+  4. When the owner supplies the live Ko-fi URL, configure it and confirm Settings → Support Boros opens that intended page in a separate tab. Unconfigured state remains tested and unavailable.
+  5. Real quota exhaustion and large-data performance remain untested; use a disposable browser profile for those checks, never the owner's stored records.
+- Next action: Phase 7 progress and profile measurements only when requested. No Phase 6 acceptance item remains pending; the manual/device checks above remain explicitly unverified. No publication, push, staging, or commit performed.

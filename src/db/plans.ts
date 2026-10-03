@@ -5,13 +5,15 @@ import { exerciseToInput } from './exercises.ts'
 import { nameKey } from '../schemas/profile.ts'
 import { copyExercise, planInputSchema, planToInput, type ExerciseSource, type Plan, type PlanInput } from '../schemas/plan.ts'
 import type { ExerciseInput } from '../schemas/exercise.ts'
+import { appendRevision } from '../schemas/schedule.ts'
+import { localToday, nextMonday } from '../lib/calendar-dates.ts'
 
 export interface PrescriptionChoice {
   id: string; nameKey: string; createdAt: string; tagIds: string[]
   label: string; prescription: ExerciseInput; source: ExerciseSource
 }
 export function planService(database: BorosDatabase) {
-  const tables = [database.profiles, database.plans, database.tags]
+  const tables = [database.profiles, database.plans, database.tags, database.schedules]
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => {
     const plan = await database.plans.get([profileId, id])
@@ -57,6 +59,15 @@ export function planService(database: BorosDatabase) {
         if (creationId) await resolveTags(database, profileId, input.days.flatMap((day) => day.exercises.flatMap((exercise) => exercise.prescription.tagNames)), now)
         const result: Plan = { ...input, profileId, id: old?.id ?? creationId ?? crypto.randomUUID(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.plans.put(result)
+        if (old && (old.days.length !== result.days.length || old.days.some((day) => !result.days.some((next) => next.id === day.id)))) {
+          const schedules = await database.schedules.where('[profileId+planId]').equals([profileId, result.id]).toArray()
+          for (const schedule of schedules.filter((item) => !item.stoppedFrom)) {
+            const last = schedule.revisions.at(-1)!
+            const cutoff = nextMonday(localToday(schedule.timeZone)), effectiveFrom = cutoff > schedule.startWeek ? cutoff : schedule.startWeek
+            // Preserve past/missed dates, suspend affected future dates until remapped.
+            await database.schedules.put({ ...schedule, revision: schedule.revision + 1, updatedAt: now, revisions: appendRevision(schedule, { ...last, id: crypto.randomUUID(), effectiveFrom, effectiveUntil: undefined, createdAt: now, needsRepair: true }) })
+          }
+        }
         return result
       })
     },

@@ -1,8 +1,8 @@
 # Boros
 
-A React / TypeScript / Vite workout tracker. Phases 1-5 provide a themed shell with single-address navigation,
+A React / TypeScript / Vite workout tracker. Phases 1-6 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, manual plans, validated external AI paste imports, training drafts/timers, and saved-session review. Calendar scheduling, progress screens, and backup tools are not implemented yet. See TODO.md for
+Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, and recurring calendar schedules. Progress screens and backup tools are not implemented yet. See TODO.md for
 the authoritative plan and verification record.
 
 ## Local development
@@ -84,10 +84,10 @@ not transfer data between origins.
 
 ## Local persistence and migrations
 
-`src/db/database.ts` defines IndexedDB database `boros`, schema version 4 (additive drafts, sessions, and restTimers stores; all v1-v3 records retained).
+`src/db/database.ts` defines IndexedDB database `boros`, schema version 5 (additive schedules store and optional unique occurrence indexes on drafts/sessions; all v1-v4 records retained).
 Profiles use UUIDs and unique normalized names (NFKC, trimmed/collapsed
 whitespace, lowercase). Photos and measurements use `[profileId, id]` keys.
-Plans retain this same owner boundary; future schedules and sessions must also retain it. Profile photos are JPEG/PNG/WebP blobs, capped at 5 MB and 4096px
+Plans, schedules, drafts, and sessions retain this same owner boundary. Profile photos are JPEG/PNG/WebP blobs, capped at 5 MB and 4096px
 per side, decoded before saving; temporary object URLs are revoked.
 
 Height is canonical centimeters; dated measurements store kilograms, with
@@ -217,7 +217,7 @@ extraction or numeric type coercion. Pasted HTML/code is inert plain text; tutor
 URLs are never automatically fetched or embedded.
 
 The public v1 contract in `src/schemas/interchange.ts` is separate from database
-schema v4. Its fully populated shape is:
+schema v5. Its fully populated shape is:
 
 ```ts
 type Range = { min: number; max: number }
@@ -373,7 +373,8 @@ which also clears that draft's timer. The draft ID is the completion identity:
 double clicks, retries after uncertain success, and competing tabs return one saved
 log. Success appears only after commit. `startedAt` records session start,
 `completedAt` captures the confirmed Save action, and `loggedAt` records the log
-write time, all UTC. These sessions have no calendar occurrence association yet.
+write time, all UTC. Starting through Calendar also records its occurrence reference;
+starting through Train's plan/day selectors remains explicitly unscheduled.
 
 Clear confirms its exact scope: reset only the open draft's results, session/exercise
 notes, and timer while retaining its prescription. It does not delete logs, plans,
@@ -384,6 +385,98 @@ timestamps. Completed-session editing/deletion is not implemented.
 
 Physical-phone keyboards/safe areas, Safari/Firefox, screen readers, actual storage
 exhaustion, and large-data performance remain unverified. The build currently emits
-Vite's advisory for a roughly 511 kB minified JavaScript chunk (154 kB gzip);
+Vite's advisory for a 531.63 kB minified JavaScript chunk (159.80 kB gzip);
 code splitting/performance measurement remains future work. No warning threshold
-was suppressed. No calendar scheduling, progress UI, or backup workflow was added.
+was suppressed. Progress UI and backup workflows remain future phases.
+
+## Calendar and recurring schedules
+
+Calendar opens in Monday–Sunday week view, with Day, Month, Today, Previous,
+Next, and a date input for direct navigation. There is no rolling history cutoff.
+Wide screens show seven columns; narrow screens use chronological cards with
+reachable controls above the bottom navigation. Completed events stay actionable,
+greyed and struck through with explicit Completed/Partial text. Past uncompleted
+events remain Missed / incomplete. Clear in Train resets input, never calendar
+history. All screens still use the same public address and static-hosting rules.
+
+**Add Plan** selects an active plan, a Monday start date, and one distinct weekday
+per stable training-day ID. A preview lists training and rest days before saving.
+Schedules repeat until explicitly stopped; a duration in a plan name has no effect.
+Multiple schedules can use the same plan, with independent IDs and completions.
+When schedules coexist in a zone, event labels show their short schedule IDs.
+
+### Dates and time zones
+
+Creation stores the browser's IANA time-zone identifier. It never follows a later
+device-zone change automatically. Calendar defaults to the first stored schedule's
+zone (the browser zone when none exist). **Displayed time zone** selects which
+zone's schedules appear; other schedules remain listed with their own zones.
+Today, view boundaries, and missed/incomplete status use that displayed context.
+Refresh restores Calendar as a screen, then defaults to week view and Today;
+the selected date, view, and open editor are not persisted as navigation state.
+
+Events are all-day Gregorian civil dates (`YYYY-MM-DD`), separate from UTC start,
+completion, and log timestamps. `src/lib/calendar-dates.ts` uses calendar field
+arithmetic on a UTC carrier solely to avoid host-zone DST changes; it does not
+interpret those carriers as scheduled instants, truncate instants to date keys,
+or divide elapsed milliseconds into weeks. Schedule-local Today uses explicit
+`timeZone`, Gregorian calendar, Latin numbering, and `formatToParts`, as specified
+by [ECMA-402 DateTimeFormat](https://tc39.es/ecma402/#sec-intl.datetimeformat.prototype.formattoparts).
+The browser's IANA data supplies DST/zone rules; no ambiguous local clock time
+needs conversion because schedules have no time of day. Supported date labels
+span years 0001–9999; views clamp only at that format boundary. No timezone package
+or FullCalendar dependency was needed for these all-day views.
+
+### Occurrences, history, and schedule changes
+
+Occurrences are generated only for the requested range. Their identity is the
+schedule UUID + stable training-day UUID + scheduled local date, scoped to the
+profile. Drafts/logs also retain scheduled week, stored zone, and schedule revision
+ID. Calendar opens/resumes that exact draft or opens its saved details in Train.
+Unscheduled drafts and logs are never adopted by a schedule. Completion comes
+only from a committed log; partial completion counts, and a late save keeps its
+original scheduled date alongside the actual completion timestamp. A new week
+has new identities and does not reset or erase anything.
+
+Database v5 preserves all existing records and adds `schedules` plus optional
+unique `[profileId+occurrenceKey]` indexes on drafts and sessions. Missing keys
+leave legacy unscheduled data separate. Start and completion transactions enforce
+one draft/log per occurrence across retries and competing tabs. Existing revision
+checks, autosave, timers, snapshots, error recovery, and profile boundaries remain.
+The populated v4 migration test compares all ten old stores and photo bytes.
+
+Schedule revisions retain a complete plan/day/mapping snapshot, effective start,
+exclusive end, source plan revision, creation timestamp, and stable revision ID.
+**Edit mapping / refresh plan** explicitly copies current prescriptions and defaults
+to the next Monday in the schedule's zone (or its later start week). Future
+revisions may supersede pending revisions, but their metadata is retained.
+Ordinary plan edits do not automatically change scheduled prescriptions; use this
+action to apply them to future dates. Archiving a source plan does not stop an
+existing schedule; use **Stop Scheduling** separately.
+
+Changing plan day IDs/count atomically adds a needs-repair segment from the next
+schedule-local Monday. Affected future dates show a mapping warning until explicitly
+remapped; earlier missed/history dates remain reconstructable. A later repair date
+intentionally leaves the intervening period blocked, rather than guessing mappings.
+Started drafts and saved sessions always retain their original prescriptions.
+
+**Stop Scheduling** previews an inclusive cutoff (default next local Monday;
+Today or a later date may be chosen). It removes future unstarted events without
+deleting earlier occurrences, drafts, or logs. Remap/stop previews list affected
+unfinished drafts and require checking **Keep these sessions on their original
+dates, with all entered data**. Those retained exceptions remain visible, resumable,
+and completable, including after their original day is removed. Cancel leaves all
+input untouched; there is no implicit draft deletion or reassignment.
+
+Preview-to-save checks cover schedule revision, source plan revision, and affected
+draft IDs/revisions in one transaction. A conflict rejects the save and keeps form
+input. Cancel the preview and preview again for changed drafts/plans; when the
+schedule itself changed, copy needed choices, cancel the editor, and reopen it.
+Creation reuses one UUID across retries. Failed writes keep the preview open;
+success is shown only after commit. Schedule-editor input remains memory-only,
+protected by navigation/unload warnings; refresh is not editor recovery.
+
+Calendar tests use isolated contexts/databases: dates, DST, device-zone changes,
+v4 preservation, remap/repair/stop history, concurrent start/save, rollback,
+overlapping schedules, partial/late completion, reload, and profile isolation.
+See TODO.md for exact run results and physical-device/browser checks still pending.

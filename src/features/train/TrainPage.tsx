@@ -3,6 +3,7 @@ import { Info, NotebookPen } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
 import { ScreenButton } from '../../app/ScreenButton'
+import { useScreenNavigation } from '../../app/navigation-context'
 import { sessions } from '../../db/sessions'
 import { assessSession, displayedLoad, numericResult, timerRemaining, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
 import type { WeightUnit } from '../../schemas/profile'
@@ -19,6 +20,7 @@ export function TrainPage() {
 }
 function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUnit }) {
   const { allowLeave } = useWorkspace()
+  const { trainingEntry } = useScreenNavigation()
   const [attempt, setAttempt] = useState(0), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [planId, setPlan] = useState(''), [dayId, setDay] = useState('')
   const [opened, setOpened] = useState<SessionDraft>(), [review, setReview] = useState<CompletedSession>()
@@ -26,6 +28,19 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
     try { return { data: await sessions.library(profileId), error: '' } } catch (error) { return { data: undefined, error: (error as Error).message } }
   }, [profileId, attempt])
   const data = result?.data, plan = data?.plans.find((item) => item.id === planId)
+  useEffect(() => {
+    if (!trainingEntry || trainingEntry.profileId !== profileId) return
+    let alive = true
+    sessions.library(profileId).then((saved) => {
+      if (!alive) return
+      const session = saved.sessions.find((item) => item.id === trainingEntry.sessionId || item.draftId === trainingEntry.draftId)
+      const draft = saved.drafts.find((item) => item.id === trainingEntry.draftId)
+      if (session) setReview(session)
+      else if (draft) setOpened(draft)
+      else setError('This scheduled session is unavailable. Open it again from Calendar.')
+    }).catch((error: Error) => { if (alive) setError(error.message) })
+    return () => { alive = false }
+  }, [trainingEntry, profileId])
   const focus = () => requestAnimationFrame(() => document.getElementById('train-heading')?.focus())
   const act = async (work: () => Promise<void>) => { if (busy) return; setBusy(true); setError(''); try { await work() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   return <><h1 id="train-heading" tabIndex={-1}>Train</h1>
@@ -36,11 +51,12 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
           {!result && <p role="status">Loading training days...</p>}
           {data && <>
             <h2>Start or resume</h2>
-            {data.drafts.length > 0 && <section aria-label="Unfinished sessions"><h3>Unfinished sessions</h3>{data.drafts.map((draft) => <p key={draft.id}><button disabled={busy} onClick={() => { setOpened(draft); focus() }}>Resume {draft.planName} / {draft.day.name}</button></p>)}</section>}
+            {data.drafts.length > 0 && <section aria-label="Unfinished sessions"><h3>Unfinished sessions</h3>{data.drafts.map((draft) => <p key={draft.id}><button disabled={busy} onClick={() => { setOpened(draft); focus() }}>Resume {draft.planName} / {draft.day.name}{draft.occurrence && ` · ${draft.occurrence.scheduledDate} · ${draft.occurrence.timeZone}`}</button></p>)}</section>}
             {!data.plans.length ? <p>No active plans. <ScreenButton to="create">Open Create</ScreenButton></p> : <fieldset disabled={busy}>
               <label htmlFor="training-plan">Plan</label><select id="training-plan" value={planId} onChange={(event) => { setPlan(event.target.value); setDay('') }}><option value="">Choose a plan</option>{data.plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select>
               <label htmlFor="training-day">Training day</label><select id="training-day" value={dayId} disabled={!plan} onChange={(event) => setDay(event.target.value)}><option value="">Choose a day</option>{plan?.days.map((day, index) => <option key={day.id} value={day.id}>{index + 1}. {day.name}</option>)}</select>
-              <button className="primary" disabled={!dayId} onClick={() => void act(async () => { setOpened(await sessions.start(profileId, planId, dayId)); focus() })}>{data.drafts.some((draft) => draft.sourcePlanId === planId && draft.sourceDayId === dayId) ? 'Resume selected day' : 'Start session'}</button>
+              <p className="muted">This starts an unscheduled session. Open Calendar to train a scheduled date.</p>
+              <button className="primary" disabled={!dayId} onClick={() => void act(async () => { setOpened(await sessions.start(profileId, planId, dayId)); focus() })}>{data.drafts.some((draft) => !draft.occurrence && draft.sourcePlanId === planId && draft.sourceDayId === dayId) ? 'Resume selected day' : 'Start session'}</button>
             </fieldset>}
             <h2 className="library-heading">Saved sessions</h2>
             {!data.sessions.length && <p className="muted">No saved sessions.</p>}
@@ -78,6 +94,7 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
   return <section className="training-session" aria-label="Training session">
     <div className="training-heading"><h2 ref={heading} tabIndex={-1}>{initial.day.name}</h2><button aria-label="Session Note" disabled={controller.busy || !!controller.record.finalizedAt} onClick={() => setNote({ value: controller.input.notes })}><NotebookPen aria-hidden="true" size={20} /></button></div>
     <p className="muted">{initial.planName} · Weight ({unit}) · Change units in Settings.</p>
+    {initial.occurrence && <p>Scheduled: {initial.occurrence.scheduledDate} · Week of {initial.occurrence.scheduledWeek} · {initial.occurrence.timeZone} · In progress</p>}
     <p role="status">{controller.status === 'saved' ? 'Draft saved locally.' : controller.status === 'saving' ? 'Saving draft...' : controller.status === 'pending' ? 'Unsaved changes — saving shortly...' : 'Draft not saved. Your input is kept.'}</p>
     {controller.error && <p role="alert">{controller.error}</p>}
     {controller.status === 'failed' && <div className="actions"><button disabled={controller.busy} onClick={() => void act(() => controller.flush())}>Retry draft save</button><button disabled={controller.busy} onClick={() => setConfirm('reload')}>Reload saved draft</button></div>}
@@ -136,7 +153,7 @@ function TimerDisplay({ timer, disabled, onAction }: { timer: RestTimer; disable
 }
 function SessionReview({ session, onClose }: { session: CompletedSession; onClose: () => void }) {
   const [info, setInfo] = useState<ExerciseInput>()
-  return <section aria-label="Saved session details"><h2>{session.planName} / {session.day.name}</h2><p>{session.partial ? 'Partial session' : 'Complete session'}</p><p>Started: {session.startedAt}<br />Completed: {session.completedAt}<br />Logged: {session.loggedAt}</p><p className="plain-text">Session note: {session.notes || 'None'}</p>
+  return <section aria-label="Saved session details"><h2>{session.planName} / {session.day.name}</h2><p>{session.partial ? 'Partial session' : 'Complete session'}</p>{session.occurrence && <p>Scheduled: {session.occurrence.scheduledDate} · Week of {session.occurrence.scheduledWeek} · {session.occurrence.timeZone} · Completed</p>}<p>Started: {session.startedAt}<br />Completed: {session.completedAt}<br />Logged: {session.loggedAt}</p><p className="plain-text">Session note: {session.notes || 'None'}</p>
     {session.day.exercises.map((exercise, e) => <section className="training-exercise" key={exercise.id}><div className="training-heading"><h3>{exercise.prescription.name}</h3><button aria-label={`Information for ${exercise.prescription.name}`} onClick={() => setInfo(exercise.prescription)}><Info aria-hidden="true" size={20} /></button></div><p className="plain-text">Exercise note: {session.exercises[e].notes || 'None'}</p><p className="muted">Rest between sets: {exercise.prescription.restBetweenSeconds ?? 'unspecified'} seconds · After exercise: {exercise.prescription.restAfterSeconds ?? 'unspecified'} seconds</p><ol>{session.exercises[e].sets.map((set, s) => <li key={s}>Set {s + 1}: {set.skipped ? 'Skipped' : `${set.load} ${set.unit} · ${set.reps} reps · ${set.rir === undefined ? 'unspecified' : set.rir} actual RIR`}<p className="muted">Target: {target(exercise.prescription.sets[s].reps)} reps · {target(exercise.prescription.sets[s].rir)} RIR</p></li>)}</ol></section>)}
     {info && <ConfirmDialog title={info.name} confirmLabel="Close" onConfirm={() => setInfo(undefined)} onCancel={() => setInfo(undefined)}><p className="plain-text">{info.instructions || 'No instructions.'}</p><p className="plain-text">Prescription note: {info.notes || 'None'}</p>{info.tutorialUrl && isYouTubeUrl(info.tutorialUrl) && <a className="tutorial-link" href={info.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial</a>}</ConfirmDialog>}
     <button onClick={onClose}>Back to training days</button><p className="muted">To train again, return to training days and deliberately start another session.</p>

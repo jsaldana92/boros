@@ -5,6 +5,7 @@ import { PlaceholderPage } from '../components/layout/PlaceholderPage'
 import { SettingsPage } from '../features/profiles/SettingsPage'
 import { CreatePage } from '../features/create/CreatePage'
 import { TrainPage } from '../features/train/TrainPage'
+import { CalendarPage } from '../features/calendar/CalendarPage'
 import { pages } from './pages'
 import { useWorkspace } from './workspace-context'
 import { WorkspaceProvider } from './WorkspaceProvider'
@@ -21,9 +22,9 @@ function NavigationProvider({ children }: { children: ReactNode }) {
   const returnScreen = isScreen(previous) && previous !== 'settings' ? previous : 'train'
   // Commit-only persistence: a canceled guard never navigates or writes here.
   useLayoutEffect(() => { if (isScreen(candidate)) rememberScreen(candidate) }, [candidate])
-  return <NavigationContext.Provider value={{ screen, returnScreen, openScreen: (destination) => {
+  return <NavigationContext.Provider value={{ screen, returnScreen, trainingEntry: location.state?.trainingEntry, openScreen: (destination, trainingEntry) => {
     if (!isScreen(destination) || destination === screen || !allowLeave()) return
-    navigate(`/${destination}`, { replace: true, state: destination === 'settings' ? { returnScreen: screen } : null })
+    navigate(`/${destination}`, { replace: true, state: destination === 'settings' ? { returnScreen: screen } : trainingEntry ? { trainingEntry } : null })
   } }}>{children}</NavigationContext.Provider>
 }
 
@@ -34,7 +35,8 @@ export function AppRouter({ initialScreen }: { initialScreen: Screen }) {
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/train" element={<TrainPage />} />
-      {pages.filter((page) => !['/settings', '/create', '/train'].includes(page.path)).map((page) => <Route key={page.path} path={page.path} element={<PlaceholderPage page={page} />} />)}
+      <Route path="/calendar" element={<CalendarPage />} />
+      {pages.filter((page) => !['/settings', '/create', '/train', '/calendar'].includes(page.path)).map((page) => <Route key={page.path} path={page.path} element={<PlaceholderPage page={page} />} />)}
       <Route path="*" element={<Navigate to="/train" replace />} />
     </Route>
   </Routes></NavigationProvider></WorkspaceProvider></MemoryRouter>

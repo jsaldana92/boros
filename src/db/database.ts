@@ -3,6 +3,7 @@ import type { Measurement, PhotoAsset, Profile, WorkspaceSettings } from '../sch
 import type { Plan } from '../schemas/plan.ts'
 import type { Exercise, Tag } from '../schemas/exercise.ts'
 import type { CompletedSession, RestTimer, SessionDraft } from '../schemas/session.ts'
+import type { Schedule } from '../schemas/schedule.ts'
 
 export class BorosDatabase extends Dexie {
   profiles!: Table<Profile, string>
@@ -15,6 +16,7 @@ export class BorosDatabase extends Dexie {
   drafts!: Table<SessionDraft, [string, string]>
   sessions!: Table<CompletedSession, [string, string]>
   restTimers!: Table<RestTimer, string>
+  schedules!: Table<Schedule, [string, string]>
 
   constructor(name = 'boros') {
     super(name)
@@ -37,6 +39,13 @@ export class BorosDatabase extends Dexie {
       drafts: '[profileId+id], profileId, &[profileId+activeSourceKey]',
       sessions: '[profileId+id], profileId, &[profileId+draftId]',
       restTimers: 'id, profileId',
+    })
+    // Existing v4 records remain byte-for-byte unchanged. Absent occurrence keys
+    // are not indexed, so unscheduled history remains separate.
+    this.version(5).stores({
+      schedules: '[profileId+id], profileId, [profileId+planId]',
+      drafts: '[profileId+id], profileId, &[profileId+activeSourceKey], &[profileId+occurrenceKey]',
+      sessions: '[profileId+id], profileId, &[profileId+draftId], &[profileId+occurrenceKey]',
     })
   }
 }
