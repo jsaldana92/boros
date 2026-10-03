@@ -38,7 +38,7 @@ export function DownloadData() {
   }
   return <div className="backup-export">
     <p>Download saved data for <strong>{snapshot.profile.name}</strong>.</p>
-    <p>The ZIP contains personal records and photos. It is not password-protected. Restore is not available yet.</p>
+    <p>The ZIP contains personal records and photos. It is not password-protected. Use Upload data below to validate and preview a restore.</p>
     <p id="export-scope">Only committed records are included. Save edits and Apply notes, then wait for “Draft saved locally” in every training tab. Pending or failed autosaves and unsaved forms are excluded; Boros cannot flush another tab’s input.</p>
     <label className="check-label"><input type="checkbox" checked={acknowledged} disabled={busy} onChange={(event) => setAcknowledged(event.target.checked)} />I understand this exports saved data only.</label>
     <p className="muted">Preparation runs locally. Leaving Settings or switching profiles cancels preparation. Large exports need browser memory; capacity has not been benchmarked.</p>

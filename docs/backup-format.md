@@ -1,8 +1,10 @@
 # Boros profile backup, schema 1
 
-Implemented by Phase 8. This is separate from the external AI interchange format.
-Restore, rename/new-profile import, replacement, merge, and profile Clear Data are
-not implemented. No export/import/export round trip has been verified.
+Export was implemented in Phase 8; reviewed restore and profile Clear Data are
+implemented in Phase 9. This remains separate from the external AI interchange
+format. Database version 5 and backup schema 1 are unchanged. An isolated
+export → import under a new name → export comparison verifies canonical records,
+relationships and original image bytes, with the identity exceptions below.
 
 ## Archive layout and authority
 
@@ -198,30 +200,155 @@ and validation buffers occupy memory. There is no tested large-data capacity
 promise, streaming download, or automatic photo resizing. Browser download
 permissions and physical mobile save-sheet behavior still need manual checks.
 
-## Phase 9 compatibility boundary
+## Upload validation and limits (Phase 9)
 
-The single-profile scope, stable IDs/nameKeys and explicit relationships support
-an independent new-profile import (new profile ID, consistent ownership rewrite),
-full replacement, or rename under an unused normalized name. Profile-owned
-compound keys permit retained internal IDs; any remapped IDs require all foreign
-keys, occurrence keys and active-source indexes to be rebuilt consistently.
+Settings → Data → **Backup ZIP** accepts an original Boros schema 1/database v5
+export. Unsupported versions explain that the user must update Boros or choose a
+supported export. Import never guesses at a future schema or reads AI interchange
+as a backup. Parsing, hashing, CSV row checks and image decoding run in a worker,
+with progress and cancellation. Nothing is written during validation or preview.
 
-Plan-family membership is explicit: plan → days/prescriptions → schedules and
-their complete revision snapshots → drafts/sessions/associated notes, via planId
-and sourcePlanId. Future whole-family precedence selects one complete conflicting
-family, including its unique logs, rather than unioning losing history. Library
-exercises/tags and independent progress/assets are separate; references still
-needed by winning records must survive. Stable-ID then normalized-name matching
-and ambiguity checks are Phase 9 responsibilities. The contract preserves nulls
-for future precedence, archive state, name keys, revision metadata and original
-text; it does not choose a merge winner.
+| Limit | Maximum |
+| --- | --- |
+| Uploaded/compressed ZIP | 64 MiB |
+| Total expanded payload, including manifest | 128 MiB |
+| Archive entries | 4,096 |
+| Each canonical JSON/CSV file | 32 MiB |
+| Manifest | 2 MiB |
+| Each image | 5 MiB; declared/decoded dimensions at most 4,096 per side |
 
-The current generated-archive checker is **not** an untrusted upload validator.
-Phase 9 must add archive/expansion/file-count limits, unsafe/duplicate path checks,
-unsupported-version handling, full schema/reference checks, reviewable conflict
-previews, revision rechecks and atomic restore transactions. Only then can a
-semantic export → import → export round trip be claimed verified.
+These are rejection limits, **not a benchmarked capacity guarantee**. Original
+exports exceeding them cannot currently be restored by this version; retain the
+ZIP and use a version supporting its size. Export does not silently omit records
+to satisfy restore limits. The worker and planner still hold snapshots/buffers in
+memory; cancellation terminates the worker. No streaming-to-disk claim is made.
+
+Raw central-directory and local headers are inspected **before JSZip loads the
+archive**. They must agree on names, offsets, lengths, compression and CRC; entries
+must be contiguous without hidden/overlapping data. Supported ZIP features are
+classic single-disk STORE/DEFLATE, with no encryption, ZIP64, extra fields, data
+descriptors, directory entries or symlinks. This is the subset emitted by the
+installed Boros exporter; repackaged archives can be rejected. Only exact
+`manifest.json`, `data.json`, known `csv/*.csv`, and UUID `photos/*` paths are
+accepted. Absolute/traversal/backslash/unknown paths and duplicates/collisions
+after NFKC/case normalization are rejected, never sanitized into another name.
+
+Expansion checks count **actual streamed bytes** per file and in total, not just
+directory sizes. CRC, byte lengths and SHA-256 inventory checks cover every payload;
+file lists, profile identity, record counts, CSV row counts and asset metadata must
+agree. Schema/reference checks include profile ownership, unique IDs/names/indexes,
+required parents/assets, complete occurrence metadata, finalized-draft/session
+agreement and historical prescriptions. Images require supported signatures and
+successful decoding matching their metadata. Canonical JSON/assets alone create
+records; CSVs are checked for integrity/structure/counts but never reconstruct data.
+Checksums are integrity checks, not proof of a trusted author. Strings remain inert
+React text. Upload does not render imported HTML, embed tutorials or fetch links.
+
+## Preview, matching and family precedence
+
+Profiles match by the existing NFKC, trimmed/collapsed-whitespace, lowercase name
+key. A source profile ID never selects an existing target. An unmatched or renamed
+profile imports independently; a new name must be unused after normalization.
+For a name match, choices are **Replace this profile**, **Merge — prefer this
+device**, **Merge — prefer imported file**, **Import under a new name**, and
+**Cancel**. Export/modified timestamps are context only; chosen precedence wins.
+
+The preview names the target and shows additions, conflicts, replacements,
+removals and skipped records by store, with explicit session/draft/schedule removal
+counts. A replacement counts all removed and newly restored records. Merge family
+children count as removed/added, while matching plan/library/tag/measurement roots
+count as replaced. All operations require the confirmation checkbox and **Confirm
+and save**. Cancel, navigating away or switching profiles before commit writes
+nothing. Dirty Settings edits must be saved or discarded first.
+
+Plans/library exercises match by stable ID first, normalized name second. If they
+point to different candidates, names have multiple archived candidates, or multiple
+incoming records identify one target, preview reports ambiguity; use an independent
+new name or resolve the records first. Tags use their profile-scoped normalized
+names and ID matching, with the same ambiguity protection.
+
+Plan-family membership is plan → ordered days/prescriptions → schedules and all
+revision snapshots → drafts/completed sessions/associated notes, using `planId`
+and `sourcePlanId`. **Prefer this device** keeps the entire local matching family
+and skips the entire imported family, including unique imported logs. **Prefer
+imported file** removes the entire matching local family, including unique local
+logs/drafts/schedules, and installs the imported family. Histories are never unioned
+inside a conflict. Both modes retain unrelated local families and add nonconflicting
+imported families. Libraries and tags are independent of family ownership.
+
+Selected profile fields win as a complete source, including explicit nulls.
+Measurements merge distinct IDs; matching IDs use selected precedence and appear
+as conflicts with their actual dates. Differing date/origin metadata is called out;
+distinct IDs sharing the same nonempty `lastMutationId` are an ambiguity requiring
+separate import/review. Equal dates alone do not cause deduplication. Current weight
+continues to use the existing latest-measurement service, including its ID tie rule.
+
+Only photos referenced by winning profile/measurement records are installed.
+Shared references remain; genuinely unreferenced photos are pruned. If local and
+imported winning records require different bytes/metadata under one photo ID, the
+imported asset receives a deterministic ID and its winning references are remapped.
+Repeated identical merges create no extra records or remapped photo copies.
+
+## Identity, concurrency and transaction boundary
+
+Each committed restore/merge/replacement or Clear Data receives a fresh **local
+profile ID**. For an existing target, its old ownership ID is retired in the same
+transaction, preserving the selected logical profile/name but invalidating old
+editors. All owned records move to the new compound-key scope. This deliberate
+ownership remap avoids revision-number reuse letting an old tab overwrite restored
+records, and prevents even delayed *new-record* saves recreating cleared data.
+Existing services already check owner existence inside their transactions; no new
+database version, migration, revision rewriting or browser-wide preference reset
+is needed. Old tabs keep mounted form input with a recovery banner and can copy it,
+then **Reopen workspace**. They cannot save into the replacement.
+
+Internal record IDs remain unchanged when safe. Name matches map imported root
+IDs to the matched local root ID. Child schedule/draft collisions with unrelated
+retained families use deterministic SHA-256-derived UUIDs, independent of each new
+ownership ID; unresolved collisions are explicit errors. Schedule references,
+session/draft links, occurrence keys and active-source keys are rebuilt together.
+Optional prescription provenance IDs are remapped if their source participates;
+missing historical provenance remains optional. Frozen prescriptions, day IDs,
+order, results, units, null/absent/zero distinctions, timestamps, schedule zones and
+revision history are not reconstructed from the current library.
+
+`buildRestorePlan` is a pure function of captured snapshots, choice, supplied ID
+and time. The service keeps a private copy of that exact reviewed operation.
+All incoming and required retained images are validated/decoded before the live
+transaction. Commit opens one Dexie read/write transaction over the existing stores,
+rechecks the complete target records and photo bytes, verifies name uniqueness,
+retires the previous ownership scope, writes all selected records/assets, removes
+only the affected profile's timer, and selects the result. Other profiles, theme and
+storage-notice settings remain unchanged. A failure rolls everything back.
+
+The byte-level concurrency check uses `Dexie.waitFor` for bounded Blob reads/SHA-256
+inside the already-locked transaction; image decoding/ZIP parsing do not occur there.
+Its default 60-second timeout aborts without partial writes. This adds CPU/locking
+cost for large targets and remains part of the unbenchmarked capacity limitation.
+Any changed target, including a same-size photo replacement, rejects the preview;
+the user must rebuild it and confirm the changed consequences. Repeated clicks share
+an in-flight operation/success receipt. After reload, existing normalized names and
+stable record matching prevent an identical merge producing extra copies.
+
+Clear Data uses the same preview, confirmation, stale-state checks, ownership
+retirement and atomic transaction. It identifies the selected profile, offers
+Download data first, deletes its owned records/assets/timer and demographic fields,
+and retains its name/kind and weight/height unit preferences as an empty usable
+workspace. It is separate from clearing one training draft. Cancel changes neither
+records nor selection. Once Confirm and save starts, it is an atomic commit, not a
+cancelable preparation step.
+
+The verified semantic round trip allows only the new profile/ownership ID, requested
+display name/nameKey/kind changes, regenerated manifest/export metadata and the
+documented pruning of unreferenced photos. The representative round-trip fixture
+references every asset, so every original image byte is compared. Independent merge
+tests assert whole-family winners and unique losing logs; round-trip success alone
+does not establish merge correctness. See TODO.md for exact current checks and the
+still-unverified physical-device/browser-engine/accessibility/capacity checks.
 
 Implementation references: [Dexie transactions](https://dexie.org/docs/Dexie/Dexie.transaction()),
 [JSZip asynchronous generation](https://stuk.github.io/jszip/documentation/api_jszip/generate_async.html),
 and [Papa Parse CSV serialization](https://www.papaparse.com/docs#unparse).
+Upload safeguards also follow [JSZip load behavior](https://stuk.github.io/jszip/documentation/api_jszip/load_async.html),
+[bounded stream access](https://stuk.github.io/jszip/documentation/api_zipobject/internal_stream.html),
+and [Dexie transaction keep-alive](https://dexie.org/docs/Dexie/Dexie.waitFor()).

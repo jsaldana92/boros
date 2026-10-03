@@ -94,7 +94,7 @@ export function profileService(database: BorosDatabase) {
         }
         if (weightKg !== undefined) await appendSettingsWeight(database, profileId, weightKg)
         await database.profiles.put(next)
-        if (photo !== undefined) await removeUnusedPhoto(database, profileId, original.photoId)
+        if (photo !== undefined) await removeUnusedPhoto(database, profileId, original.photoId ?? undefined)
         return next
       })
     },

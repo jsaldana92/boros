@@ -1,8 +1,8 @@
 # Boros
 
-A React / TypeScript / Vite workout tracker. Phases 1-8 provide a themed shell with single-address navigation,
+A React / TypeScript / Vite workout tracker. Phases 1-9 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress weight history/charts/photos, and complete profile ZIP export. Backup restore and profile Clear Data are not implemented yet. See TODO.md for
+Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress weight history/charts/photos, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
 ## Local development
@@ -608,7 +608,75 @@ announcements and voice control, real spreadsheet rendering/formula handling,
 large-data/memory capacity, actual storage exhaustion, background-device behavior,
 and the live Ko-fi destination. Exact manual checks are in TODO.md.
 
-**Restore is not implemented or round-trip verified.** Upload Data, merge/replace/
-rename import and profile Clear Data remain disabled. Phase 9 is the next phase,
-only when requested; it must validate untrusted archives and complete an
-export → import → export semantic comparison before making a recovery guarantee.
+The Phase 8 results above are historical. Restore was not implemented or round-trip
+verified at that checkpoint; Phase 9 behavior and verification follow.
+
+## Upload, merge, replace and clear profile data (Phase 9)
+
+In **Settings → Data → Backup ZIP**, choose an original Boros export. Validation
+runs locally and reports progress; it checks paths, versions, schemas, counts,
+CRC/SHA-256, required relationships and decoded image assets. User text stays plain
+text; no links are fetched and nothing is sent to a server. AI paste imports are
+separate. Validation and preview make no database changes.
+
+Uploads are limited to **64 MiB compressed, 128 MiB expanded, 4,096 entries,
+32 MiB per JSON/CSV, 2 MiB manifest, and 5 MiB per photo (4,096 pixels per side)**.
+Actual decompressed bytes are bounded. Unsafe/duplicate/normalized-colliding paths,
+unsupported ZIP features, future versions and broken references are rejected.
+Use the original ZIP: repackaging may introduce unsupported entries/features.
+These are limits, not a tested capacity promise; larger exports need a future
+compatible importer. See [the full contract](docs/backup-format.md).
+
+An unmatched profile name imports independently. A normalized name match offers:
+
+- **Replace this profile**: replace only the identified profile after confirmation.
+- **Merge — prefer this device**: keep each matching local plan and its whole family,
+  skipping the matching imported history, including unique imported logs.
+- **Merge — prefer imported file**: replace each matching local plan and its whole
+  family, removing even unique local logs/drafts/schedules shown in the preview.
+- **Import under a new name**: require an unused name and create an independent profile.
+- **Cancel**: keep records and selection unchanged.
+
+Both merge modes retain unrelated plans and import nonconflicting items. Reusable
+library exercises/tags are independent of plan families. Matching progress IDs use
+chosen precedence; distinct measurements stay distinct even on the same date.
+Selected profile fields include explicit nulls. Current weight comes from the
+latest dated measurement. Timestamps provide context, not automatic precedence.
+ID/name ambiguities require separate import or corrected names, never a silent guess.
+
+Review additions, conflicts, replacements, removals and skips, then check the
+confirmation box and choose **Confirm and save**. Dirty Settings forms must be saved
+or discarded first. Cancel, leaving Settings or switching profiles during preparation
+abandons the temporary upload. A started commit is atomic; a write failure rolls
+everything back. A stale preview requires a fresh preview and confirmation.
+
+Restore/merge/replace and Clear Data retire the affected **internal profile ID** and
+rewrite owned record keys to a fresh local ID. Safe internal record IDs, histories,
+units and timestamps remain; remapped references are consistent and repeat merges
+do not add copies. This deliberately blocks stale editors and delayed autosaves,
+even if imported revision numbers match. Copy unsaved work from other tabs before
+confirming. Old tabs preserve their input and offer **Reopen workspace**, but cannot
+save into the replacement. Rest timers are not restored. Theme and other profiles
+are preserved; the successful result becomes active only after commit.
+
+**Clear data** previews the selected profile's entire deletion scope and points to
+Download data first. Confirmation removes its exercises, tags, plans, schedules,
+drafts, completed logs, measurements, photos/timer and demographics. Its name and
+unit preferences remain as an empty workspace. This is separate from training's
+draft Clear. Cancel leaves records and selection untouched.
+
+An isolated export → renamed-profile import → export comparison passed for canonical
+records, relationships and image bytes. Independent tests also verify both merge
+family rules, unique logs, asset collisions, null/zero values, repeated imports,
+stale previews, competing tabs, delayed saves and transaction rollback. Current
+Phase 9 checks: build/typecheck/lint pass, data **90/90**, focused development restore
+browser **14/14**, full development **118 passed / 2 expected static-only skips**.
+Full production preview passed **118 tests / 2 expected static-only skips**;
+plain-static root/project hosting passed **240/240**, without SPA rewrites. Phase 9
+is complete; see TODO.md for the full handoff. Main bundle: **579.00 kB / 174.33 kB gzip**, export worker
+**197.72 kB**, import worker **200.83 kB**; the existing Vite advisory remains.
+
+Physical phones/save sheets, Safari/Firefox, screen readers/voice control, live Ko-fi,
+real quota exhaustion, background-device timers, spreadsheet applications and
+large-data memory/latency remain unverified. The final TODO.md handoff gives exact
+manual checks using disposable profiles. No Phase 10 or release work is included.

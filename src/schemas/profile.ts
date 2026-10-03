@@ -30,11 +30,11 @@ export interface Profile {
   kind: 'guest' | 'named'
   name: string
   nameKey: string
-  age?: number
-  heightCm?: number
+  age?: number | null
+  heightCm?: number | null
   weightUnit: WeightUnit
   heightUnit: HeightUnit
-  photoId?: string
+  photoId?: string | null
   revision: number
   createdAt: string
   updatedAt: string

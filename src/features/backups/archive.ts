@@ -1,10 +1,11 @@
 import JSZip from 'jszip'
 import { BACKUP_VERSION, SNAPSHOT_POLICY, manifestSchema, recordCounts, validateBackupData, type BackupData, type BackupManifest, type ProfileSnapshot } from '../../schemas/backup.ts'
 import { csvTables } from './csv.ts'
+import { sha256 } from './integrity.ts'
+export { sha256 } from './integrity.ts'
 
 export const exclusions = ['Other profiles and their records/assets', 'Browser-wide appearance, storage-notice preference and active-profile selection', 'Navigation/sessionStorage, unsaved editor forms, unapplied notes and pending/failed autosaves', 'Active rest timers, interval/tick state and object URLs', 'Credentials, environment/configuration files and machine paths', 'Generated calendar occurrences (reconstruct from schedules and retained session identities)']
 const encode = (value: string) => new TextEncoder().encode(value)
-export async function sha256(bytes: Uint8Array) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes).buffer)), (byte) => byte.toString(16).padStart(2, '0')).join('') }
 export function backupFilename(name: string, exportedAt: string) {
   const safe = name.normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'profile'
   return `Boros-${safe}-${exportedAt.replace(/[:.]/g, '-')}.zip`

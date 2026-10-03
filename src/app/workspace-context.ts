@@ -11,7 +11,8 @@ export interface Workspace {
   setDirty: (value: boolean) => void
   allowLeave: () => boolean
   select: (id: string) => Promise<void>
-  useCreated: (id: string) => void
+  dataNotice: string
+  useCreated: (id: string, notice?: string) => void
 }
 export const WorkspaceContext = createContext<Workspace | undefined>(undefined)
 export function useWorkspace() {

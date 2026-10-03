@@ -8,8 +8,8 @@ import { Avatar } from './Avatar'
 function initialForm(snapshot: ProfileSnapshot) {
   const p = snapshot.profile
   const inches = (p.heightCm ?? 0) / 2.54
-  return { name: p.kind === 'guest' ? '' : p.name, age: p.age === undefined ? '' : String(p.age),
-    height: p.heightCm === undefined ? '' : displayNumber(p.heightCm), feet: p.heightCm === undefined ? '' : String(Math.floor(inches / 12)), inches: p.heightCm === undefined ? '' : displayNumber(inches % 12),
+  return { name: p.kind === 'guest' ? '' : p.name, age: p.age == null ? '' : String(p.age),
+    height: p.heightCm == null ? '' : displayNumber(p.heightCm), feet: p.heightCm == null ? '' : String(Math.floor(inches / 12)), inches: p.heightCm == null ? '' : displayNumber(inches % 12),
     weight: snapshot.measurement ? displayNumber(fromKg(snapshot.measurement.weightKg, p.weightUnit)) : '', weightUnit: p.weightUnit, heightUnit: p.heightUnit }
 }
 export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
@@ -32,7 +32,7 @@ export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
     return parsed
   }
   const heightCm = () => {
-    if (!heightChanged) return baseline.profile.heightCm
+    if (!heightChanged) return baseline.profile.heightCm ?? undefined
     if (form.heightUnit === 'cm') return numeric(form.height, 'Height')
     const feet = numeric(form.feet, 'Feet'), inches = numeric(form.inches, 'Inches')
     if (feet === undefined && inches === undefined) return undefined
