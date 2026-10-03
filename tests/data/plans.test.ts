@@ -10,7 +10,7 @@ import { copyExercise, newDay, planInputSchema, planToInput, type PlanInput } fr
 import { filterExercises } from '../../src/features/create/library.ts'
 
 const prescription = () => ({ name: 'Squat', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 } }], restBetweenSeconds: 0, instructions: '<b>Plain text</b>', notes: 'Local note', tutorialUrl: 'https://youtu.be/abcdefghijk', tagNames: ['Legs'] })
-const input = (name = 'Strength', count = 4): PlanInput => ({ name, days: Array.from({ length: count }, (_, index) => ({ ...newDay(index + 1), exercises: [copyExercise(prescription())] })) })
+const input = (name = 'Strength', count = 4): PlanInput => ({ name, durationWeeks: 2, days: Array.from({ length: count }, (_, index) => ({ ...newDay(index + 1), exercises: [copyExercise(prescription())] })) })
 async function setup(t: { after: (fn: () => Promise<void>) => void }) {
   const db = new BorosDatabase(`boros-test-plans-${crypto.randomUUID()}`)
   t.after(() => db.delete())
@@ -93,9 +93,9 @@ test('copies include full snapshots; source edits/archive and destination edits 
   const { service, exercises, id } = await setup(t)
   const source = await exercises.save(id, prescription())
   const choice = (await service.library(id)).choices[0]
-  const first = await service.save(id, { name: 'One', days: [{ ...newDay(1), exercises: [copyExercise(choice.prescription, choice.source), copyExercise(choice.prescription, choice.source)] }] })
+  const first = await service.save(id, { name: 'One', durationWeeks: 2, days: [{ ...newDay(1), exercises: [copyExercise(choice.prescription, choice.source), copyExercise(choice.prescription, choice.source)] }] })
   const planChoice = (await service.library(id)).choices.find((item) => item.source.kind === 'plan')!
-  const second = await service.save(id, { name: 'Two', days: [{ ...newDay(1), exercises: [copyExercise(planChoice.prescription, planChoice.source)] }] })
+  const second = await service.save(id, { name: 'Two', durationWeeks: 2, days: [{ ...newDay(1), exercises: [copyExercise(planChoice.prescription, planChoice.source)] }] })
   const changed = planToInput(first); changed.days[0].exercises[0].prescription.sets[0].reps.min = 6
   const edited = await service.save(id, changed, first)
   assert.equal((await exercises.get(id, source.id)).sets[0].reps.min, 5)

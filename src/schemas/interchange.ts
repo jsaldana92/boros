@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { exerciseInputSchema, range } from './exercise.ts'
-import { daySchema } from './plan.ts'
+import { daySchema, positiveInteger } from './plan.ts'
 
 // Public data deliberately has no IDs, profile ownership, revisions or provenance.
 export const interchangeExerciseSchema = z.object({
@@ -19,10 +19,27 @@ export const interchangePlanSchema = z.object({
 }).strict().superRefine((plan, context) => {
   if (plan.days.length !== plan.trainingDaysPerWeek) context.addIssue({ code: 'custom', path: ['days'], message: 'Day count must equal trainingDaysPerWeek.' })
 })
-export const interchangeSchema = z.discriminatedUnion('kind', [
+export const legacyInterchangeSchema = z.discriminatedUnion('kind', [
   z.object({ schemaVersion: z.literal(1), kind: z.literal('workout'), workout: interchangeExerciseSchema }).strict(),
   z.object({ schemaVersion: z.literal(1), kind: z.literal('plan'), plan: interchangePlanSchema }).strict(),
 ])
+export const interchangeGroupSchema = z.object({ number: positiveInteger, restBetweenRoundsSeconds: exerciseInputSchema.shape.restBetweenSeconds.unwrap().nullable().default(null), restAfterGroupSeconds: exerciseInputSchema.shape.restAfterSeconds.unwrap().nullable().default(null) }).strict()
+const groupedDay = z.object({ name: daySchema.shape.name, exercises: z.array(interchangeExerciseSchema.extend({ superset: positiveInteger.nullable().default(null) })).min(1).max(100), supersets: z.array(interchangeGroupSchema).max(50).default([]) }).strict().superRefine((day, context) => {
+  const numbers = new Set<number>()
+  day.supersets.forEach((group, g) => {
+    if (numbers.has(group.number)) context.addIssue({ code: 'custom', path: ['supersets', g, 'number'], message: 'Duplicate superset number in this day.' })
+    numbers.add(group.number)
+    const positions = day.exercises.flatMap((item, i) => item.superset === group.number ? [i] : [])
+    if (positions.length < 2) context.addIssue({ code: 'custom', path: ['supersets', g], message: 'A superset needs at least two members.' })
+    if (positions.length && positions.at(-1)! - positions[0] + 1 !== positions.length) context.addIssue({ code: 'custom', path: ['supersets', g], message: 'Place superset members together in execution order.' })
+  })
+  day.exercises.forEach((item, i) => { if (item.superset !== null && !numbers.has(item.superset)) context.addIssue({ code: 'custom', path: ['exercises', i, 'superset'], message: 'Declare this group in the day supersets array.' }) })
+})
+export const currentInterchangeSchema = z.discriminatedUnion('kind', [
+  z.object({ schemaVersion: z.literal(2), kind: z.literal('workout'), workout: interchangeExerciseSchema }).strict(),
+  z.object({ schemaVersion: z.literal(2), kind: z.literal('plan'), plan: z.object({ name: daySchema.shape.name, durationWeeks: positiveInteger, trainingDaysPerWeek: z.number().int().min(1).max(7), days: z.array(groupedDay).min(1).max(7) }).strict().superRefine((plan, context) => { if (plan.days.length !== plan.trainingDaysPerWeek) context.addIssue({ code: 'custom', path: ['days'], message: 'Day count must equal trainingDaysPerWeek.' }) }) }).strict(),
+])
+export const interchangeSchema = z.union([currentInterchangeSchema, legacyInterchangeSchema])
 export type Interchange = z.infer<typeof interchangeSchema>
 export type InterchangeExercise = z.infer<typeof interchangeExerciseSchema>
 export type ImportKind = Interchange['kind']
@@ -30,5 +47,5 @@ export type ImportKind = Interchange['kind']
 // Both visible instructions and tests consume these schema-checked examples.
 export function interchangeExample(kind: ImportKind): Interchange {
   const exercise = { name: 'Example exercise', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 }, rir: null }], restBetweenSetsSeconds: 0, restAfterExerciseSeconds: null, instructions: 'Illustrative instructions only.', youtubeUrl: null, tags: ['Example tag'] }
-  return interchangeSchema.parse(kind === 'workout' ? { schemaVersion: 1, kind, workout: exercise } : { schemaVersion: 1, kind, plan: { name: 'Example plan', trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [exercise] }] } })
+  return interchangeSchema.parse(kind === 'workout' ? { schemaVersion: 2, kind, workout: exercise } : { schemaVersion: 2, kind, plan: { name: 'Example plan', durationWeeks: 2, trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [{ ...exercise, superset: null }, { ...exercise, superset: 1 }, { ...exercise, name: 'Second example', superset: 1 }], supersets: [{ number: 1, restBetweenRoundsSeconds: 0, restAfterGroupSeconds: null }] }] } })
 }

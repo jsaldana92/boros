@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-03
-Status: Owner revisions Group 1 implemented and locally verified; production HTTPS and live Support acceptance remain pending. Groups 2–4 recorded below and not started. Phase 10 verification and Phase 11 live release acceptance remain pending.
-Current scope: Group 1 compatibility, Support, branding and general controls only. The owner supplied the Ko-fi destination and confirmed bypassing an HTTPS certificate warning; the app fix does not repair HTTPS. Preserve previous handoffs as historical evidence. No commit, push, deployment or DNS/GitHub settings change is authorized.
+Status: Owner revisions Group 2 complete in the available local verification environments: supersets, repeated occurrences and finite duration. Owner reports HTTPS resolved and the published site working (2026-10-03); no new independent production verification is claimed. Groups 3–4 remain unstarted. Earlier manual and live Support acceptance checks remain pending.
+Current scope: Group 2 across plans, training, scheduling, AI and backups. Preserve Group 1 and historical handoffs. No commit, push, deployment or DNS/GitHub settings change is authorized.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -86,7 +86,7 @@ These defaults make implementation concrete. They are design choices, not additi
 
 - Weeks run Monday–Sunday. Compute date keys using calendar-aware operations, not elapsed milliseconds divided by seven days.
 - A schedule records the browser's IANA time zone when created, its start-week date, and its training-day-to-weekday mapping. Show the time zone and retain it across device imports.
-- A plan repeats weekly from its selected start week until the user stops/removes its future schedule. A duration mentioned in a plan name is not automatically interpreted as a schedule length.
+- New plans require duration in weeks. New schedules repeat for that many Monday–Sunday weeks anchored to their selected start week, unless stopped earlier. Existing records without duration remain unbounded. A duration mentioned in a name is never interpreted as a schedule length. Existing schedule durations change only through explicit preview/confirmation; earlier missed dates and started/completed sessions remain.
 - Map each training day once per week to a distinct weekday within that schedule; remaining weekdays are rest days. Separate schedules may coexist.
 - Identify occurrences by schedule ID, stable training day ID, and scheduled local date. Store the scheduled week/date separately from the actual completion timestamp.
 - `Save` from a scheduled occurrence completes that occurrence only. An unscheduled session does not silently complete a calendar item.
@@ -472,17 +472,18 @@ Acceptance: the full journey passes, critical data-integrity tests pass, and rem
 Goal: publish the tested SPA at a stable address when the owner authorizes deployment.
 
 - [ ] Finish live Support acceptance: the real Ko-fi URL is supplied and configured for production, and protected opening passes local browser checks. Owner confirmation of the account page remains pending behind its Cloudflare challenge.
-- [x] Inspect and prepare the existing GitHub Pages release: public `jsaldana92/boros`, `origin`/`gh-pages`, `dist`, CLI-generated CNAME for `boros-app.com` and `.nojekyll`; retain exact gh-pages 6.1.1 and current scripts. Domain is confirmed but its HTTPS certificate mismatch remains a release blocker.
+- [x] Inspect and prepare the existing GitHub Pages release: public `jsaldana92/boros`, `origin`/`gh-pages`, `dist`, CLI-generated CNAME for `boros-app.com` and `.nojekyll`; retain exact gh-pages 6.1.1 and current scripts. Owner reports HTTPS resolved on 2026-10-03; earlier hostname failure is historical. No new independent production check is claimed.
 - [x] Document local setup, actual scripts, supported backup versions, storage scope, single-address navigation, and release steps in README and docs/release-preparation.md.
-- [x] Produce the release build and verify unchanged-address navigation, remembered-screen refresh, asset paths, and startup at both static root and project subpath. Current Group 1 candidate: 268 static checks passed initially, all 12 adjusted fixtures passed on rerun; 23/23 resource hashes per mount. Earlier 252/252 results remain historical. No screen-specific server routes are required.
+- [x] Produce the release build and verify unchanged-address navigation, remembered-screen refresh, asset paths, and startup at both static root and project subpath. Current Group 2 candidate: 296/296 static browser checks and 23/23 resource hashes per mount. Earlier release/Group 1 results remain historical. No screen-specific server routes are required.
 - [x] Explain separate origin ownership and the original-ZIP export/import procedure; preserve source records until target reload, photos/history and isolation are checked.
 - [ ] Deploy only when instructed, then run the short release smoke test on the published origin.
 - [ ] Create a profile, save/reopen a plan/session, reload, export a backup, and confirm persistence from the published site. Check a phone-sized viewport and the Support link.
 - [ ] Record the release URL/version, verification date, and known limitations.
 
-Preparation evidence is in docs/release-preparation.md; the current candidate fingerprint and verification are in docs/group1-verification.md.
-Phase 11 remains incomplete: Phase 10's required Safari check, HTTPS, Ko-fi, actual
-owner-authorized publication and the newly published artifact's smoke test are pending.
+Preparation evidence is in docs/release-preparation.md; the current candidate fingerprint and verification are in docs/group2-verification.md.
+Phase 11 remains incomplete: Phase 10's required Safari check, live Ko-fi acceptance,
+and the changed Group 2 artifact's separately authorized publication/smoke are pending.
+The owner's HTTPS resolution and working published site are recorded without claiming a fresh automated production check.
 
 Acceptance: the published app passes the release smoke test, data survives reload at its stable address, and backups work. Offline cold start remains outside the release promise unless separately implemented and verified.
 
@@ -495,7 +496,7 @@ a time; Groups 2–4 below are **not implemented** by Group 1.
 
 ### Group 1 — Compatibility, Support, branding and general controls
 
-Status: **Verification pending** for production HTTPS and live Support acceptance. Application implementation and available local checks are complete; the remaining owner/environment checks below are not application fixes.
+Status: **Verification pending** for live Support acceptance. Application/local checks are complete; HTTPS is subsequently owner-confirmed resolved. Earlier diagnosis is preserved in the historical handoff.
 
 - [x] Centralize every application UUID path on native randomUUID or secure getRandomValues UUID v4; retain IDs, ownership, records and schema. No Math.random/time/counter fallback. Data tests cover missing/throwing sources and atomic rollback.
 - [x] Report unsupported random/hash APIs as compatibility issues; retain genuine storage errors, input recovery and strict backup checksums. Preserve manual clipboard fallback.
@@ -506,18 +507,23 @@ Status: **Verification pending** for production HTTPS and live Support acceptanc
 - [x] Show minute precision in ordinary date/time fields/displays while preserving exact saved UTC/zone context on unrelated edits and full backup precision; deliberate date edits choose a minute explicitly.
 - [x] Finish build/type/lint/data and affected static/browser verification, record actual results and update the candidate fingerprint. Exact runs, fixture corrections and remaining environment limits are in the latest handoff and docs/group1-verification.md.
 - [x] Diagnose HTTPS separately: owner Chrome bypass report and independent default-validation Edge/Node observations establish a certificate hostname mismatch. No security warning bypass, certificate-validation change or checksum weakening in this work.
-- [ ] Owner resolves GitHub Pages certificate provisioning/HTTPS enforcement and verifies normally validated HTTPS, final address, secure-context APIs and mixed-content status. This task did not change hosting or deploy the candidate.
+- [x] Owner reports HTTPS resolved and the site working (2026-10-03). No hosting mutation or warning bypass by this task. A fresh independent certificate/SAN/API/mixed-content capture is not claimed; retain that capture in the next release smoke.
 - [ ] Owner confirms the live Ko-fi account page. Automated live navigation reaches a valid TLS response but a Cloudflare 403 challenge, not verified account content.
 
-### Group 2 — Supersets and plan duration (not started)
+### Group 2 — Supersets and plan duration (complete in available local checks)
 
-- [ ] Permit repeated occurrences of the same exercise in a day, including standalone plus superset occurrences; each occurrence owns a stable ID, prescription, notes and results.
-- [ ] Add per-exercise Superset toggle and positive-integer group number in the plan editor. Matching numbers group at least two exercises within that training day only; never join days/plans by a number alone.
-- [ ] Define unequal-set handling, member order, invalid one-member groups and rest between rounds/after the group before implementation. Never fabricate sets or silently discard prescriptions.
-- [ ] Train presents “Superset 1”, member/prescription summary, then ordered rounds: Set 1 A weight/reps, B weight/reps, REST; Set 2 likewise. Support more than two members.
-- [ ] Support supersets in manual creation and external AI instructions, parser and editable preview.
-- [ ] Add explicit plan duration in weeks and stop generating scheduled occurrences after its boundary. Preserve legacy indefinite schedules and historical records without inventing durations.
-- [ ] Update domain schemas, additive migrations if needed, occurrence identity, plan/schedule/session snapshots, drafts/history, AI interchange and backup export/restore together; retain existing valid backups and record integrity fixtures.
+Compatibility decisions: retain IndexedDB v5 and all existing records without a migration; nested group/duration fields need no new index. AI contract v2 supports v1 with duration entered in preview. Backup v2 accepts strict v1 archives only after original integrity/structure validation, preserving absent duration as unbounded. Supersets have stable internal UUIDs distinct from editable day-local numbers. Duration changes on existing schedules require an explicit preview and apply from a selected Monday without rewriting earlier dates or started/completed snapshots.
+
+- [x] Permit repeated occurrences of the same exercise in a day, including standalone plus superset occurrences; each occurrence owns a stable ID, prescription, notes and results. Known library provenance is retained through plan copies.
+- [x] Add per-exercise Superset toggle and positive-integer group number in the plan editor. Matching numbers group at least two exercises within that training day only; never join days/plans by a number alone. Stable group UUIDs survive renumbering; joining shows actual execution order immediately.
+- [x] Define unequal-set handling, member order, invalid one-member groups and rest between rounds/after the group. Rounds use the largest set count and omit shorter members without inventing sets; blank rest permits manual duration, zero remains explicit. Preserve standalone member rests without applying them between members.
+- [x] Train presents “Superset 1”, member/prescription summary, then ordered rounds: Set 1 A weight/reps, B weight/reps, REST; Set 2 likewise. Support more than two members. Preserve per-member notes/info, read-only weight units, single timer, autosave/Clear/partial and full Save, revision/profile/retry guards and immutable history.
+- [x] Support group/member movement, removal, dissolution and duplication without prescription loss; copied plans get new day/group/occurrence IDs. Incomplete groups remain editable but cannot be saved until repaired.
+- [x] Support supersets in manual creation and AI v2 instructions, strict parser and editable preview. Keep workout v1/v2; legacy AI plans require owner-entered duration in preview. Unsupported fields/versions and contradictory memberships report paths before writes.
+- [x] Require positive duration for new plans and bound newly created schedules to exactly that many calendar weeks. Preserve legacy unbounded records. Freeze schedule duration/end dates; existing schedule changes use a separate review/confirmation and effective Monday while preserving earlier missed dates and started/completed snapshots.
+- [x] Update schemas, occurrence identity, all plan/schedule/session snapshots and readable history together. Keep database v5; no index/migration or record rewrite needed. Verify populated-store reopen and photo preservation.
+- [x] Export backup v2 JSON/manifest/linked CSVs and restore both v1/v2. Validate original v1 archive integrity/strict fields/assets before changing only the in-memory envelope. Verify duration-history/group round trips, repeated results, both whole-family merge priorities and root remapping.
+- [x] Verify build/type/lint, data 108/108, static browsers 296/296, development Group 2 8/8, Firefox 138 passes + 2 cleanup-failure reruns passing (2 expected skips), and 23/23 resource hashes per static mount. Actual commands and initial failures are in docs/group2-verification.md. Physical/Safari/manual release gates remain explicitly unverified.
 
 ### Group 3 — Calendar and Train (not started; depends on Group 2)
 
@@ -541,8 +547,8 @@ Status: **Verification pending** for production HTTPS and live Support acceptanc
 - [ ] Define multiple-set and tied-date presentation. For supersets use separate member sections/graphs/dividers without combining different exercises' loads. Distinguishable point colors need accessible labels; an additional repetition graph is optional.
 - [ ] Keep saved-session history reachable through Progress and add Back controls at each level without changing the public URL. Add integrity, accessible graph and navigation tests before calling the redesign complete.
 
-Next dependency group after verified Group 1: Group 2's coordinated superset identity,
-duration and schema/backup/AI changes, only when requested. Do not implement it here.
+Next dependency group: Group 3's Calendar/time-zone preference and active-plan Train
+flow, only when requested. Group 4 analytics remains later work.
 
 ## 6. Required test fixtures
 
@@ -563,7 +569,7 @@ These do not block Phase 0 unless the owner changes the scope.
 | Input                         | Needed by            | Current handling                                                          |
 | ----------------------------- | -------------------- | ------------------------------------------------------------------------- |
 | Ko-fi page URL                | Group 1 / Phase 11   | Supplied: https://ko-fi.com/jhonatansaldana; configured in .env.production, remote challenge may require owner confirmation |
-| Hosting repository/domain     | Phase 11             | Confirmed public jsaldana92/boros and boros-app.com; observed HTTPS hostname mismatch needs owner resolution |
+| Hosting repository/domain     | Phase 11             | Confirmed public jsaldana92/boros and boros-app.com; owner reports HTTPS resolved (2026-10-03), no fresh independent production capture claimed |
 | Visual brand preferences/logo | During UI refinement | Use a clean, accessible neutral design and text wordmark initially        |
 
 ## 8. Decision log
@@ -632,18 +638,23 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-03 | Supply the real public Ko-fi URL through .env.production | Existing Vite mechanism embeds it in the actual production build; preserve disabled state for blank/invalid overrides and explicit protected opening |
 | 2026-10-03 | Owner PNG branding, avatar-only Settings, paired units, compact filters and minute-only display | Group 1 supersedes earlier header/default UI requirements; unchanged measurements/time context and backup precision remain authoritative |
 | 2026-10-03 | Record Groups 2–4 as coordinated future dependency groups | Superset occurrence identity and plan duration must reach schemas/AI/snapshots/backups before dependent Calendar/Train/Progress redesign; no partial feature implementation here |
+| 2026-10-03 | Group 2 uses stable superset UUIDs and editable day-local numbers | Renumber/reorder must not reidentify results; contiguous groups share the same visible editor/training order, with independent repeated occurrences |
+| 2026-10-03 | Unequal group members run only their existing sets; group rest owns round/block boundaries | No fabricated sets or hidden member rests; optional/manual and explicit zero preserve their meaning, using the existing persistent timer |
+| 2026-10-03 | Require new-plan duration, preserve legacy omissions, freeze schedule boundaries | Civil weeks anchor to the selected Monday; explicit effective-date duration changes preserve past missed dates and started/completed history |
+| 2026-10-03 | Retain database v5; publish AI v2 and backup v2 contracts with v1 compatibility | Nested optional fields require no index migration; legacy AI gets owner-entered duration, legacy backups retain unbounded meaning after original checksum/strict validation |
+| 2026-10-03 | Record owner's HTTPS resolution separately from automated production checks | Latest owner report supersedes the prior warning; no fresh certificate/API/mixed-content capture or new-candidate deployment was performed by this task |
+| 2026-10-03 | Preserve external commit 40e5c74 appearing during Group 2 work | No reset/staging/commit/push/deploy by this agent; final artifact receipt names the current HEAD plus dirty working tree |
 
 ## 9. Current checkpoint
 
-- Group 1 implements secure UUID fallback/compatibility errors, configured production Support, actual PNG branding/avatar-only Settings, paired units/compact filters and minute-only date presentation with stored precision intact. Groups 2–4 are unchecked above. Phases 0–9 retain their recorded completion; Phase 10 stays **Verification pending** and Phase 11 **In progress**, not live-verified.
-- Startup diagnosis: Guest initialization directly invoked missing randomUUID, and the provider mislabeled that failure as storage unavailability. Every application ID path now shares a secure generator; unsupported sources fail before initialization writes. Existing ownership, stale-edit guards, transactions, checksum verification, database v5 and backup schema 1 are preserved.
-- Owner confirms HTTPS loads after bypassing Chrome's red certificate warning. Independently, Edge/Node reject the certificate's hostname; its SANs cover GitHub domains, not boros-app.com. Validated HTTPS page runtime/mixed-content state remains unknown; no warning was bypassed here. Separate HTTP probe returns 200 without redirection, isSecureContext false, randomUUID/subtle undefined and getRandomValues available, reproducing the startup message. Do not equate that probe with the owner's HTTPS session.
-- At task start the current public branch HTML matched the pre-edit local dist (entry index-C_gTw0vp.js); it does not contain Group 1's new artifact. Current build entry **274.37 kB / 87.99 kB gzip**, shared **166.06 kB**, export/import workers **198.09/201.20 kB**, CSS **19.44 kB**, no large-chunk warning. User favicon/images and deployment configuration/pins untouched.
-- Group 1 build/typecheck/lint pass; data **97/97**. Full static suite first **268 passed / 12 obsolete-expectation/scroll-fixture failures**, then all affected **12/12 passed** on the unchanged candidate. Full Firefox first **130 passed / 2 touch-target floating-point assertion failures / 2 expected static-only skips**, then **2/2 passed** after rounding the assertion to hundredths of a pixel. Affected development suite **44 passed / 2 expected production-Support skips**. No failure remains; these are combined initial/rerun results, not fresh full-suite passes. Both static mounts pass **23/23** HTTP resource/hash checks.
-- Candidate: **23 files / 2,047,113 bytes**, inventory SHA-256 `33a2a1cc3b7ba3090f829c52bc0e1788f93bbb4c7e19951285a8ee33cfa73e68`. The older release-preparation fingerprints/results are historical; use this Group 1 record for the changed app. Any later source/configuration/asset changes require a new build and affected checks.
-- Support URL is supplied and configured in .env.production. Protected explicit new-tab opening is browser-tested; direct account-page content remains unverified because Ko-fi returns a Cloudflare challenge. Exact live evidence/hosting actions: [docs/group1-verification.md](docs/group1-verification.md). Current owner checklist: [docs/release-preparation.md](docs/release-preparation.md#current-owner-checklist).
-- Previous Windows WebKit native Blob failure remains a blocker for photo-backed Safari acceptance; unchanged probes were not rerun. Physical phone, AT/voice control, real quota, spreadsheets and suspended-device timers remain unverified. Earlier capacity observations are retained in their historical handoff, not rerun or extrapolated to this changed build.
-- Next: owner completes the documented HTTPS/Support checks; Group 2's coordinated superset occurrence identity/duration/schema/AI/backup work is the next implementation group, only when requested. Verify any newly published artifact after separate owner authorization. No staging, commit, push, tag, deployment, DNS/GitHub mutation or owner-data clearing in this task.
+- Group 2 is implemented and verified in available local environments: repeated occurrences, stable supersets/editor order, unequal rounds/rest/notes/results, immutable history and explicit finite duration across plans, schedules, AI and backups. Group 1 protections/UI/configuration are preserved. Groups 3–4 are unstarted. Phases 0–9 keep their historical completion; Phase 10 remains **Verification pending**, Phase 11 **In progress**.
+- Database **v5**, no migration or rewritten defaults. AI **v2** accepts **v1**, with owner-supplied duration before saving old AI plans. Backup **v2** accepts strict **v1** after original CRC/SHA-256/field/CSV/asset checks; legacy unbounded meaning, stored precision, whole-family precedence and source IDs remain intact.
+- New schedules freeze inclusive end dates using civil weeks. **Review plan duration** explicitly applies a reviewed change from a selected Monday; unrelated plan edits/refresh do not shorten schedules. Earlier missed dates and started/completed sessions remain. Superset numbers do not define identity; occurrence/group UUIDs survive edits and are copied independently on duplication.
+- Final build/typecheck/lint and diff checks pass; data **108/108**; static root/project Edge desktop/phone **296/296**, no skips; development Group 2 **8/8**. Firefox **138 passed / 2 trace-cleanup ENOENT failures / 2 expected static-only skips**, then both affected checks **2/2 passed** with overlapping output cleanup stopped. This is combined Firefox evidence, not a fresh full-suite pass. Both static mounts return **23/23** exact resource hashes.
+- Candidate: **23 files / 2,099,946 bytes**, inventory SHA-256 `dd8b25b6231d48ff56c387b7fd5b2bdfde68a151c9c7c0bc84ca711c7bf4bd95`. Entry **274.38 kB / 88.04 kB gzip**, shared **166.07 kB**, workers **201.36/204.68 kB**, Create **50.52 kB**, Train **21.23 kB**, CSS **19.82 kB**; no size warning. Exact evidence and owner test: [docs/group2-verification.md](docs/group2-verification.md). Older fingerprints remain historical.
+- Owner reports HTTPS resolved and the public site fully working on 2026-10-03. This supersedes the previous blocker claim, without a new independent certificate/API/mixed-content capture or changed-candidate production smoke. An external commit appeared during work: `40e5c74d3e94dcdbadf6b82e955aceb5a0ae2eae`; it was preserved. This agent did not stage/commit/push/deploy or change hosting. Receipt refers to that HEAD plus working tree.
+- Live Ko-fi account content, Blob-capable Safari photo/restore, physical phones/keyboards/download sheets, screen readers/voice control, real quota, spreadsheet applications and suspended timers remain unverified. Unchanged Windows WebKit probes/capacity benchmarks were not rerun. See [current owner checklist](docs/release-preparation.md#current-owner-checklist); screenshots/emulation are not physical-device evidence.
+- Next: Group 3's Calendar/time-zone preference and active-plan Train flow, only when requested. Keep Group 4 analytics out of scope. New-candidate publication and full release acceptance remain separate owner actions; do not clear source records to test them.
 
 ## 10. Handoff entry template
 
@@ -1232,3 +1243,31 @@ Fresh verification against the final build (isolated contexts/test databases):
 - Live Support: local production test verifies the supplied account URL, explicit-only new tab, `noopener noreferrer` and null opener. Independent live request gets certificate-valid Ko-fi HTTP 403/Cloudflare “Just a moment…”; account content remains unverified. Owner should confirm the intended page in an ordinary browser. No challenge bypass.
 - Remaining manual/environment checks: photo-bearing Safari/WebKit round trip, physical phone keyboards/safe areas/download sheets, screen reader/voice control, real quota, spreadsheet applications and suspended-device timers. Known Windows WebKit Blob limitation was not repeatedly reprobed; earlier capacity results remain historical. Current exact owner checklist: [docs/release-preparation.md](docs/release-preparation.md#current-owner-checklist).
 - Next: resolve owner HTTPS/Support checks. The next implementation dependency group, only on request, is Group 2's superset occurrence identity and duration coordinated across schemas, snapshots/history, AI and backups. No staging, commit, push, publication, dependency installation, DNS/GitHub mutation or owner-data deletion was performed.
+
+### 2026-10-03 — Owner revisions Group 2: supersets, repeated occurrences and finite duration
+
+- Status: **Complete in available local acceptance checks**. Groups 3–4 unstarted. Earlier Safari/physical-device/live Support and full release acceptance remain pending; no earlier phase is newly marked complete.
+- Implemented: day-scoped stable group UUIDs with editable positive numbers, independent repeated exercise occurrences, immediate grouped editor order, member/block movement, duplication and dissolution. Train/history render unequal rounds without invented sets, with member notes/info/results and optional/manual/zero group rest on the existing persistent timer. Autosave/Clear/partial/full/idempotent Save, frozen snapshots, stale-write protection, profile isolation and single-address guards remain intact.
+- Duration: new plans require explicit positive weeks. Existing absent duration remains unbounded. New schedules freeze inclusive end dates from their selected Monday; plan edits do not silently alter them. **Review plan duration** explicitly previews and applies the current plan duration from a selected future Monday, preserving earlier missed dates and all started/completed exceptions.
+- Compatibility: database stays **v5**, no migration/default rewrite; populated store/photo reopen verified. AI contract **v2**, with strict v1 support and required owner duration entry in legacy plan preview. Backup contract **v2**, with linked superset/duration CSVs and strict v1 support. Original archive CRC/SHA-256/structure/assets pass before an in-memory v1 envelope conversion; no source ZIP mutation, invented duration or checksum bypass. Whole-plan-family winners keep group/occurrence identity, repeated results and schedule history through root remapping.
+- Changed areas: plan/session/schedule schemas and services; PlanEditor/PlanLibrary, Train/controller and Calendar duration preview; AI contract/instructions/conversion; backup schema/CSV/archive/read/restore provenance; group styling; focused fixtures/data/browser tests and existing creation fixtures; TODO/README/backup and release documentation. Group 1, installed dependencies/pins, hosting config, favicon/PNG assets and unrelated work were preserved.
+
+| Command / check | Actual result |
+| --- | --- |
+| `npm run build`; `npm run typecheck`; `npm run lint` | Passed; final lint clean; no large-chunk warning |
+| `npm run test:data` | Final **108/108**, no failures/skips; 11 new Group 2 tests |
+| `npm run test:browser:static -- tests/browser/group2.spec.ts --workers=2` | Initial **8 passed / 8 failed** from new test theme selectors; corrected selectors, then **16/16 passed** |
+| `npm run test:browser:static` | Final candidate **296/296**, no failures/skips, 4.4m; root/project subpaths and Edge desktop/phone |
+| `$env:PLAYWRIGHT_BROWSERS_PATH = "$PWD/node_modules/.cache/playwright"`; `node node_modules/playwright/cli.js test --config playwright.engines.config.ts --project=firefox-desktop --project=firefox-phone --workers=2` | **138 passed / 2 failed / 2 expected static-only skips**, 5.3m; two ENOENT trace cleanup failures caused by a concurrent runner cleaning the parent output directory |
+| Same Firefox command with `--last-failed`, other suites stopped | **2/2 passed**, 9.4s, no source/test change required; combined evidence rather than a fresh complete-suite pass |
+| `npm run test:browser -- tests/browser/group2.spec.ts` | **8/8**, no skips/failures, 27.3s |
+| `node scripts/release-audit.mjs`; `node scripts/release-audit.mjs --url http://127.0.0.1:4174/` and same with `/project-check/` | **23/23 resources per mount**, exact HTTP 200 byte/hash matches, zero findings, no SPA rewrites |
+| `git diff --check` | Passed; LF/CRLF notices only |
+
+- Test history: sandboxed Node workers initially failed EPERM; authorized data execution first passed 95/97 because two old creation fixtures lacked newly required duration. Updated fixtures plus new Group 2 tests passed 108/108. Extending a root-remap fixture exposed its stale derived activeSourceKey (107/108); correcting the fixture produced final 108/108. Full details and exact Firefox command: [docs/group2-verification.md](docs/group2-verification.md). Do not overlap default `test-results` cleanup with nested engine/static runs in future.
+- Browser/data evidence includes same-library standalone/group copies, multiple groups/three members, different reps/RIR and unequal sets, zero/unspecified rest, stable renumber/reorder/dissolve/duplicate, timer and note reload, partial/full saves, snapshot immutability, atomic failures, profile/concurrency guards, DST/New Year/first-last civil weeks, legacy unbounded preservation, both AI versions, original v1 backup validation and v2 round trips including duration changes and both merge priorities. Existing navigation/profiles/library/measurements/photo/backup regressions pass. Dark/light 320px editor/training screenshots were visually inspected and overflow checks passed. All data/browser contexts are isolated.
+- Final candidate: **23 files / 2,099,946 bytes**, SHA-256 `dd8b25b6231d48ff56c387b7fd5b2bdfde68a151c9c7c0bc84ca711c7bf4bd95`. Entry **274.38 kB / 88.04 kB gzip**, shared **166.07 kB**, workers **201.36/204.68 kB**, Create **50.52 kB**, Train **21.23 kB**, CSS **19.82 kB**. Receipt in ignored `test-results/release-candidate.json`; per-mount receipts `group2-root-resources.json` and `group2-project-resources.json`. Rebuild/retest after source/configuration/asset changes.
+- Owner/repository evidence: latest owner statement says HTTPS is solved and the site fully works. This supersedes the historical hostname-blocker status, but no fresh independent certificate/API/mixed-content or changed-candidate production check is claimed. An external commit `40e5c74d3e94dcdbadf6b82e955aceb5a0ae2eae` appeared during work and was preserved; the receipt identifies it plus the dirty working tree. This agent did not stage, commit, push, deploy, install dependencies, modify hosting or clear owner data.
+- Short owner test: in a disposable profile, make a two-week plan with Squat standalone plus Squat/Row/Press in one three-member group; use 3/2/1 member sets and distinct reps/RIR. Save/reopen, enter different weights/notes for the repeated Squat, start rest and reload/resume, save/review. Schedule from a Monday and confirm the second-Sunday boundary/no week-3 occurrence; change plan duration and verify the schedule changes only after its separate preview. Export/restore under a new name and compare. Exact steps and remaining checks: [docs/group2-verification.md](docs/group2-verification.md#owner-check-and-remaining-boundaries).
+- Remaining: physical phones/keyboards/download sheets/safe areas, screen reader/voice control, live Ko-fi account content, Blob-capable Safari photo/restore, real quota, spreadsheet applications and suspended timers remain unverified. Existing Windows WebKit Blob limitation was not reprobed; prior capacity measurements were not repeated or generalized to supersets. Full release acceptance remains separate.
+- Next: **Group 3**, only when requested—Calendar month/default/time-zone preference and active-plan Train flow. Do not begin Group 4 analytics or publication from this handoff.

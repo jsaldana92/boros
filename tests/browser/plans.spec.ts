@@ -37,6 +37,7 @@ async function copy(page: Page, day = 0, source = 'Library: Squat') {
 async function createPlan(page: Page, name: string, count = 1) {
   await button(page, 'Create Plan').click()
   await page.getByLabel('Plan name', { exact: true }).fill(name)
+  await page.getByLabel('Duration (weeks)', { exact: true }).fill('2')
   await page.getByLabel('Training days per week').selectOption(String(count))
   for (let index = 0; index < count; index++) await copy(page, index)
   await save(page, name)
@@ -96,7 +97,7 @@ test('four-day heterogeneous snapshots, stable ordering/moves, duplicate and arc
 test('source picker filters combine and copied prescriptions remain independent of library and plans', async ({ page }) => {
   await open(page); await libraryExercise(page); await libraryExercise(page, 'Row', 'Back')
   await createPlan(page, 'Source')
-  await button(page, 'Create Plan').click(); await page.getByLabel('Plan name', { exact: true }).fill('Destination')
+  await button(page, 'Create Plan').click(); await page.getByLabel('Plan name', { exact: true }).fill('Destination'); await page.getByLabel('Duration (weeks)', { exact: true }).fill('2')
   await days(page).first().getByRole('button', { name: 'Add exercise', exact: true }).click()
   const picker = page.getByRole('region', { name: 'Choose exercise', exact: true })
   await picker.getByLabel('Search sources').fill('squat')
@@ -131,7 +132,7 @@ test('validation, destructive cancellation, nested drafts, failed saves and mobi
   await button(page, 'Create Plan').click(); await button(page, 'Save plan').click()
   await expect(page.getByText('Enter a name.', { exact: true })).toBeVisible()
   await expect(page.getByText('Add at least one exercise to this day.', { exact: true })).toBeVisible()
-  await page.getByLabel('Plan name', { exact: true }).fill('Recoverable')
+  await page.getByLabel('Plan name', { exact: true }).fill('Recoverable'); await page.getByLabel('Duration (weeks)', { exact: true }).fill('2')
   await copy(page); const firstIds = await ids(page)
   await button(page, 'Add training day').click(); await copy(page, 1)
   await page.getByLabel('Training days per week').selectOption('1')

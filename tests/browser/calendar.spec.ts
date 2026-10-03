@@ -8,7 +8,7 @@ async function setup(page: Page) {
   await page.goto('./'); await button(page, 'Create').click()
   const notice = button(page, 'Understood'); if (await notice.isVisible()) await notice.click()
   await button(page, 'Import AI Output').click(); await page.getByLabel('AI output JSON', { exact: true }).fill(JSON.stringify(fixture))
-  await button(page, 'Validate and preview').click(); await button(page, 'Save plan').click()
+  await button(page, 'Validate and preview').click(); await page.getByLabel('Duration (weeks)', { exact: true }).fill('104'); await button(page, 'Save plan').click()
   await expect(page.getByRole('article', { name: 'Plan Calendar four', exact: true })).toBeVisible()
   await button(page, 'Calendar').click(); await button(page, 'Add Plan').click()
   await page.getByLabel('Starting week (Monday)', { exact: true }).fill('2024-12-30')

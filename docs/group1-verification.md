@@ -3,6 +3,11 @@
 Date: 2026-10-03. Scope: Group 1 only; Groups 2–4 are unchecked in TODO.md.
 No commit, push, deployment, DNS/GitHub settings change or owner-data clearing.
 
+Subsequent owner evidence (2026-10-03, Group 2 request): the owner reports the site
+fully works and HTTPS is resolved. The diagnosis below is historical. No fresh
+certificate/SAN/API capture or independent production smoke was supplied in that
+confirmation, so it is recorded as owner verification, not a new automated result.
+
 ## Production diagnosis
 
 The owner confirmed **HTTPS with a red strikethrough**, loading only after choosing

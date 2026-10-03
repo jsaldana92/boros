@@ -131,6 +131,12 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .source-list { list-style: none; padding: 0; }
 .source-list li { padding: 18px 0; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-wrap: anywhere; }
 .plan-day .actions button { flex: 1 1 auto; }
+.superset-settings { margin: 20px 0; padding: 16px; border: 1px solid var(--border); border-radius: 6px; }
+.superset-settings .field-control { margin: 14px 0; }
+.superset-settings legend { font-weight: 600; padding: 0 6px; }
+.superset-round { margin-top: 20px; padding-top: 16px; border-top: 2px solid var(--border); }
+.superset-round > h4 { font-size: 18px; font-weight: 600; }
+.training-superset > .training-heading { margin-top: 12px; }
 
 .import-panel > label { margin-top: 20px; }
 .import-panel > textarea { min-height: 220px; }

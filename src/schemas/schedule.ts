@@ -15,7 +15,9 @@ export interface Schedule { id: string; profileId: string; planId: string; revis
 export function scheduleEnd(startWeek: string, durationWeeks?: number) {
   if (durationWeeks === undefined) return undefined
   positiveInteger.parse(durationWeeks)
-  return addDays(startWeek, durationWeeks * 7 - 1)
+  const end = addDays(startWeek, durationWeeks * 7 - 1)
+  if (!validDate(end)) throw new Error('Duration extends beyond the supported calendar range (years 1–9999).')
+  return end
 }
 export function scheduleActiveOn(schedule: Schedule, date: string) {
   const boundary = schedule.durationChanges?.findLast((item) => item.effectiveFrom <= date) ?? schedule

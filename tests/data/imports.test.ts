@@ -10,7 +10,7 @@ import { interchangeSchema } from '../../src/schemas/interchange.ts'
 import { formattingInstructions, parseInterchange, toImportDraft } from '../../src/features/create/interchange.ts'
 import { workoutFixture, planFixture } from '../fixtures/interchange.ts'
 
-const draft = (kind: 'workout' | 'plan') => toImportDraft(interchangeSchema.parse(kind === 'workout' ? workoutFixture() : planFixture()))
+const draft = (kind: 'workout' | 'plan') => { const value = toImportDraft(interchangeSchema.parse(kind === 'workout' ? workoutFixture() : planFixture())); if (value.kind === 'plan') value.input.durationWeeks = 2; return value }
 async function setup(t: { after: (fn: () => Promise<void>) => void }) {
   const db = new BorosDatabase(`boros-test-imports-${crypto.randomUUID()}`)
   t.after(() => db.delete())
@@ -47,7 +47,7 @@ test('optional defaults preserve absent values versus zero, Unicode, multiline p
 test('malformed/prose/multiple-block JSON, versions, mismatched payloads and excessive input are rejected', () => {
   const json = JSON.stringify(workoutFixture())
   for (const text of ['', '{', `Here: ${json}`, `${json} done`, `\`\`\`json\n${json}\n\`\`\`\n\`\`\`json\n${json}\n\`\`\``, 'x'.repeat(1_000_001)]) assert.equal(parseInterchange(text).value, undefined)
-  for (const value of [null, [], true, { ...workoutFixture(), schemaVersion: 2 }, { ...workoutFixture(), schemaVersion: '1' }, { ...workoutFixture(), kind: 'plan' }, { ...workoutFixture(), plan: planFixture().plan }]) assert.equal(interchangeSchema.safeParse(value).success, false)
+  for (const value of [null, [], true, { ...workoutFixture(), schemaVersion: 99 }, { ...workoutFixture(), schemaVersion: '1' }, { ...workoutFixture(), kind: 'plan' }, { ...workoutFixture(), plan: planFixture().plan }]) assert.equal(interchangeSchema.safeParse(value).success, false)
 })
 
 test('unknown fields at every object level are rejected with precise nested paths', () => {

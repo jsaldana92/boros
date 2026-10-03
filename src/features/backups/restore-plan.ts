@@ -91,7 +91,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     return ids
   }
   const scheduleIds = await allocate('schedule', importedSchedules, localSchedules), draftIds = await allocate('draft', importedDrafts, [...localDrafts, ...localSessions])
-  const remapDay = (day: TrainingDay) => { for (const exercise of day.exercises) if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id } }
+  const remapDay = (day: TrainingDay) => { for (const exercise of day.exercises) if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } }
   for (const p of plans.imported) p.days.forEach(remapDay)
   for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const revision of schedule.revisions) revision.days.forEach(remapDay) }
   for (const item of [...importedDrafts, ...importedSessions]) {

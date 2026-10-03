@@ -14,7 +14,7 @@ async function setup(t: { after: (fn: () => Promise<void>) => void }) {
   const db = new BorosDatabase(`boros-test-sessions-${crypto.randomUUID()}`); t.after(() => db.delete())
   const profiles = profileService(db), id = (await profiles.initialize()).activeProfileId, plans = planService(db), service = sessionService(db)
   const exercise = { name: 'Squat', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 } }], restBetweenSeconds: 60, restAfterSeconds: 120, instructions: '<b>plain\ntext</b>', tutorialUrl: 'https://youtu.be/abcdefghijk', tagNames: ['Legs'], notes: 'Prescription note' }
-  const plan = await plans.save(id, { name: 'Strength', days: [{ ...newDay(1), exercises: [copyExercise(exercise), copyExercise({ ...exercise, name: 'Row', restBetweenSeconds: 0 })] }] })
+  const plan = await plans.save(id, { name: 'Strength', durationWeeks: 2, days: [{ ...newDay(1), exercises: [copyExercise(exercise), copyExercise({ ...exercise, name: 'Row', restBetweenSeconds: 0 })] }] })
   const draft = await service.start(id, plan.id, plan.days[0].id)
   return { db, profiles, id, plans, plan, service, draft }
 }

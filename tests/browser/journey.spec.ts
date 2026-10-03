@@ -58,7 +58,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await field(page, 'YouTube tutorial URL (optional)').fill('https://youtu.be/abcdefghijk')
   await field(page, 'New tag').fill('Journey legs'); await button(page, 'Add tag').click()
   await button(page, 'Save workout').click(); await expect(page.getByRole('article', { name: 'Journey squat', exact: true })).toBeVisible()
-  await button(page, 'Create Plan').click(); await field(page, 'Plan name').fill('Manual four')
+  await button(page, 'Create Plan').click(); await field(page, 'Plan name').fill('Manual four'); await field(page, 'Duration (weeks)').fill('104')
   await field(page, 'Training days per week').selectOption('4')
   for (let i = 0; i < 4; i++) {
     await page.locator('.plan-day').nth(i).getByRole('button', { name: 'Add exercise', exact: true }).click()
@@ -98,6 +98,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await button(page, 'Import AI Output').click()
   await field(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 1, kind: 'plan', plan: { name: 'AI plan', trainingDaysPerWeek: 1, days: [{ name: 'AI day', exercises: [{ name: 'AI row', sets: [{ reps: { min: 8, max: 12 } }], tags: ['Back'] }] }] } }))
   await button(page, 'Validate and preview').click()
+  await field(page, 'Duration (weeks)').fill('104')
   await page.locator('.plan-day').first().getByRole('button', { name: 'Edit prescription', exact: true }).click()
   await field(page, 'Set 1 Reps minimum').fill('9'); await button(page, 'Apply to plan').click(); await button(page, 'Save plan').click()
   await expect(planCard(page, 'AI plan')).toBeVisible(); await schedule(page, 'AI plan')

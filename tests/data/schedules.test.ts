@@ -14,7 +14,9 @@ import { addDays, localToday, monday, monthStart, nextMonday, viewRange } from '
 async function setup(t: { after: (fn: () => Promise<void>) => void }) {
   const db = new BorosDatabase(`boros-test-calendar-${crypto.randomUUID()}`); t.after(() => db.delete())
   const profiles = profileService(db), id = (await profiles.initialize()).activeProfileId, plans = planService(db), sessions = sessionService(db), service = scheduleService(db)
-  const plan = await plans.save(id, { name: 'Four days / 8 weeks', days: Array.from({ length: 4 }, (_, index) => ({ ...newDay(index + 1), exercises: [copyExercise({ name: 'Squat', tagNames: [], sets: [{ reps: { min: 5, max: 8 } }, { reps: { min: 8, max: 8 } }] })] })) })
+  const plan = await plans.save(id, { name: 'Four days / 8 weeks', durationWeeks: 2, days: Array.from({ length: 4 }, (_, index) => ({ ...newDay(index + 1), exercises: [copyExercise({ name: 'Squat', tagNames: [], sets: [{ reps: { min: 5, max: 8 } }, { reps: { min: 8, max: 8 } }] })] })) })
+  // This suite retains historical unbounded schedules; Group 2 tests finite ones.
+  delete plan.durationWeeks; await db.plans.put(plan)
   const input = { planId: plan.id, planRevision: plan.revision, startWeek: '2024-12-23', timeZone: 'America/New_York', mapping: plan.days.map((day, index) => ({ dayId: day.id, weekday: index })) }
   const schedule = await service.create(id, input)
   return { db, profiles, id, plans, plan, sessions, service, schedule, input }

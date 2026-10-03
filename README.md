@@ -228,8 +228,10 @@ tutorial links fail without writes or loss of pasted text. There is no fragment
 extraction or numeric type coercion. Pasted HTML/code is inert plain text; tutorial
 URLs are never automatically fetched or embedded.
 
-The public v1 contract in `src/schemas/interchange.ts` is separate from database
-schema v5. Its fully populated shape is:
+The public v2 contract in `src/schemas/interchange.ts` is separate from database
+schema v5 and backup schema v2. Valid v1 payloads remain accepted; a v1 plan requires
+the owner to supply duration in the editable preview. Nothing is inferred from its
+name. The v2 shape is:
 
 ```ts
 type Range = { min: number; max: number }
@@ -244,18 +246,29 @@ type Exercise = {
 }
 type Plan = {
   name: string
+  durationWeeks: number // positive safe integer, required for new plans
   trainingDaysPerWeek: number
-  days: { name: string; exercises: Exercise[] }[]
+  days: {
+    name: string
+    exercises: (Exercise & { superset: number | null })[]
+    supersets: { number: number; restBetweenRoundsSeconds: number | null; restAfterGroupSeconds: number | null }[]
+  }[]
 }
 type Interchange =
-  | { schemaVersion: 1; kind: 'plan'; plan: Plan }
-  | { schemaVersion: 1; kind: 'workout'; workout: Exercise }
+  | { schemaVersion: 2; kind: 'plan'; plan: Plan }
+  | { schemaVersion: 2; kind: 'workout'; workout: Exercise }
 ```
 
 Exactly one matching payload is required. No IDs, ownership fields, revisions,
 timestamps, provenance, or notes are accepted in this format; notes can be added
 in the preview. Name, sets/reps, and the plan/day structure are required. Names
-are trimmed, nonempty, and at most 120 characters. Plans have 1-7 ordered days,
+are trimmed, nonempty, and at most 120 characters. Each superset number is a positive
+integer unique within its day, declared in `supersets`, and referenced by at least
+two contiguous occurrences. Numbers never join different days. Repeated exercise
+names are allowed and receive separate local occurrence IDs. Missing membership
+defaults to null; missing groups default to []; group rest defaults to null. Unknown
+fields, missing membership declarations and interleaved groups are rejected.
+Plans have 1-7 ordered days,
 exactly matching `trainingDaysPerWeek`, with 1-100 exercises per day. Exercises
 have 1-100 ordered sets. All numbers are safe integers; reps are positive, RIR
 and rest are nonnegative, and `max >= min`. Equal bounds mean a fixed target.
@@ -270,7 +283,7 @@ zero survives unchanged. Numeric strings, missing range bounds, and empty sets
 are errors, not repaired values. Example minimal workout using these defaults:
 
 ```json
-{"schemaVersion":1,"kind":"workout","workout":{"name":"Example","sets":[{"reps":{"min":5,"max":8}}]}}
+{"schemaVersion":2,"kind":"workout","workout":{"name":"Example","sets":[{"reps":{"min":5,"max":8}}]}}
 ```
 
 Only a fully valid payload opens an **unsaved import preview** using the existing
@@ -412,8 +425,16 @@ events remain Missed / incomplete. Clear in Train resets input, never calendar
 history. All screens still use the same public address and static-hosting rules.
 
 **Add Plan** selects an active plan, a Monday start date, and one distinct weekday
-per stable training-day ID. A preview lists training and rest days before saving.
-Schedules repeat until explicitly stopped; a duration in a plan name has no effect.
+per stable training-day ID. A preview lists training/rest days and the inclusive
+start/end dates before saving. New plans require duration in weeks. A two-week plan
+starting Monday 2024-12-30 ends Sunday 2025-01-12; no next-week occurrences are
+generated. Civil-date arithmetic respects the schedule's recorded zone. Legacy
+records without duration remain unbounded; a duration in a plan name has no effect.
+Schedules freeze their effective duration/end date. Editing a plan or refreshing
+its prescriptions does not change an existing schedule's duration. **Review plan
+duration** explicitly previews that change, anchored to the original start week
+and applied only from a selected Monday. Earlier missed dates stay incomplete;
+started/completed sessions remain on their original dates with frozen prescriptions.
 Multiple schedules can use the same plan, with independent IDs and completions.
 When schedules coexist in a zone, event labels show their short schedule IDs.
 
@@ -719,9 +740,10 @@ the intended address is [https://boros-app.com/](https://boros-app.com/).
 Publishing is an owner action; this preparation did not commit, push or deploy.
 
 As of 2026-10-03, Phase 10 is **Verification pending** for Blob-capable WebKit/Safari
-photo/restore coverage and Phase 11 is **In progress, preparation only**. Independent
-Edge/Node requests to the custom domain fail certificate hostname validation;
-the deployment branch also contains a different bundle from this local candidate.
+photo/restore coverage and Phase 11 remains **In progress**. The owner reports the
+public site works and HTTPS is resolved. Earlier Edge/Node certificate failures
+are historical. The changed Group 2 candidate has local verification; no new
+independent production certificate/runtime or artifact comparison is claimed here.
 The Ko-fi URL was supplied during Group 1 and is now configured for production;
 its automated live visit encounters a Cloudflare challenge. These checks have not
 passed simply because a site already exists. See [release preparation](docs/release-preparation.md) for evidence,
@@ -743,7 +765,7 @@ the old address, then import its original ZIP at the new one, preferably under a
 new name. Verify reload, plans/sessions/photos and another profile before retiring
 the source. Follow the [cross-origin procedure](docs/backup-format.md#moving-between-website-addresses).
 
-Restore supports original **backup schema 1 / database schema 5** exports, not CSV
+Restore supports original **backup schemas 1 and 2 / database schema 5** exports, not CSV
 reconstruction, future schemas or arbitrary repackaged ZIPs. The size/entry/photo
 limits and whole-family merge behavior above remain in force. An export can exceed
 restore limits; keep the original ZIP. Memory/device limits, physical phone/AT and
@@ -771,5 +793,39 @@ Settings button with an accessible name/tooltip. Both brand images use guarded T
 navigation. Height/weight units stay beside inputs; Age remains separate. Filters
 are compact; displayed date/time values stop at minutes, while stored timestamps,
 time-zone context and backups keep their original precision on unrelated edits.
-Groups 2–4 (supersets/duration, Calendar/Train, Progress redesign) are recorded in
-TODO.md and **not implemented**. No Group 1 deployment was performed.
+That Group 1 handoff predates Group 2 below. Groups 3–4 (Calendar/Train redesign and
+Progress analytics) remain unimplemented. No Group 1 deployment was performed.
+
+## Group 2: supersets, repeated occurrences and duration
+
+Create Plan accepts a duration in weeks and repeated copies of a library exercise.
+Each occurrence has its own stable ID, prescription, notes and results. Enable
+**Superset** on members and give them the same positive group number within the
+day. Groups need at least two members to save. Joining shows the resulting order
+immediately. **Superset number (rename group)** changes the display number without
+changing the internal group ID; changing an occurrence's membership number joins
+or creates a group. Inner member movement changes member order; moving a group's
+outer member past its boundary moves the block. Moving a member to another day
+makes it standalone. Remove/duplicate occurrences or dissolve a group without
+changing the remaining prescriptions. Plan duplication creates new day, group and
+occurrence IDs; source-library provenance is retained when known.
+
+Train runs one group round at a time, in the displayed member order. Unequal set
+counts use the largest count; a member appears only when it has that prescribed
+set. There are no invented sets. Member Note and Information controls stay
+available, and weight-unit labels follow Settings. Optional group rest applies
+between rounds and after the group before another block. Blank permits manual
+duration; explicit zero means no timed rest. Original member rest prescriptions
+remain stored but are not applied between group members. The existing single
+persistent timer, autosave, Clear, partial/full Save, stale-write guards and frozen
+history remain in use. Saved history represents group rounds without adding
+Group 4 analytics.
+
+Database schema stays **v5**, with optional nested additions and no record rewrite.
+AI and backup contracts are **v2**, with validated v1 compatibility. Backups retain
+stable group membership/order, repeated results, original time precision and
+schedule boundary history. See [backup format](docs/backup-format.md) and
+[Group 2 verification](docs/group2-verification.md) for contracts, decisions and
+actual checks. The owner reports HTTPS resolved on 2026-10-03; this is owner
+verification, not a new automated production smoke test. No hosting changes or
+deployment were performed here.

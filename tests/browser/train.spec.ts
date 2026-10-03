@@ -11,7 +11,7 @@ async function open(page: Page) {
   await page.goto('./'); await button(page, 'Create').click()
   const notice = button(page, 'Understood'); if (await notice.isVisible()) await notice.click()
   await button(page, 'Import AI Output').click(); await input(page, 'AI output JSON').fill(JSON.stringify(fixture()))
-  await button(page, 'Validate and preview').click(); await button(page, 'Save plan').click()
+  await button(page, 'Validate and preview').click(); await input(page, 'Duration (weeks)').fill('2'); await button(page, 'Save plan').click()
   await expect(page.getByRole('article', { name: 'Plan Training plan', exact: true })).toBeVisible()
   await button(page, 'Train').click(); await input(page, 'Plan').selectOption({ label: 'Training plan' }); await input(page, 'Training day').selectOption({ label: '1. Upper' }); await button(page, 'Start session').click()
 }

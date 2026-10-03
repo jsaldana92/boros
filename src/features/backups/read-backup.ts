@@ -82,20 +82,21 @@ export async function readBackup(bytes: Uint8Array, progress: (message: string) 
   }
   const json = (path: string) => { const value = payload.get(path); if (!value) fail(`Missing ${path}. Choose a Boros backup ZIP, not an AI import.`); try { return JSON.parse(decoder.decode(value)) } catch { return fail(`Invalid JSON in ${path}.`) } }
   const manifest = json('manifest.json') as BackupManifest, data = json('data.json') as BackupData
-  for (const record of [manifest, data]) if (record?.backupSchemaVersion !== 1 || record?.format !== 'boros-profile-backup') fail('Unsupported backup version or format. Update Boros to a version supporting this file, or choose a schema 1 Boros export.')
+  for (const record of [manifest, data]) if (![1, 2].includes(record?.backupSchemaVersion) || record?.format !== 'boros-profile-backup') fail('Unsupported backup version or format. Update Boros to a version supporting this file, or choose a schema 1 or 2 Boros export.')
+  if (manifest.backupSchemaVersion !== data.backupSchemaVersion) fail('Manifest and data backup versions disagree.')
   if (manifest.databaseSchemaVersion !== 5) fail('Unsupported database schema in backup. Update Boros or choose a database v5 export.')
   const validated = manifestSchema.safeParse(manifest)
   if (!validated.success) { const issue = validated.error.issues[0]; fail(`Invalid manifest ${issue.path.join('.')}: ${issue.message}`) }
-  validateBackupData(data); validateRestoreRecords(data)
-  const counts = recordCounts(data)
-  if (JSON.stringify(Object.keys(manifest.counts).sort()) !== JSON.stringify(Object.keys(counts).sort()) || Object.entries(counts).some(([key, count]) => manifest.counts[key] !== count)) fail('Manifest record counts disagree with canonical data.')
-  if (manifest.profile.id !== data.profile.id || manifest.profile.name !== data.profile.name || manifest.profile.kind !== data.profile.kind) fail('Manifest profile disagrees with canonical data.')
   const inventory = new Map(manifest.inventory.map((item) => [item.path, item]))
   if (inventory.size !== manifest.inventory.length || inventory.size + 1 !== payload.size || inventory.has('manifest.json')) fail('Manifest inventory is ambiguous or incomplete.')
   for (const item of inventory.values()) {
     const content = payload.get(item.path)
     if (!content || content.length !== item.bytes || await sha256(content) !== item.sha256) fail(`Missing file, size or checksum failure: ${item.path}`)
   }
+  validateBackupData(data); validateRestoreRecords(data)
+  const counts = recordCounts(data)
+  if (JSON.stringify(Object.keys(manifest.counts).sort()) !== JSON.stringify(Object.keys(counts).sort()) || Object.entries(counts).some(([key, count]) => manifest.counts[key] !== count)) fail('Manifest record counts disagree with canonical data.')
+  if (manifest.profile.id !== data.profile.id || manifest.profile.name !== data.profile.name || manifest.profile.kind !== data.profile.kind) fail('Manifest profile disagrees with canonical data.')
   const tables = csvTables(data), expectedPaths = ['data.json', ...tables.map((item) => item.path), ...data.assets.map((item) => item.path)].sort()
   if (JSON.stringify([...inventory.keys()].sort()) !== JSON.stringify(expectedPaths)) fail('Archive file inventory does not match the supported contract.')
   if (Object.keys(manifest.csvRows).length !== tables.length || tables.some((table) => manifest.csvRows[table.path] !== table.rows)) fail('CSV row counts disagree with canonical data.')
@@ -116,5 +117,9 @@ export async function readBackup(bytes: Uint8Array, progress: (message: string) 
     const photo = { ...metadata, blob: new Blob([new Uint8Array(content).buffer], { type: mediaType }) }
     progress(`Decoding photo ${photos.length + 1}/${data.assets.length}`); await decodePhoto(photo); photos.push(photo)
   }
-  return { data, manifest, photos }
+  // Only after original archive integrity, v1 field/reference checks, CSVs and
+  // original assets pass. Never add a duration/group or mutate the source ZIP.
+  const compatible = data.backupSchemaVersion === 1 ? { ...structuredClone(data), backupSchemaVersion: 2 as const } : data
+  validateBackupData(compatible)
+  return { data: compatible, manifest, photos }
 }

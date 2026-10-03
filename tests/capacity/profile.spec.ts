@@ -38,7 +38,7 @@ test('documented larger profile loads, filters, exports and restores within arch
     const prescription = { name: 'Capacity exercise', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 2 } }, { reps: { min: 8, max: 12 } }, { reps: { min: 10, max: 10 } }], tagNames: ['Strength'], instructions: 'Plain local instructions', restBetweenSeconds: 60 }
     for (let i = 0; i < 100; i++) await exercises.save(owner, { ...prescription, name: `Exercise ${String(i).padStart(3, '0')}` })
     for (let i = 0; i < 20; i++) {
-      const plan = await plans.save(owner, { name: `Plan ${String(i).padStart(2, '0')}`, days: Array.from({ length: 4 }, (_, n) => ({ ...newDay(n + 1), exercises: [copyExercise(prescription)] })) })
+      const plan = await plans.save(owner, { name: `Plan ${String(i).padStart(2, '0')}`, durationWeeks: 104, days: Array.from({ length: 4 }, (_, n) => ({ ...newDay(n + 1), exercises: [copyExercise(prescription)] })) })
       if (i < 5) await scheduleService(db).create(owner, { planId: plan.id, planRevision: plan.revision, startWeek: '2025-01-06', timeZone: 'America/New_York', mapping: plan.days.map((day, weekday) => ({ dayId: day.id, weekday })) })
       const draft = await sessions.start(owner, plan.id, plan.days[0].id), input = structuredClone(draft.input)
       input.notes = 'Capacity completed session'; input.exercises[0].sets.forEach((s) => Object.assign(s, { load: '50', reps: '8', rir: '0' }))

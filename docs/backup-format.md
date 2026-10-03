@@ -1,8 +1,9 @@
-# Boros profile backup, schema 1
+# Boros profile backup, schema 2 (schema 1 supported)
 
 Export was implemented in Phase 8; reviewed restore and profile Clear Data are
 implemented in Phase 9. This remains separate from the external AI interchange
-format. Database version 5 and backup schema 1 are unchanged. An isolated
+format. Group 2 writes backup schema 2; database version 5 stays unchanged. Strict
+schema 1/database v5 backups remain supported through the compatibility path below. An isolated
 export → import under a new name → export comparison verifies canonical records,
 relationships and original image bytes, with the identity exceptions below.
 
@@ -21,7 +22,9 @@ csv/days.csv
 csv/prescriptions.csv
 csv/prescription_sets.csv
 csv/prescription_tags.csv
+csv/supersets.csv
 csv/schedules.csv
+csv/schedule_duration_changes.csv
 csv/schedule_revisions.csv
 csv/schedule_assignments.csv
 csv/drafts.csv
@@ -45,7 +48,7 @@ fields rather than write null. Record timestamps/revisions are not regenerated.
 
 `src/schemas/backup.ts` defines the executable payload/manifest schema and required
 reference checks. Database version stays 5: exporting adds no tables, migrations,
-or writes. The manifest separately records backup schema `1`, database schema `5`,
+or writes. The manifest separately records backup schema `2`, database schema `5`,
 and the real `package.json` app name/version (`boros`, currently `0.0.0`). That
 package value is not an invented release number.
 
@@ -53,7 +56,7 @@ package value is not an invented release number.
 
 | Field | Meaning |
 | --- | --- |
-| `format`, `backupSchemaVersion` | `boros-profile-backup`, 1; independent of AI/database versions |
+| `format`, `backupSchemaVersion` | `boros-profile-backup`, 2 for new exports; independent of AI/database versions |
 | `databaseSchemaVersion`, `app` | Actual supported source database version and package name/version |
 | `profile` | The captured profile's ID, name, and Guest/named kind; no active-profile selection reference |
 | `snapshotAt` | UTC timestamp at the end of the consistent read transaction |
@@ -83,8 +86,8 @@ or resizing. ZIP compression is STORE for images and DEFLATE for text.
 | `profile` | ID, kind, name/nameKey, optional age/heightCm/photoId, weightUnit/heightUnit, revision, createdAt/updatedAt. Current weight is derived, never a copied field. |
 | `tags` | Profile-owned ID, name/nameKey, creation/update time, optional archivedAt. |
 | `exercises` | Profile-owned library ID, name keys, archive/revision/timestamps, ordered sets, tagIds, optional rest/instructions/notes/tutorial URL. |
-| `plans` | Profile-owned ID, name keys, archive/revision/timestamps, ordered days and exercise occurrences. Each occurrence has its own ID, a complete prescription and optional provenance source. |
-| `schedules` | Profile-owned ID and planId, revision, stored IANA zone/startWeek, optional stoppedFrom, timestamps, ordered revision history. Each revision retains ID, effectiveFrom/exclusive effectiveUntil, creation time, planRevision/name, complete days, mapping and optional needsRepair. |
+| `plans` | Profile-owned ID, name keys, archive/revision/timestamps, optional durationWeeks (absent means legacy unbounded), ordered days and exercise occurrences. Each occurrence has its own ID, complete prescription, optional provenance source and groupId. Days optionally contain groups with stable ID, positive day-local number and optional restBetweenRoundsSeconds/restAfterGroupSeconds. |
+| `schedules` | Profile-owned ID and planId, revision, stored IANA zone/startWeek, optional stoppedFrom, timestamps, ordered revision history; optional durationWeeks/inclusive endDate and ordered durationChanges. Each duration change has a stable ID, Monday effectiveFrom and optional durationWeeks/endDate. Each prescription revision retains ID, effectiveFrom/exclusive effectiveUntil, creation time, planRevision/name, complete days/groups, mapping and optional needsRepair. |
 | `drafts` | Profile-owned ID, sourcePlanId/sourceDayId, revision, activeSourceKey if unfinished, planName/day snapshot, raw input/results/applied notes, startedAt/updatedAt and optional finalizedAt/occurrence metadata. Finalized drafts are retained too. |
 | `sessions` | Profile-owned ID/draftId, source plan/day, revision, frozen day/prescription snapshot, actual exercise/set results and notes, partial flag, startedAt/completedAt/loggedAt, optional occurrence metadata. |
 | `measurements` | Profile-owned ID, weightKg, measuredAt/loggedAt and optional updatedAt/revision/photoId/local-time/zone/offset/mutation metadata. Legacy omissions remain omitted. |
@@ -110,6 +113,48 @@ reference. Do not generate/export an infinite calendar: schedules and revision
 intervals reconstruct ordinary dates, while retained draft/session identities
 preserve started exceptions after a remap/stop. Old snapshot day IDs need not be
 present in the current edited plan.
+
+## Group 2 compatibility and linked CSV additions
+
+Schema 2 extends every day snapshot (plan, schedule revision, draft and session)
+with optional `groups`; occurrences optionally reference a day-local `groupId`.
+Groups require unique IDs and positive numbers, at least two contiguous members,
+and safe nonnegative integer rest seconds when present. Group number changes do
+not change IDs. Array order defines execution; unequal sets remain untouched.
+Session results reference occurrence IDs, never library IDs, group numbers or
+names. Optional plan-copy provenance now carries `libraryId` when known, so
+later analytics need not guess identity by name. Unknown provenance stays unknown.
+
+`csv/supersets.csv` links profile, owner kind/ID, schedule revision, plan and day
+to group ID/number, execution block order and group rest. `prescriptions.csv`
+adds `groupId` and `sourceLibraryId`; existing occurrence IDs/order link each member
+and its sets/results. `plans.csv` adds durationWeeks; `schedules.csv` adds frozen
+durationWeeks/endDate; `schedule_duration_changes.csv` links each boundary change
+to its owning schedule and effective date. Schema 1 CSV headers and inventory
+remain exactly the earlier contract (without these columns/tables).
+
+New plans require positive duration, but backups and existing v5 records may omit
+it. Absence remains unbounded, never defaulted to a made-up number. Schedule end
+dates must equal start Monday plus duration×7−1 civil days. Duration changes are
+validated in increasing Monday order and select the applicable boundary without
+rewriting earlier occurrences. Started/completed exceptions remain valid beyond
+a later end date. Plan edits do not alter the frozen schedule boundary.
+
+Upload accepts versions 1 and 2 with matching manifest/data versions and database
+v5. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
+before validating records against the version-specific strict field set, linked
+references, CSV inventory/counts and original assets. Only after all checks pass,
+v1 canonical data is cloned with a v2 envelope; no group/duration is inserted and
+the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
+The returned manifest remains the original validated version for provenance.
+Checksums and photo decoding are never bypassed.
+
+Whole-plan-family precedence is unchanged. Group/occurrence IDs are scoped by the
+winning plan/day and its snapshots; they remain together through root ownership,
+plan/schedule/draft identity remapping. Optional library provenance is remapped
+when its library participates. Matching by name does not merge occurrence results
+or groups from unrelated families. Both precedence modes and v2 round trips are
+covered by Group 2 tests; legacy v1 validation/transform has a separate fixture.
 
 All profile-owned photo records are included, even if currently unreferenced;
 export is not cleanup. Asset references are separate from the asset's original
@@ -202,7 +247,7 @@ permissions and physical mobile save-sheet behavior still need manual checks.
 
 ## Upload validation and limits (Phase 9)
 
-Settings → Data → **Backup ZIP** accepts an original Boros schema 1/database v5
+Settings → Data → **Backup ZIP** accepts an original Boros schema 1 or 2/database v5
 export. Unsupported versions explain that the user must update Boros or choose a
 supported export. Import never guesses at a future schema or reads AI interchange
 as a backup. Parsing, hashing, CSV row checks and image decoding run in a worker,
@@ -371,7 +416,7 @@ remove them. Do not delete the source to test a move.
    actual original ZIP is present/readable on disk; “Download started” cannot
    confirm filesystem success. Repeat separately for each desired profile.
 2. At the verified target address, use Settings → Data → Backup ZIP. Select the
-   original schema 1/database v5 ZIP; do not unpack/repackage it or import CSVs.
+   original schema 1 or 2/database v5 ZIP; do not unpack/repackage it or import CSVs.
    Review validation and counts. Prefer **Import under a new name** with an unused
    name if a name conflict exists; merge/replace have the destructive whole-family
    semantics documented above. Review, acknowledge and Confirm and save.

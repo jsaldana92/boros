@@ -44,7 +44,7 @@ test('fallback Guest conversion, imports, photo/weight IDs and independent profi
     const saved = await service.save(id, 1, { ...input, name: 'Ada', weightKg: 70 }, { blob: new Blob(['fixture'], { type: 'image/png' }), width: 1, height: 1 })
     assert.equal(saved.id, id)
     const day = newDay(1); day.exercises.push(copyExercise({ name: 'Squat', sets: [{ reps: { min: 5, max: 5 } }], tagNames: ['Legs'] }))
-    const plan = await importSession(id, db).savePlan({ name: 'Imported', days: [day] })
+    const plan = await importSession(id, db).savePlan({ name: 'Imported', durationWeeks: 2, days: [day] })
     const before = await service.snapshot(id)
     const other = await service.create('Bea'); assert.equal((await service.snapshot(other.id)).measurement, undefined)
     await service.select(id); db.close(); await db.open()

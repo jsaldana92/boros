@@ -10,6 +10,7 @@ import { assessSession, displayedLoad, numericResult, timerRemaining, type Compl
 import type { WeightUnit } from '../../schemas/profile'
 import type { ExerciseInput } from '../../schemas/exercise'
 import { isYouTubeUrl } from '../../schemas/exercise'
+import { roundCount, trainingBlocks, type PlanExercise } from '../../schemas/plan'
 import { DraftController } from './draft-controller'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
@@ -92,6 +93,22 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     if (assessed.skipped) setConfirm('partial'); else void finish(false)
   }
   const finish = (partial: boolean) => act(async () => { const result = await controller.complete(partial); setDirty(false); onCompleted(result) })
+  const memberLabel = (exercise: PlanExercise) => initial.day.exercises.filter((item) => item.prescription.name === exercise.prescription.name).length > 1 ? `${exercise.prescription.name} occurrence ${initial.day.exercises.findIndex((item) => item.id === exercise.id) + 1}` : exercise.prescription.name
+  const memberHeading = (exercise: PlanExercise) => {
+    const e = initial.day.exercises.findIndex((item) => item.id === exercise.id), label = memberLabel(exercise)
+    return <div className="training-heading" key={exercise.id}><h3>{label}</h3><button aria-label={`Note for ${label}`} onClick={() => setNote({ index: e, value: controller.input.exercises[e].notes })}><NotebookPen aria-hidden="true" size={20} /></button><button aria-label={`Information for ${label}`} onClick={() => setInfo(exercise.prescription)}><Info aria-hidden="true" size={20} /></button></div>
+  }
+  const setFields = (exercise: PlanExercise, s: number) => {
+    const e = initial.day.exercises.findIndex((item) => item.id === exercise.id), prescribed = exercise.prescription.sets[s]
+    if (!prescribed) return null
+    const set = controller.input.exercises[e].sets[s], prefix = `${e}.${s}`, label = `${memberLabel(exercise)} set ${s + 1}`
+    const update = (field: 'load' | 'reps' | 'rir' | 'skipped', value: string | boolean) => { const input = structuredClone(controller.input); Object.assign(input.exercises[e].sets[s], { [field]: value }, field === 'load' ? { unit } : {}); controller.change(input) }
+    return <div className="training-set" key={exercise.id} data-occurrence-id={exercise.id}><h4>{exercise.groupId ? memberLabel(exercise) : `Set ${s + 1}`}</h4><p>Target: {target(prescribed.reps)} reps · {target(prescribed.rir)} RIR</p><div className="training-fields">
+      <Field label={`Weight (${unit})`} aria-label={`${label} Weight (${unit})`} inputMode="decimal" maxLength={64} disabled={set.skipped} value={displayedLoad(set, unit)} error={assessed.errors[`${prefix}.load`]} onChange={(event) => update('load', event.target.value)} />
+      <Field label="Reps" aria-label={`${label} Repetitions`} inputMode="numeric" maxLength={64} disabled={set.skipped} value={set.reps} error={assessed.errors[`${prefix}.reps`]} onChange={(event) => update('reps', event.target.value)} />
+      <Field label="RIR (optional)" aria-label={`${label} Actual RIR (optional)`} inputMode="numeric" maxLength={64} disabled={set.skipped} value={set.rir} error={assessed.errors[`${prefix}.rir`]} onChange={(event) => update('rir', event.target.value)} />
+    </div>{set.unit !== unit && set.load && numericResult(set.load) === undefined && <p className="field-error">Invalid saved load in {set.unit}; replace it with a valid {unit} value.</p>}<label className="check-label"><input type="checkbox" checked={set.skipped} onChange={(event) => update('skipped', event.target.checked)} />Skip {label}</label></div>
+  }
   return <section className="training-session" aria-label="Training session">
     <div className="training-heading"><h2 ref={heading} tabIndex={-1}>{initial.day.name}</h2><button aria-label="Session Note" disabled={controller.busy || !!controller.record.finalizedAt} onClick={() => setNote({ value: controller.input.notes })}><NotebookPen aria-hidden="true" size={20} /></button></div>
     <p className="muted">{initial.planName} · Weight ({unit}) · Change units in Settings.</p>
@@ -103,28 +120,22 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     {timer && <TimerDisplay timer={timer} disabled={timerBusy || controller.busy} onAction={(action) => void timerAction(() => controller.changeTimer(timer.token, action))} />}
     {controller.record.finalizedAt && <p role="status">This draft is completed. Return to training days to review the saved session.</p>}
     <fieldset disabled={controller.busy || timerBusy || !!controller.record.finalizedAt}><legend className="sr-only">Session results</legend>
-      {initial.day.exercises.map((exercise, e) => <section className="training-exercise" key={exercise.id} aria-label={exercise.prescription.name}>
-        <div className="training-heading"><h3>{exercise.prescription.name}</h3><button aria-label={`Note for ${exercise.prescription.name}`} onClick={() => setNote({ index: e, value: controller.input.exercises[e].notes })}><NotebookPen aria-hidden="true" size={20} /></button><button aria-label={`Information for ${exercise.prescription.name}`} onClick={() => setInfo(exercise.prescription)}><Info aria-hidden="true" size={20} /></button></div>
-        <p className="muted">{exercise.prescription.sets.length} sets · targets shown per set</p>
-        {exercise.prescription.sets.map((prescribed, s) => {
-          const set = controller.input.exercises[e].sets[s], prefix = `${e}.${s}`, label = `${exercise.prescription.name} set ${s + 1}`
-          const update = (field: 'load' | 'reps' | 'rir' | 'skipped', value: string | boolean) => { const input = structuredClone(controller.input); Object.assign(input.exercises[e].sets[s], { [field]: value }, field === 'load' ? { unit } : {}); controller.change(input) }
-          const between = s < exercise.prescription.sets.length - 1, after = !between && e < initial.day.exercises.length - 1
-          return <Fragment key={s}><div className="training-set"><h4>Set {s + 1}</h4><p>Target: {target(prescribed.reps)} reps · {target(prescribed.rir)} RIR</p><div className="training-fields">
-            <Field label={`Weight (${unit})`} aria-label={`${label} Weight (${unit})`} inputMode="decimal" maxLength={64} disabled={set.skipped} value={displayedLoad(set, unit)} error={assessed.errors[`${prefix}.load`]} onChange={(event) => update('load', event.target.value)} />
-            <Field label="Reps" aria-label={`${label} Repetitions`} inputMode="numeric" maxLength={64} disabled={set.skipped} value={set.reps} error={assessed.errors[`${prefix}.reps`]} onChange={(event) => update('reps', event.target.value)} />
-            <Field label="RIR (optional)" aria-label={`${label} Actual RIR (optional)`} inputMode="numeric" maxLength={64} disabled={set.skipped} value={set.rir} error={assessed.errors[`${prefix}.rir`]} onChange={(event) => update('rir', event.target.value)} />
-          </div>{set.unit !== unit && set.load && numericResult(set.load) === undefined && <p className="field-error">Invalid saved load in {set.unit}; replace it with a valid {unit} value.</p>}<label className="check-label"><input type="checkbox" checked={set.skipped} onChange={(event) => update('skipped', event.target.checked)} />Skip {label}</label></div>
-            {(between || after) && <RestControl label={`${exercise.prescription.name} ${between ? `after set ${s + 1}` : 'between exercises'}`} seconds={between ? exercise.prescription.restBetweenSeconds : exercise.prescription.restAfterSeconds} onStart={(seconds) => timerAction(() => controller.startTimer(exercise.id, s, seconds))} />}
-          </Fragment>
-        })}
+      {trainingBlocks(initial.day).map((block, b, blocks) => block.group ? <section className="training-exercise training-superset" key={block.id} aria-label={`Superset ${block.group.number}`}>
+        <h3>Superset {block.group.number}</h3><p>{block.members.map((member) => `${memberLabel(member)}: ${member.prescription.sets.length} sets`).join(' · ')}</p>
+        {block.members.map(memberHeading)}
+        {Array.from({ length: roundCount(block.members) }, (_, s) => <section className="superset-round" key={s} aria-label={`Superset ${block.group!.number} set ${s + 1}`}><h4>Set {s + 1}</h4>{block.members.map((member) => setFields(member, s))}
+          {(s < roundCount(block.members) - 1 || b < blocks.length - 1) && <RestControl label={`Superset ${block.group!.number} ${s < roundCount(block.members) - 1 ? `after round ${s + 1}` : 'after group'}`} seconds={s < roundCount(block.members) - 1 ? block.group!.restBetweenRoundsSeconds : block.group!.restAfterGroupSeconds} onStart={(seconds) => timerAction(() => controller.startGroupTimer(block.id, s, seconds))} />}
+        </section>)}
+      </section> : <section className="training-exercise" key={block.id} aria-label={memberLabel(block.members[0])}>
+        {memberHeading(block.members[0])}<p className="muted">{block.members[0].prescription.sets.length} sets · targets shown per set</p>
+        {block.members[0].prescription.sets.map((_, s, sets) => <Fragment key={s}>{setFields(block.members[0], s)}{(s < sets.length - 1 || b < blocks.length - 1) && <RestControl label={`${memberLabel(block.members[0])} ${s < sets.length - 1 ? `after set ${s + 1}` : 'between exercises'}`} seconds={s < sets.length - 1 ? block.members[0].prescription.restBetweenSeconds : block.members[0].prescription.restAfterSeconds} onStart={(seconds) => timerAction(() => controller.startTimer(block.id, s, seconds))} />}</Fragment>)}
       </section>)}
     </fieldset>
     {error && error !== controller.error && <p role="alert">{error}</p>}
     <button disabled={controller.busy || timerBusy} onClick={onClose}>Back to training days</button>
     <div className="session-actions"><button className="primary" disabled={controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={save}>{controller.busy ? 'Working...' : 'Save'}</button><button disabled={controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={() => setConfirm('clear')}>Clear</button></div>
     {note && <NoteDialog value={note.value} title={note.index === undefined ? 'Session note' : `Note: ${initial.day.exercises[note.index].prescription.name}`} onDirty={setNoteDirty} onClose={() => { setNote(undefined); setNoteDirty(false) }} onApply={(value) => { const input = structuredClone(controller.input); if (note.index === undefined) input.notes = value; else input.exercises[note.index].notes = value; controller.change(input); setNote(undefined); setNoteDirty(false) }} />}
-    {info && <ConfirmDialog title={info.name} confirmLabel="Close" onCancel={() => setInfo(undefined)} onConfirm={() => setInfo(undefined)}><p className="plain-text">{info.instructions || 'No instructions.'}</p>{info.tutorialUrl && isYouTubeUrl(info.tutorialUrl) && <a className="tutorial-link" href={info.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial</a>}</ConfirmDialog>}
+    {info && <ConfirmDialog title={info.name} confirmLabel="Close" onCancel={() => setInfo(undefined)} onConfirm={() => setInfo(undefined)}><p className="plain-text">{info.instructions || 'No instructions.'}</p><p className="plain-text">Prescription note: {info.notes || 'None'}</p>{info.tutorialUrl && isYouTubeUrl(info.tutorialUrl) && <a className="tutorial-link" href={info.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial</a>}</ConfirmDialog>}
     {confirm && <ConfirmDialog title={confirm === 'clear' ? 'Clear this draft?' : confirm === 'partial' ? 'Save partial session?' : 'Reload saved draft?'} confirmLabel={confirm === 'clear' ? 'Clear draft' : confirm === 'partial' ? 'Save partial session' : 'Reload draft'} onCancel={() => setConfirm(undefined)} onConfirm={() => {
       const action = confirm; setConfirm(undefined)
       if (action === 'partial') void finish(true)
@@ -154,8 +165,16 @@ function TimerDisplay({ timer, disabled, onAction }: { timer: RestTimer; disable
 }
 function SessionReview({ session, onClose }: { session: CompletedSession; onClose: () => void }) {
   const [info, setInfo] = useState<ExerciseInput>()
+  const result = (exercise: PlanExercise, s: number) => {
+    const entry = session.exercises.find((item) => item.id === exercise.id)!, set = entry.sets[s], prescribed = exercise.prescription.sets[s]
+    return set ? <li key={exercise.id}>{exercise.groupId && `${exercise.prescription.name}: `}Set {s + 1}: {set.skipped ? 'Skipped' : `${set.load} ${set.unit} · ${set.reps} reps · ${set.rir === undefined ? 'unspecified' : set.rir} actual RIR`}<p className="muted">Target: {target(prescribed.reps)} reps · {target(prescribed.rir)} RIR</p></li> : null
+  }
   return <section aria-label="Saved session details"><h2>{session.planName} / {session.day.name}</h2><p>{session.partial ? 'Partial session' : 'Complete session'}</p>{session.occurrence && <p>Scheduled: {session.occurrence.scheduledDate} · Week of {session.occurrence.scheduledWeek} · {session.occurrence.timeZone} · Completed</p>}<p>Started: {displayDateTime(session.startedAt)}<br />Completed: {displayDateTime(session.completedAt)}<br />Logged: {displayDateTime(session.loggedAt)}</p><p className="plain-text">Session note: {session.notes || 'None'}</p>
-    {session.day.exercises.map((exercise, e) => <section className="training-exercise" key={exercise.id}><div className="training-heading"><h3>{exercise.prescription.name}</h3><button aria-label={`Information for ${exercise.prescription.name}`} onClick={() => setInfo(exercise.prescription)}><Info aria-hidden="true" size={20} /></button></div><p className="plain-text">Exercise note: {session.exercises[e].notes || 'None'}</p><p className="muted">Rest between sets: {exercise.prescription.restBetweenSeconds ?? 'unspecified'} seconds · After exercise: {exercise.prescription.restAfterSeconds ?? 'unspecified'} seconds</p><ol>{session.exercises[e].sets.map((set, s) => <li key={s}>Set {s + 1}: {set.skipped ? 'Skipped' : `${set.load} ${set.unit} · ${set.reps} reps · ${set.rir === undefined ? 'unspecified' : set.rir} actual RIR`}<p className="muted">Target: {target(exercise.prescription.sets[s].reps)} reps · {target(exercise.prescription.sets[s].rir)} RIR</p></li>)}</ol></section>)}
+    {trainingBlocks(session.day).map((block) => <section className="training-exercise" key={block.id} aria-label={block.group ? `Saved superset ${block.group.number}` : block.members[0].prescription.name}>
+      {block.group && <><h3>Superset {block.group.number}</h3><p>Rest between rounds: {block.group.restBetweenRoundsSeconds ?? 'unspecified'} seconds · After group: {block.group.restAfterGroupSeconds ?? 'unspecified'} seconds</p></>}
+      {block.members.map((exercise) => <div key={exercise.id}><div className="training-heading"><h3>{exercise.prescription.name}</h3><button aria-label={`Information for ${exercise.prescription.name}`} onClick={() => setInfo(exercise.prescription)}><Info aria-hidden="true" size={20} /></button></div><p className="plain-text">Exercise note: {session.exercises.find((item) => item.id === exercise.id)!.notes || 'None'}</p>{!block.group && <p className="muted">Rest between sets: {exercise.prescription.restBetweenSeconds ?? 'unspecified'} seconds · After exercise: {exercise.prescription.restAfterSeconds ?? 'unspecified'} seconds</p>}</div>)}
+      {block.group ? Array.from({ length: roundCount(block.members) }, (_, s) => <section className="superset-round" key={s}><h4>Set {s + 1}</h4><ul>{block.members.map((member) => result(member, s))}</ul></section>) : <ol>{block.members[0].prescription.sets.map((_, s) => <Fragment key={s}>{result(block.members[0], s)}</Fragment>)}</ol>}
+    </section>)}
     {info && <ConfirmDialog title={info.name} confirmLabel="Close" onConfirm={() => setInfo(undefined)} onCancel={() => setInfo(undefined)}><p className="plain-text">{info.instructions || 'No instructions.'}</p><p className="plain-text">Prescription note: {info.notes || 'None'}</p>{info.tutorialUrl && isYouTubeUrl(info.tutorialUrl) && <a className="tutorial-link" href={info.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial</a>}</ConfirmDialog>}
     <button onClick={onClose}>Back to training days</button><p className="muted">To train again, return to training days and deliberately start another session.</p>
   </section>

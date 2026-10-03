@@ -14,6 +14,7 @@ async function preview(page: Page, value: unknown, fenced = false) {
   await page.getByLabel('AI output JSON', { exact: true }).fill(fenced ? `\`\`\`json\n${json}\n\`\`\`` : json)
   await button(page, 'Validate and preview').click()
   await expect(page.getByText('Unsaved import preview.', { exact: false })).toBeVisible()
+  if (await page.getByLabel('Duration (weeks)', { exact: true }).isVisible()) await page.getByLabel('Duration (weeks)', { exact: true }).fill('2')
 }
 async function counts(page: Page) {
   return page.evaluate(async () => {
@@ -62,6 +63,7 @@ test('invalid input and canceled previews write nothing; dirty navigation/unload
     await preview(page, plan ? planFixture() : workoutFixture())
     page.once('dialog', (dialog) => dialog.dismiss()); await button(page, 'Settings').click()
     await expect(page.getByText('Unsaved import preview.', { exact: false })).toBeVisible()
+  if (await page.getByLabel('Duration (weeks)', { exact: true }).isVisible()) await page.getByLabel('Duration (weeks)', { exact: true }).fill('2')
     await cancelPreview(page, plan)
     expect(await counts(page)).toEqual(before)
   }
@@ -104,7 +106,7 @@ test('four-day plan preview edits save independently and reopen in the manual ed
   await button(page, 'Cancel editor').click(); await button(page, 'Cancel plan editor').click()
   await button(page, 'Create Plan').click(); await page.locator('.plan-day').first().getByRole('button', { name: 'Add exercise', exact: true }).click()
   await button(page, 'Copy Plan: Imported edited plan / Day 1: Upper 肩 / Exercise 1: Élévation 肩').click()
-  await page.getByLabel('Plan name', { exact: true }).fill('Manual copy'); await button(page, 'Save plan').click()
+  await page.getByLabel('Plan name', { exact: true }).fill('Manual copy'); await page.getByLabel('Duration (weeks)', { exact: true }).fill('2'); await button(page, 'Save plan').click()
   await expect(card(page, 'Manual copy')).toBeVisible()
   expect(external).toEqual([]); expect(await page.evaluate(() => 'importExecuted' in window)).toBe(false)
   await expect(page.locator('main img')).toHaveCount(0); await expect(page).toHaveURL(address)

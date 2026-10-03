@@ -1,15 +1,15 @@
 import { z } from 'zod'
 import { exerciseInputSchema, setSchema } from './exercise.ts'
-import { daySchema as originalDaySchema, occurrenceSchema, sourceSchema, planInputSchema } from './plan.ts'
+import { daySchema as originalDaySchema, occurrenceSchema, sourceSchema, planInputSchema, positiveInteger } from './plan.ts'
 import { heightUnitSchema, measurementSchema, weightUnitSchema, type Measurement, type PhotoAsset, type Profile } from './profile.ts'
 import type { Exercise, Tag } from './exercise.ts'
 import type { Plan } from './plan.ts'
-import { dateSchema, mappingSchema, occurrenceKey, validateMapping, type Schedule } from './schedule.ts'
+import { dateSchema, mappingSchema, occurrenceKey, scheduleEnd, validateMapping, type Schedule } from './schedule.ts'
 import { assessSession, sessionInputSchema, validateDraftInput, type CompletedSession, type SessionDraft } from './session.ts'
 import { monday, validZone } from '../lib/calendar-dates.ts'
 import { validateTimeContext } from '../lib/measurement-dates.ts'
 
-export const BACKUP_VERSION = 1
+export const BACKUP_VERSION = 2
 export const SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Wait for Draft saved locally in every training tab before exporting.'
 export interface ProfileSnapshot {
   databaseVersion: number; capturedAt: string; profile: Profile; tags: Tag[]; exercises: Exercise[]; plans: Plan[]
@@ -27,7 +27,7 @@ const number = z.number().finite().nonnegative(), integer = number.int().max(Num
 const recorded = z.discriminatedUnion('skipped', [z.object({ skipped: z.literal(true) }).strict(), z.object({ skipped: z.literal(false), weightKg: number, load: number, unit: weightUnitSchema, reps: integer, rir: integer.optional() }).strict()])
 export const assetSchema = z.object({ ...owned, createdAt: time, role: z.enum(['avatar', 'progress']), width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), bytes: z.number().int().positive().max(5 * 1024 * 1024), path: z.string().regex(/^photos\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/i) }).strict()
 export type BackupAsset = z.infer<typeof assetSchema>
-export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1; assets: BackupAsset[] }
+export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2; assets: BackupAsset[] }
 // Validation never replaces the original records with Zod's parsed/transformed output.
 // The JSON payload retains saved text, optional-field presence, array order and snapshots.
 export const backupDataSchema = z.object({
@@ -35,16 +35,27 @@ export const backupDataSchema = z.object({
   profile: z.object({ id, kind: z.enum(['guest', 'named']), name: z.string(), nameKey: z.string(), age: z.number().int().min(0).max(130).nullable().optional(), heightCm: z.number().positive().max(300).nullable().optional(), weightUnit: weightUnitSchema, heightUnit: heightUnitSchema, photoId: id.nullable().optional(), revision, ...timestamps }).strict(),
   tags: z.array(z.object({ ...owned, ...timestamps, name: z.string(), nameKey: z.string(), archivedAt: time.optional() }).strict()),
   exercises: z.array(prescription.omit({ tagNames: true }).extend({ ...archived, tagIds: z.array(id) }).strict()),
-  plans: z.array(z.object({ ...archived, name: z.string(), days: z.array(daySchema).min(1).max(7) }).strict()),
-  schedules: z.array(z.object({ ...owned, ...timestamps, planId: id, revision, timeZone: z.string().refine(validZone), startWeek: dateSchema, stoppedFrom: dateSchema.optional(), revisions: z.array(z.object({ id, effectiveFrom: dateSchema, effectiveUntil: dateSchema.optional(), createdAt: time, planRevision: revision, planName: z.string(), days: z.array(daySchema).min(1).max(7), mapping: mappingSchema, needsRepair: z.boolean().optional() }).strict()).min(1) }).strict()),
+  plans: z.array(z.object({ ...archived, name: z.string(), durationWeeks: positiveInteger.optional(), days: z.array(daySchema).min(1).max(7) }).strict()),
+  schedules: z.array(z.object({ ...owned, ...timestamps, planId: id, revision, timeZone: z.string().refine(validZone), startWeek: dateSchema, stoppedFrom: dateSchema.optional(), durationWeeks: positiveInteger.optional(), endDate: dateSchema.optional(), durationChanges: z.array(z.object({ id, effectiveFrom: dateSchema, durationWeeks: positiveInteger.optional(), endDate: dateSchema.optional() }).strict()).optional(), revisions: z.array(z.object({ id, effectiveFrom: dateSchema, effectiveUntil: dateSchema.optional(), createdAt: time, planRevision: revision, planName: z.string(), days: z.array(daySchema).min(1).max(7), mapping: mappingSchema, needsRepair: z.boolean().optional() }).strict()).min(1) }).strict()),
   drafts: z.array(z.object({ ...sessionBase, activeSourceKey: z.string().optional(), input: sessionInputSchema, updatedAt: time, finalizedAt: time.optional() }).strict()),
   sessions: z.array(z.object({ ...sessionBase, draftId: id, notes: z.string(), exercises: z.array(z.object({ id, notes: z.string(), sets: z.array(recorded).min(1) }).strict()), partial: z.boolean(), completedAt: time, loggedAt: time }).strict()),
   measurements: z.array(measurementSchema.extend({ ...owned, loggedAt: time, updatedAt: time.optional(), revision: revision.optional(), photoId: id.optional(), lastMutationId: id.optional() }).strict()),
   assets: z.array(assetSchema),
 }).strict()
+// Freeze the v1 allowed field set. Verify its original bytes/CSV contract before
+// upgrading only the envelope; absent groups/duration retain their original meaning.
+const legacySource = z.discriminatedUnion('kind', [source.options[0], source.options[1].omit({ libraryId: true })])
+const legacyDay = daySchema.omit({ groups: true }).extend({ exercises: z.array(occurrenceSchema.omit({ groupId: true }).extend({ prescription, source: legacySource.optional() }).strict()).min(1).max(100) })
+export const legacyBackupDataSchema = backupDataSchema.extend({
+  backupSchemaVersion: z.literal(1),
+  plans: z.array(backupDataSchema.shape.plans.element.omit({ durationWeeks: true }).extend({ days: z.array(legacyDay).min(1).max(7) })),
+  schedules: z.array(backupDataSchema.shape.schedules.element.omit({ durationWeeks: true, endDate: true, durationChanges: true }).extend({ revisions: z.array(backupDataSchema.shape.schedules.element.shape.revisions.element.extend({ days: z.array(legacyDay).min(1).max(7) })).min(1) })),
+  drafts: z.array(backupDataSchema.shape.drafts.element.extend({ day: legacyDay })),
+  sessions: z.array(backupDataSchema.shape.sessions.element.extend({ day: legacyDay })),
+})
 export const inventorySchema = z.object({ path: z.string(), bytes: z.number().int().nonnegative(), sha256: z.string().regex(/^[0-9a-f]{64}$/), mediaType: z.string() }).strict()
 export const manifestSchema = z.object({
-  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.literal(BACKUP_VERSION), databaseSchemaVersion: z.literal(5),
+  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2)]), databaseSchemaVersion: z.literal(5),
   app: z.object({ name: z.literal('boros'), version: z.string().min(1) }).strict(), exportedAt: time, snapshotAt: time,
   profile: z.object({ id, name: z.string(), kind: z.enum(['guest', 'named']) }).strict(), snapshotPolicy: z.literal(SNAPSHOT_POLICY),
   counts: z.record(z.number().int().nonnegative()), csvRows: z.record(z.number().int().nonnegative()),
@@ -66,7 +77,7 @@ function equalRecord(a: unknown, b: unknown): boolean {
 }
 export function validateBackupData(data: BackupData) {
   const fail = (message: string): never => { throw new Error(`Backup cannot be completed: ${message}. Reopen the affected record and repair it before retrying; source data was not changed.`) }
-  const validation = backupDataSchema.safeParse(data)
+  const validation = (data.backupSchemaVersion === 1 ? legacyBackupDataSchema : backupDataSchema).safeParse(data)
   if (!validation.success) { const issue = validation.error.issues[0]; fail(`invalid saved ${issue.path.join('.')}: ${issue.message}`) }
   const index = <T extends { id: string; profileId: string }>(records: T[], label: string) => {
     const map = new Map<string, T>()
@@ -80,6 +91,12 @@ export function validateBackupData(data: BackupData) {
   for (const schedule of data.schedules) {
     if (!plans.has(schedule.planId)) fail(`schedule ${schedule.id} requires missing plan ${schedule.planId}`)
     if (monday(schedule.startWeek) !== schedule.startWeek) fail(`schedule ${schedule.id} has invalid start week`)
+    if (schedule.endDate !== scheduleEnd(schedule.startWeek, schedule.durationWeeks)) fail(`schedule ${schedule.id} has inconsistent duration/end date`)
+    const changes = schedule.durationChanges ?? [], changeIds = new Set<string>()
+    changes.forEach((change, i) => {
+      if (changeIds.has(change.id) || monday(change.effectiveFrom) !== change.effectiveFrom || change.effectiveFrom < schedule.startWeek || (i > 0 && changes[i - 1].effectiveFrom >= change.effectiveFrom) || change.endDate !== scheduleEnd(schedule.startWeek, change.durationWeeks)) fail(`schedule ${schedule.id} has invalid duration history`)
+      changeIds.add(change.id)
+    })
     const ids = new Set<string>()
     for (const item of schedule.revisions) { if (ids.has(item.id)) fail(`schedule ${schedule.id} has duplicate revision ${item.id}`); ids.add(item.id); validateMapping(item.mapping, item.days); planInputSchema.parse({ name: item.planName, days: item.days }); if (item.effectiveUntil && item.effectiveUntil < item.effectiveFrom) fail(`schedule ${schedule.id} has reversed revision dates`) }
   }

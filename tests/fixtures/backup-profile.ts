@@ -18,7 +18,7 @@ export async function representativeProfile(db: BorosDatabase) {
   const exercise = await exercises.save(id, { name: '=Range 雪', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 12 }, rir: { min: 1, max: 3 } }, { reps: { min: 6, max: 6 } }], tagNames: ['Legs', '@tag'], restBetweenSeconds: 0, instructions: strangeText, notes: strangeText, tutorialUrl: 'https://youtu.be/abcdefghijk' })
   const standalone = await exercises.save(id, { name: 'Standalone', sets: [{ reps: { min: 1, max: 1 } }], tagNames: [] })
   const prescription = { name: exercise.name, sets: exercise.sets, tagNames: ['Legs', 'historical only'], restBetweenSeconds: 0, instructions: strangeText, notes: strangeText }
-  const plan = await plans.save(id, { name: 'Plan 雪', days: Array.from({ length: 4 }, (_, i) => ({ ...newDay(i + 1), exercises: [copyExercise(prescription, { kind: 'exercise', id: exercise.id })] })) })
+  const plan = await plans.save(id, { name: 'Plan 雪', durationWeeks: 104, days: Array.from({ length: 4 }, (_, i) => ({ ...newDay(i + 1), exercises: [copyExercise(prescription, { kind: 'exercise', id: exercise.id })] })) })
   const schedule = await schedules.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: '2025-01-06', timeZone: 'America/New_York', mapping: plan.days.map((day, weekday) => ({ dayId: day.id, weekday })) })
   for (const [dayIndex, date] of ['2025-01-06', '2025-01-07'].entries()) {
     const { draft } = await sessions.openOccurrence(id, schedule.id, plan.days[dayIndex].id, date)

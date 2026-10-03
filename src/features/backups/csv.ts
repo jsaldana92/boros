@@ -9,6 +9,7 @@ export function spreadsheetCell(value: unknown) {
   return typeof value === 'string' && /^[\s\uFEFF]*(?:[=+\-@＝＋－＠]|\t|\r|\n)/u.test(value) ? `'${value}` : value
 }
 export function csvTables(data: BackupData) {
+  const current = data.backupSchemaVersion >= 2
   const tables: Record<string, Table> = {}
   const table = (name: string, fields: string, rows: Row[] = []) => { tables[name] = { fields: fields.split(','), rows }; return tables[name].rows }
   const scope = 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,dayOrder'
@@ -17,12 +18,14 @@ export function csvTables(data: BackupData) {
   const libraries = table('library_exercises', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl,createdAt,updatedAt')
   const librarySets = table('library_sets', 'profileId,libraryExerciseId,setOrder,repsMin,repsMax,rirMin,rirMax')
   const tagLinks = table('exercise_tags', 'profileId,libraryExerciseId,tagId,tagOrder')
-  table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt', data.plans as unknown as Row[])
+  table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : ''), data.plans as unknown as Row[])
   const days = table('days', `${scope},name`)
-  const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl`)
+  const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}`)
+  const groups = current ? table('supersets', `${scope},groupId,number,blockOrder,restBetweenRoundsSeconds,restAfterGroupSeconds`) : []
   const prescriptionSets = table('prescription_sets', `${scope},exerciseOccurrenceId,exerciseOrder,setOrder,repsMin,repsMax,rirMin,rirMax`)
   const prescriptionTags = table('prescription_tags', `${scope},exerciseOccurrenceId,exerciseOrder,tagOrder,tagName`)
-  table('schedules', 'profileId,id,planId,revision,timeZone,startWeek,stoppedFrom,createdAt,updatedAt', data.schedules as unknown as Row[])
+  table('schedules', 'profileId,id,planId,revision,timeZone,startWeek,stoppedFrom,createdAt,updatedAt' + (current ? ',durationWeeks,endDate' : ''), data.schedules as unknown as Row[])
+  if (current) table('schedule_duration_changes', 'profileId,scheduleId,id,effectiveFrom,durationWeeks,endDate', data.schedules.flatMap((schedule) => (schedule.durationChanges ?? []).map((change) => ({ ...change, profileId: data.profile.id, scheduleId: schedule.id }))))
   const revisions = table('schedule_revisions', 'profileId,scheduleId,id,revisionOrder,planId,planRevision,planName,effectiveFrom,effectiveUntil,needsRepair,createdAt')
   const assignments = table('schedule_assignments', 'profileId,scheduleId,scheduleRevisionId,assignmentOrder,dayId,weekday')
   const event = 'occurrenceKey,scheduleId,scheduleRevisionId,scheduledDate,scheduledWeek,timeZone'
@@ -38,9 +41,11 @@ export function csvTables(data: BackupData) {
   const snapshotDays = (context: Row, list: TrainingDay[]) => list.forEach((day, d) => {
     const parent = { profileId: data.profile.id, ...context, dayId: day.id, dayOrder: d + 1 }
     days.push({ ...parent, name: day.name })
+    const blocks = [...new Set(day.exercises.map((item) => item.groupId ?? item.id))]
+    for (const group of day.groups ?? []) groups.push({ ...parent, ...group, groupId: group.id, blockOrder: blocks.indexOf(group.id) + 1 })
     day.exercises.forEach((exercise, e) => {
       const link = { ...parent, exerciseOccurrenceId: exercise.id, exerciseOrder: e + 1 }, p = exercise.prescription, source = exercise.source
-      prescriptions.push({ ...link, ...p, sourceKind: source?.kind, sourceId: source?.id, sourceDayId: source?.kind === 'plan' ? source.dayId : undefined, sourceOccurrenceId: source?.kind === 'plan' ? source.occurrenceId : undefined })
+      prescriptions.push({ ...link, ...p, groupId: exercise.groupId, sourceLibraryId: source?.kind === 'exercise' ? source.id : source?.libraryId, sourceKind: source?.kind, sourceId: source?.id, sourceDayId: source?.kind === 'plan' ? source.dayId : undefined, sourceOccurrenceId: source?.kind === 'plan' ? source.occurrenceId : undefined })
       writeSets(prescriptionSets, link, p.sets)
       p.tagNames.forEach((tagName, t) => prescriptionTags.push({ ...link, tagOrder: t + 1, tagName }))
       if (p.notes !== undefined) notes.push({ ...link, noteKind: 'prescription', text: p.notes })

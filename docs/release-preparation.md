@@ -2,11 +2,13 @@
 
 **Not ready to publish.** Phase 10 remains **Verification pending** for photo-backed
 restore in Blob-capable WebKit/Safari. Phase 11 is **In progress: preparation only**.
-The public custom domain additionally fails HTTPS hostname validation from this
-environment. Group 1 now supplies the owner's Ko-fi destination in `.env.production`;
+The owner reports HTTPS resolved and the site working on 2026-10-03; the earlier
+hostname failure below is historical, not a current blocker claim. No independent
+Group 2 production certificate/runtime smoke was performed. Group 1 supplies the owner's Ko-fi destination in `.env.production`;
 its live account content is blocked by a Cloudflare challenge in automation.
-See [Group 1 verification](group1-verification.md) for the current changes, candidate
-and owner-confirmed certificate warning. The artifact/test observations below are
+See [Group 2 verification](group2-verification.md) for the current candidate and
+local checks, and [Group 1 verification](group1-verification.md) for historical TLS
+evidence. The artifact/test observations below are
 the **historical pre-Group-1 preparation**, not verification of the revised build.
 No publication, commit,
 staging, push, tag, DNS change or GitHub settings change was performed.
@@ -128,13 +130,14 @@ profiles; preserve an original exported ZIP before any destructive experiment.
    re-export. Compare canonical records and original photo bytes; verify notes,
    units, schedule completion and the untouched second profile. Record browser/OS
    and results. Do not weaken photo validation to accommodate Windows WebKit.
-2. **Release blockers/inputs:** inspect the existing repository's Pages custom-domain
-   and HTTPS status and resolve the certificate mismatch before trusting the public
-   smoke test. Follow the exact [Group 1 hosting checks](group1-verification.md#separate-owner-hosting-correction).
+2. **Release evidence/inputs:** HTTPS is owner-confirmed resolved. At the next
+   separately authorized release smoke, record the final HTTPS address, normal
+   certificate validation and secure-context/backup APIs without bypassing warnings.
+   The exact capture is in [Group 1 hosting checks](group1-verification.md#separate-owner-hosting-correction).
    Group 1 configures `https://ko-fi.com/jhonatansaldana` in `.env.production`; confirm
    the intended account page in an ordinary browser because automation encounters a
    Cloudflare challenge. Do not bypass either a browser security warning or the
-   challenge to claim a passing live check. Use the current Group 1 fingerprint,
+   challenge to claim a passing live check. Use the current Group 2 fingerprint,
    not the historical preparation fingerprint above, for the next owner release.
 3. **Device checks, still unverified:** on a physical phone in both themes, portrait/
    landscape and enlarged text, edit with the keyboard open and reach Save/Clear
