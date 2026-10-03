@@ -2,7 +2,7 @@
 
 A React / TypeScript / Vite workout tracker. Phases 1-9 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress weight history/charts/photos, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
+Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
 ## Local development
@@ -549,8 +549,8 @@ See TODO.md for exact run results and physical-device/browser checks still pendi
 
 ## Progress weights and photos (Phase 7)
 
-Progress adds dated weights, optional photos, chronological history, and a simple
-SVG chart. Add measurement defaults to the current instant; a local date/time
+Progress provides dated weights, optional photos and a selectable SVG graph.
+The graph is the primary display; its selector exposes every saved measurement. Add measurement defaults to the current instant; a local date/time
 field permits backdating. Edit keeps the entry ID and measured time unless
 **Change measurement date/time** is selected. Confirmed entry deletion removes
 the entry and only its unshared photo. Removing a photo in the editor is staged:
@@ -599,12 +599,13 @@ load only when an editor/viewer opens; previews revoke object URLs on replacemen
 and unmount. Photos are not resized or thumbnailed. Delayed decoding cannot move
 input into another profile.
 
-The chart uses elapsed measurement time horizontally, explicit endpoint dates
-and weight units, and every recorded point, including irregular/repeated dates.
-Coincident points can overlap; history retains every record with accessible exact
-values, canonical kilograms, dates, and record details. Empty and single-entry
-states work in both themes. History reads all profile measurements. Phase 10
-measured a 730-entry history; see its verification record for timings and limits.
+The graph uses actual measured time horizontally, numeric weight ticks in the
+selected unit, angled date labels, and colored points. Click a point, use the
+labeled selector/Previous/Next controls, or focus the graph and use arrows/Home/End.
+Every overlapping entry remains selectable at its real date/value. Selected-entry
+actions retain correction, confirmed deletion and photo viewing. There is no
+visible history/debug dump; all underlying measurements remain in local storage
+and backups. Full photo blobs load only on explicit editor/viewer entry.
 
 Phase 7 checks passed: `npm run build`, `npm run typecheck`, `npm run lint`,
 `git diff --check`, and `npm run test:data` (66/66). Full development and production
@@ -826,8 +827,7 @@ Settings button with an accessible name/tooltip. Both brand images use guarded T
 navigation. Height/weight units stay beside inputs; Age remains separate. Filters
 are compact; displayed date/time values stop at minutes, while stored timestamps,
 time-zone context and backups keep their original precision on unrelated edits.
-That Group 1 handoff predates Groups 2–3 below. Group 4's Progress redesign and
-analytics remain unimplemented. No Group 1 deployment was performed.
+That Group 1 handoff predates Groups 2–4 below. No Group 1 deployment was performed.
 
 ## Group 2: supersets, repeated occurrences and duration
 
@@ -851,8 +851,8 @@ between rounds and after the group before another block. Blank permits manual
 duration; explicit zero means no timed rest. Original member rest prescriptions
 remain stored but are not applied between group members. The existing single
 persistent timer, autosave, Clear, partial/full Save, stale-write guards and frozen
-history remain in use. Saved history represents group rounds without adding
-Group 4 analytics.
+history remain in use. Group 2 established the saved group-round snapshots
+used by Group 4 analytics below.
 
 Database schema stays **v5**, with optional nested additions and no record rewrite.
 Group 2 introduced AI and backup contracts **v2**, with validated v1 compatibility. Backups retain
@@ -875,5 +875,41 @@ remapping; the chosen whole-profile merge precedence also chooses preferences.
 Clear Data clears selections and retains the time zone and units. AI remains v2.
 
 See [Group 3 verification](docs/group3-verification.md) for actual checks and the
-remaining owner checklist. Group 4 Progress redesign is the next implementation
-group. HTTPS remains owner-confirmed resolved; this task does not publish changes.
+remaining owner checklist. Group 4 is described below. HTTPS remains
+owner-confirmed resolved; these tasks do not publish changes.
+
+## Group 4: Progress by body weight, plan and workout
+
+Progress separates Body weight, Plans and Workouts. Scroll or use Previous/Next
+through plan cards, including archived plans with history. Plan views show
+training-day and exercise completions, then exercise/superset drill-downs. The
+alphabetical Workouts grid shows the same statistics across all plans. Names wrap
+in three columns, with two columns below 341px. Back controls remain inside the
+single public address. Refresh returns to Progress's overview, not its drill-down.
+
+Training-day totals count distinct completed scheduled occurrences or unscheduled
+sessions; partial sessions count and retain their marker. Exercise totals count
+each performed occurrence with at least one recorded set. Superset members count
+separately, without counting the group again. Drafts and skipped work do not count.
+Statistics use saved actual results and completion instants, not today's targets,
+scheduled dates or import time. Starting/latest show all set weight/repetition
+pairs from the earliest/latest qualifying session, including repeated occurrences.
+Equal completion times use stable session-ID order. Min/max ties retain the
+first matching set in chronological, occurrence and set order. Zero is valid;
+missing/skipped sets are omitted. Historical kg/lb values compare canonically
+and convert for display without changing saved values. Scheduled completion dates
+use their stored zone; unscheduled sessions use the profile zone because they
+have no historical zone field.
+
+Library IDs and explicit saved plan-occurrence references join exercise history;
+names never do. Unknown legacy links stay separate. Supersets match by ordered
+member identities and multiplicity, retaining historical compositions. Each
+member has its own graph and statistics. Graph point selectors preserve every
+set, even exact overlaps, and link to saved session details/notes. The optional
+additional weight/reps/date graph is deferred. Current statistics are derived
+locally; database v5, backups v3 with v1/v2 imports, and AI v2 are unchanged.
+
+See [Group 4 verification](docs/group4-verification.md) for exact identity rules,
+checks, performance observations and remaining owner checks. Next is integrated
+verification of Groups 1–4 and the final published-version smoke test. Overall
+release acceptance and publication remain separate.

@@ -7,6 +7,13 @@ schema 1 and 2/database v5 backups remain supported through the compatibility pa
 export → import under a new name → export comparison verifies canonical records,
 relationships and original image bytes, with the identity exceptions below.
 
+Group 4 Progress statistics are derived from the existing canonical sessions,
+prescription snapshots, source references and measurements. Graph selection,
+computed counts/extrema, colors and drill-down state are not persisted or added
+to archives. The format and supported v1/v2 imports are unchanged; Group 4 tests
+verify underlying records and derived results through new/replace/both-merge
+restoration. See [Group 4 verification](group4-verification.md) for analytics rules.
+
 ## Archive layout and authority
 
 ```text

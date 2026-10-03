@@ -65,8 +65,8 @@ test('documented larger profile loads, filters, exports and restores within arch
       }); db.close()
     }, stores)
   } finally { await db.delete() }
-  await time('reloadSettingsMs', async () => { await page.reload(); await expect(page.getByLabel('Active profile')).toHaveValue(owner) })
-  await time('train500SessionsMs', async () => { await b('Train').click(); await expect(b('Review session')).toHaveCount(500) })
+  await time('reloadSettingsMs', async () => { await page.reload(); await expect(page.getByRole('combobox', { name: 'Active profile', exact: true })).toHaveValue(owner) })
+  await time('train500SessionsMs', async () => { await b('Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await expect(b('Review session')).toHaveCount(500) })
   await time('create100Exercises20PlansMs', async () => { await b('Create').click(); await expect(page.getByRole('article', { name: 'Exercise 099', exact: true })).toBeVisible() })
   await time('filterExercisesMs', async () => { await page.getByLabel('Search exercises', { exact: true }).fill('099'); await expect(page.locator('.exercise-card').filter({ has: b('View / edit') })).toHaveCount(1) })
   await page.evaluate(() => {
@@ -80,10 +80,15 @@ test('documented larger profile loads, filters, exports and restores within arch
       IDBIndex.prototype[method] = function (...args) { if (this.objectStore.name === 'photos') w.photoReads++; return original.apply(this, args) }
     }
   })
-  await time('progress730MeasurementsMs', async () => { await b('Progress').click(); await expect(page.locator('.measurement-card')).toHaveCount(730) })
+  await time('progress730MeasurementsMs', async () => { await b('Progress').click(); await expect(page.getByRole('combobox', { name: 'Select measurement', exact: true }).locator('option')).toHaveCount(730); await expect(page.locator('.point-chart circle')).toHaveCount(730) })
+  await time('measurementSelectionMs', async () => { await page.getByRole('combobox', { name: 'Select measurement', exact: true }).selectOption({ index: 0 }); await expect(page.locator('.measurement-card h3')).toHaveText('70 kg') })
+  await time('workout75SetsMs', async () => { await page.locator('.workout-progress-grid button').filter({ has: page.getByText('Capacity exercise', { exact: true }) }).first().click(); await expect(page.locator('.exercise-statistics')).toContainText('75 recorded sets') })
+  await time('workoutSetSelectionMs', async () => { await page.getByRole('combobox', { name: 'Select recorded set for Capacity exercise', exact: true }).selectOption({ index: 0 }); await expect(page.locator('.exercise-statistics .point-chart [role="status"]')).toContainText('Set 1') })
+  expect(await page.locator('.exercise-statistics circle').count()).toBe(75)
+  await time('progressBackMs', async () => { await b('Back to Progress').click(); await expect(page.locator('.workout-progress-grid button')).toHaveCount(180) })
   expect(await page.evaluate(() => (window as unknown as { photoReads: number }).photoReads)).toBe(0)
   expect(await page.locator('.progress-photo').count()).toBe(0)
-  await time('calendarWeekMs', async () => { await b('Calendar').click(); await page.getByLabel('Calendar date', { exact: true }).fill('2025-01-06'); await expect(page.locator('.calendar-event')).toHaveCount(20) })
+  await time('calendarWeekMs', async () => { await b('Calendar').click(); await b('Week').click(); await page.getByLabel('Calendar date', { exact: true }).fill('2025-01-06'); await expect(page.locator('.calendar-event')).toHaveCount(20) })
   await time('calendarMonthMs', async () => { await b('Month').click(); await expect(page.getByLabel('month calendar')).toBeVisible(); await expect(page.locator('.calendar-event').first()).toBeVisible() })
   expect(await page.locator('.calendar-day').count()).toBeLessThanOrEqual(42)
   await b('Settings').click(); await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
@@ -97,10 +102,10 @@ test('documented larger profile loads, filters, exports and restores within arch
   await page.getByRole('checkbox', { name: /^I confirm/ }).check()
   await time('commitRestoreMs', async () => { await b('Confirm and save').click(); await expect(page.getByText(/Changes are saved locally\./)).toBeVisible({ timeout: 60000 }) })
   await page.reload(); await expect(page.locator('input[name="name"]')).toHaveValue('Capacity restored')
-  const restoredOwner = await page.getByLabel('Active profile').inputValue()
+  const restoredOwner = await page.getByRole('combobox', { name: 'Active profile', exact: true }).inputValue()
   // Sparse File avoids allocating 64 MiB in the test protocol; UI must reject before reading.
   await page.getByLabel('Backup ZIP').evaluate((node: HTMLInputElement) => { const transfer = new DataTransfer(); const file = new File(['x'], 'too-large.zip', { type: 'application/zip' }); Object.defineProperty(file, 'size', { value: 64 * 1024 * 1024 + 1 }); transfer.items.add(file); node.files = transfer.files; node.dispatchEvent(new Event('change', { bubbles: true })) })
-  await expect(page.getByRole('alert')).toContainText('up to 64 MiB'); await expect(page.getByLabel('Active profile')).toHaveValue(restoredOwner)
+  await expect(page.getByRole('alert')).toContainText('up to 64 MiB'); await expect(page.getByRole('combobox', { name: 'Active profile', exact: true })).toHaveValue(restoredOwner)
   const result = { browser: browser.version(), os: process.platform, cpu: cpus()[0].model, ramGiB: Math.round(totalmem() / 1024 ** 3), counts: manifest.counts, imageDimensions: '1280x960', imageBytes: images.map((s) => Buffer.from(s, 'base64').length), zipBytes: bytes!.length, expandedBytes: manifest.inventory.reduce((n, item) => n + item.bytes, 0), timings }
   await info.attach('capacity-observations.json', { body: JSON.stringify(result, null, 2), contentType: 'application/json' })
   console.log(JSON.stringify(result))

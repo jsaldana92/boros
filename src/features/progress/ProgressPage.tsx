@@ -1,3 +1,4 @@
+import { WorkoutProgress } from './WorkoutProgress'
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
@@ -16,6 +17,7 @@ export function ProgressPage() {
 function ProgressWorkspace() {
   const { snapshot, allowLeave } = useWorkspace(), profileId = snapshot.profile.id, unit = snapshot.profile.weightUnit
   const [editor, setEditor] = useState<{ initial?: Measurement }>(), [remove, setRemove] = useState<Measurement>(), [photo, setPhoto] = useState<Measurement>()
+  const [selectedId, setSelectedId] = useState<string>()
   const [status, setStatus] = useState(''), [error, setError] = useState(''), [attempt, setAttempt] = useState(0), [busy, setBusy] = useState(false), lock = useRef(false)
   const deleted = useRef(false)
   // Passive effects run after the dialog's cleanup has restored its trigger.
@@ -25,6 +27,7 @@ function ProgressWorkspace() {
     try { return { entries: await measurements.list(profileId), error: '' } }
     catch (error) { return { error: (error as Error).message } }
   }, [profileId, attempt])
+  const selected = result?.entries?.find((entry) => entry.id === selectedId) ?? result?.entries?.at(-1)
   const focus = () => requestAnimationFrame(() => document.getElementById('progress-heading')?.focus())
   const cancel = () => { if (allowLeave()) { setEditor(undefined); focus() } }
   const deleteEntry = async () => {
@@ -35,22 +38,21 @@ function ProgressWorkspace() {
     finally { lock.current = false; setBusy(false) }
   }
   return <><h1 id="progress-heading" tabIndex={-1}>Progress</h1>
+    <section className="progress-section" aria-labelledby="body-weight-heading"><h2 id="body-weight-heading">Body weight</h2>
     <p className="current-weight" role="status">{snapshot.measurement ? `Current weight: ${displayNumber(fromKg(snapshot.measurement.weightKg, unit))} ${unit}` : 'No recorded weight.'}</p>
     {editor ? <MeasurementEditor profileId={profileId} preferredUnit={unit} initial={editor.initial} onClose={cancel} onSaved={() => { setEditor(undefined); setStatus('Measurement saved.'); focus() }} /> : <>
       <button className="primary" onClick={() => { setEditor({}); setStatus(''); setError('') }}>Add measurement</button><p role="status">{status}</p>
       {!result && <p role="status">Loading measurements…</p>}
       {result?.error && <p role="alert">Could not load measurements. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry progress</button></p>}
-      {result?.entries && <><WeightChart entries={result.entries} unit={unit} /><h2>Measurement history</h2><p className="muted">Oldest to newest by measured time. Current weight comes from the latest measurement.</p>
-        {!result.entries.length && <p>No measurements yet. Add your first weight.</p>}
-        {result.entries.map((entry) => <article className="exercise-card measurement-card" key={entry.id} aria-label={`${displayNumber(fromKg(entry.weightKg, unit))} ${unit}, ${measurementDateLabel(entry)}`}>
-          <h3>{displayNumber(fromKg(entry.weightKg, unit))} {unit}</h3><p>Measured: <time dateTime={entry.measuredAt}>{measurementDateLabel(entry)}</time></p>
-          <details><summary>Exact values and record details</summary><p>Weight: {fromKg(entry.weightKg, unit)} {unit} · Canonical: {entry.weightKg} kg</p><p>Measured (UTC): {displayDateTime(entry.measuredAt, 'UTC')}<br />Created: {displayDateTime(entry.loggedAt)}<br />Updated: {displayDateTime(entry.updatedAt ?? entry.loggedAt)}<br />Entry ID: {entry.id}</p></details>
-          <div className="actions"><button onClick={() => { setEditor({ initial: entry }); setStatus(''); setError('') }}>Edit measurement</button>{entry.photoId && <button onClick={() => setPhoto(entry)}>View progress photo</button>}<button onClick={() => { setRemove(entry); setError('') }}>Delete measurement</button></div>
-        </article>)}
-      </>}
+      {result?.entries && <WeightChart entries={result.entries} unit={unit} selectedId={selected?.id} onSelect={setSelectedId} />}
+      {selected && <article className="measurement-card" aria-label="Selected measurement">
+        <h3>{displayNumber(fromKg(selected.weightKg, unit))} {unit}</h3><p>Measured: <time dateTime={selected.measuredAt}>{measurementDateLabel(selected)}</time></p>
+        <div className="actions"><button onClick={() => { setEditor({ initial: selected }); setStatus(''); setError('') }}>Edit measurement</button>{selected.photoId && <button onClick={() => setPhoto(selected)}>View progress photo</button>}<button onClick={() => { setRemove(selected); setError('') }}>Delete measurement</button></div>
+      </article>}
     </>}
+    </section>
+    {!editor && <WorkoutProgress />}
     {remove && <ConfirmDialog title="Delete measurement?" confirmLabel={busy ? 'Deleting…' : 'Delete entry and its photo'} onCancel={() => { if (!busy) { setRemove(undefined); setError('') } }} onConfirm={() => void deleteEntry()}><p>Delete {displayNumber(fromKg(remove.weightKg, unit))} {unit}, measured {measurementDateLabel(remove)}? This removes the whole entry and its unshared photo. Photos used by another entry or an avatar remain. Current weight will be recalculated from the remaining measurements.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
     {photo && <ConfirmDialog title="Progress photo" confirmLabel="Close photo" onCancel={() => setPhoto(undefined)} onConfirm={() => setPhoto(undefined)}><p>{measurementDateLabel(photo)}</p><SavedPhoto profileId={profileId} entryId={photo.id} /></ConfirmDialog>}
   </>
 }
-import { displayDateTime } from '../../lib/display-dates'
