@@ -26,12 +26,12 @@ async function fixture(page: Page, seed = true) {
     await db.drafts.put(localLog.draft); await db.sessions.put(localLog.session)
     await db.drafts.update([f.id, f.savedDraft.id], { input: { ...f.savedDraft.input, notes: 'Device draft notes' } })
     const stores = await Promise.all(db.tables.map(async (table) => ({ name: table.name, records: await Promise.all((await table.toArray()).map(async (record) => record.blob ? { ...record, blob: undefined, image: { type: record.blob.type, bytes: [...new Uint8Array(await record.blob.arrayBuffer())] } } : record)) })))
-    await page.goto('./'); await button(page, 'Settings').click(); if (await button(page, 'Understood').isVisible()) await button(page, 'Understood').click()
+    await page.goto('./'); await button(page, 'Settings').click(); await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible(); if (await button(page, 'Understood').isVisible()) await button(page, 'Understood').click()
     if (seed) {
       await page.evaluate(async (stores) => {
         const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('boros'); request.onsuccess = () => resolve(request.result) })
         await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(stores.map((s) => s.name), 'readwrite'); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error)
+          const tx = db.transaction(stores.map((s) => s.name), 'readwrite'); tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error); tx.onerror = (event) => reject((event.target as IDBRequest).error ?? tx.error)
           for (const store of stores) for (const item of store.records) { const { image, ...record } = item; if (image) record.blob = new Blob([new Uint8Array(image.bytes)], { type: image.type }); if (store.name === 'settings') record.noticeAccepted = true; tx.objectStore(store.name).put(record) }
         }); db.close()
       }, stores)

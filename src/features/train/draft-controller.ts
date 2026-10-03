@@ -74,6 +74,9 @@ export class DraftController {
   startTimer(exerciseId: string, setIndex: number, seconds?: number) {
     return this.command(() => this.service.startTimer(this.record.profileId, this.record.id, this.record.revision, exerciseId, setIndex, seconds))
   }
+  startGroupTimer(groupId: string, round: number, seconds?: number) {
+    return this.command(() => this.service.startGroupTimer(this.record.profileId, this.record.id, this.record.revision, groupId, round, seconds))
+  }
   changeTimer(token: string, action: 'stop' | 'reset') {
     return this.command(() => this.service.changeTimer(this.record.profileId, this.record.id, token, action))
   }

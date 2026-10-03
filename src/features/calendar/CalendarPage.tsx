@@ -1,3 +1,4 @@
+import { createId } from '../../lib/browser-crypto.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
@@ -6,7 +7,7 @@ import { ScreenButton } from '../../app/ScreenButton'
 import { schedules, type CalendarEvent, type ChangePreview } from '../../db/schedules'
 import { sessions } from '../../db/sessions'
 import { dateRange, addDays, browserZone, localToday, monday, monthStart, nextMonday, validDate, viewRange, weekdays, weekday, type CalendarView } from '../../lib/calendar-dates'
-import { revisionAt, scheduleInputSchema, type Mapping, type Schedule, type ScheduleInput } from '../../schemas/schedule'
+import { revisionAt, scheduleActiveOn, scheduleEnd, scheduleInputSchema, type Mapping, type Schedule, type ScheduleInput } from '../../schemas/schedule'
 import type { Plan } from '../../schemas/plan'
 import { Field } from '../../components/ui/Field'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -19,7 +20,7 @@ export function CalendarPage() {
 function CalendarWorkspace({ profileId }: { profileId: string }) {
   const { allowLeave } = useWorkspace(), { openScreen } = useScreenNavigation()
   const [selection, setSelection] = useState<{ zone?: string; date?: string }>({}), [view, setView] = useState<CalendarView>('week')
-  const [editor, setEditor] = useState<{ plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop' }>()
+  const [editor, setEditor] = useState<{ plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop' | 'duration' }>()
   const [error, setError] = useState(''), [attempt, setAttempt] = useState(0), [busy, setBusy] = useState(false)
   const library = useLiveQuery(async () => {
     try { return { data: await schedules.library(profileId), error: '' } }
@@ -62,7 +63,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
             {(data?.schedules.filter((item) => item.timeZone === zone).length ?? 0) > 1 && <span>Schedule {event.ref.scheduleId.slice(0, 8)}</span>}
             {event.retained && <span>Kept original session</span>}
           </button>)}
-          {data?.schedules.filter((item) => item.timeZone === zone && day >= item.startWeek && (!item.stoppedFrom || day < item.stoppedFrom)).map((item) => {
+          {data?.schedules.filter((item) => item.timeZone === zone && scheduleActiveOn(item, day)).map((item) => {
             const revision = revisionAt(item, day)
             return revision?.needsRepair ? <p className="muted" key={item.id}>{revision.planName}: mapping needs repair</p> : revision && !revision.mapping.some((assignment) => assignment.weekday === weekday(day)) ? <p className="muted" key={item.id}>{revision.planName}: Rest</p> : null
           })}
@@ -71,9 +72,10 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
       {data && <section aria-label="Schedules"><div className="actions"><button className="primary" disabled={!data.plans.some((plan) => !plan.archivedAt)} onClick={() => setEditor({ kind: 'create', plans: data.plans.filter((plan) => !plan.archivedAt) })}>Add Plan</button>{!data.plans.some((plan) => !plan.archivedAt) && <ScreenButton to="create">Create a plan</ScreenButton>}</div>
         {data.schedules.map((schedule) => <article className="exercise-card" key={schedule.id} aria-label={`Schedule ${schedule.revisions.at(-1)!.planName}`}>
           <h3>{schedule.revisions.at(-1)!.planName}</h3><p>{schedule.timeZone} · Started {schedule.startWeek} · Schedule {schedule.id.slice(0, 8)}</p>
+          <p>{(schedule.durationChanges?.at(-1) ?? schedule).endDate ? `Ends ${(schedule.durationChanges?.at(-1) ?? schedule).endDate} · ${(schedule.durationChanges?.at(-1) ?? schedule).durationWeeks} weeks from the original start` : 'Legacy unbounded schedule'}</p>
           {schedule.stoppedFrom ? <p>Stopped from {schedule.stoppedFrom}. History and started sessions are kept.</p> : <>
             {schedule.revisions.at(-1)!.needsRepair && <p role="status">Plan days changed. Mapping needs repair from {schedule.revisions.at(-1)!.effectiveFrom}. Started sessions are kept.</p>}
-            <div className="actions"><button onClick={() => setEditor({ kind: 'remap', schedule, plans: data.plans })}>Edit mapping / refresh plan</button><button onClick={() => setEditor({ kind: 'stop', schedule, plans: data.plans })}>Stop Scheduling</button></div>
+            <div className="actions"><button onClick={() => setEditor({ kind: 'remap', schedule, plans: data.plans })}>Edit mapping / refresh plan</button><button onClick={() => setEditor({ kind: 'duration', schedule, plans: data.plans })}>Review plan duration</button><button onClick={() => setEditor({ kind: 'stop', schedule, plans: data.plans })}>Stop Scheduling</button></div>
           </>}
         </article>)}
       </section>}
@@ -82,14 +84,14 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   </>
 }
 
-function ScheduleEditor({ profileId, plans, schedule, kind, onCancel, onSaved }: { profileId: string; plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop'; onCancel: () => void; onSaved: (schedule: Schedule) => void }) {
+function ScheduleEditor({ profileId, plans, schedule, kind, onCancel, onSaved }: { profileId: string; plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop' | 'duration'; onCancel: () => void; onSaved: (schedule: Schedule) => void }) {
   const { setDirty } = useWorkspace()
   const [planId, setPlanId] = useState(schedule?.planId ?? plans[0]?.id ?? '')
   const plan = plans.find((item) => item.id === planId), [zone] = useState(() => schedule?.timeZone ?? browserZone())
   const initialDate = kind === 'create' ? monday(localToday(zone)) : [nextMonday(localToday(zone)), schedule!.startWeek].sort().at(-1)!
   const [date, setDate] = useState(initialDate), [mapping, setMapping] = useState<Mapping>(() => plan?.days.map((day, index) => ({ dayId: day.id, weekday: schedule?.revisions.at(-1)?.mapping.find((item) => item.dayId === day.id)?.weekday ?? index })) ?? [])
   const [preview, setPreview] = useState<{ create?: ScheduleInput; change?: ChangePreview }>(), [keep, setKeep] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false)
-  const lock = useRef(false), [creationId] = useState(() => crypto.randomUUID()), heading = useRef<HTMLHeadingElement>(null)
+  const lock = useRef(false), [creationId] = useState(() => createId()), heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus(); setDirty(true); return () => setDirty(false) }, [setDirty])
   const act = async (work: () => Promise<void>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(''); try { await work() } catch (error) { setError(message(error)) } finally { lock.current = false; setBusy(false) } }
   const prepare = () => act(async () => {
@@ -98,6 +100,7 @@ function ScheduleEditor({ profileId, plans, schedule, kind, onCancel, onSaved }:
     if (kind === 'create') {
       const parsed = scheduleInputSchema.safeParse({ planId, planRevision: plan.revision, startWeek: date, timeZone: zone, mapping })
       if (!parsed.success) throw new Error(parsed.error.issues.map((item) => item.message).join(' '))
+      scheduleEnd(date, plan.durationWeeks)
       setPreview({ create: parsed.data })
     } else setPreview({ change: await schedules.preview(profileId, { scheduleId: schedule!.id, revision: schedule!.revision, effectiveFrom: date, kind, mapping }) })
   })
@@ -107,18 +110,20 @@ function ScheduleEditor({ profileId, plans, schedule, kind, onCancel, onSaved }:
   })
   return <section className="schedule-editor"><h2 ref={heading} tabIndex={-1}>{kind === 'create' ? 'Add Plan' : kind === 'stop' ? 'Stop Scheduling' : 'Edit schedule'}</h2>
     <p>{zone} · Weeks run Monday–Sunday.</p>
-    <p>{kind === 'create' ? 'Repeats weekly until stopped. Plan names do not set a duration.' : 'Past dates and saved sessions stay unchanged. Started sessions keep their original dates and prescriptions.'}</p>
+    <p>{kind === 'create' ? plan?.durationWeeks === undefined ? 'Legacy plan: repeats weekly until stopped. No duration was invented.' : `Repeats for ${plan.durationWeeks} calendar weeks from the selected Monday.` : 'Past dates and saved sessions stay unchanged. Started sessions keep their original dates and prescriptions.'}</p>
+    {kind === 'duration' && <p>Apply the current plan duration from the effective Monday onward. The boundary stays anchored to {schedule?.startWeek}; earlier missed dates remain incomplete. Review the resulting end date before confirming.</p>}
     {kind === 'remap' && <p>This revision copies the current plan. Prescription changes take effect only from the selected Monday.</p>}
     <form onSubmit={(e) => { e.preventDefault(); void prepare() }}><fieldset disabled={busy}>
       <label htmlFor="schedule-plan">Schedule plan</label><select id="schedule-plan" disabled={kind !== 'create'} value={planId} onChange={(e) => { setPlanId(e.target.value); setMapping(plans.find((item) => item.id === e.target.value)!.days.map((day, index) => ({ dayId: day.id, weekday: index }))) }}>{plans.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <Field label={kind === 'create' ? 'Starting week (Monday)' : 'Effective from'} type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-      {kind !== 'stop' && plan?.days.map((day) => <div key={day.id}><label htmlFor={`mapping-${day.id}`}>{day.name} weekday</label><select id={`mapping-${day.id}`} value={mapping.find((item) => item.dayId === day.id)?.weekday ?? ''} onChange={(e) => setMapping(mapping.map((item) => item.dayId === day.id ? { ...item, weekday: Number(e.target.value) } : item))}>{weekdays.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></div>)}
+      {(kind === 'create' || kind === 'remap') && plan?.days.map((day) => <div key={day.id}><label htmlFor={`mapping-${day.id}`}>{day.name} weekday</label><select id={`mapping-${day.id}`} value={mapping.find((item) => item.dayId === day.id)?.weekday ?? ''} onChange={(e) => setMapping(mapping.map((item) => item.dayId === day.id ? { ...item, weekday: Number(e.target.value) } : item))}>{weekdays.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></div>)}
       <div className="actions"><button type="button" onClick={onCancel}>Cancel</button><button id="preview-schedule" className="primary" type="submit">Preview schedule</button></div>
     </fieldset></form>
     {!preview && error && <p role="alert">{error}</p>}
     {preview && <ConfirmDialog title={kind === 'stop' ? 'Confirm stop scheduling' : 'Schedule preview'} confirmLabel={busy ? 'Saving…' : 'Confirm schedule'} onCancel={() => { if (!busy) { setPreview(undefined); setError(''); requestAnimationFrame(() => document.getElementById('preview-schedule')?.focus()) } }} onConfirm={() => { void commit() }}>
       <p>{plan?.name} · {zone}</p><p>{kind === 'stop' ? 'Stop from' : 'Effective from'} {date}.</p>
-      {kind === 'stop' ? <p>Future unstarted occurrences from this date disappear. Earlier dates, saved sessions, and already-started sessions remain.</p> : <ul>{weekdays.map((name, index) => <li key={name}>{name}: {plan?.days.find((day) => mapping.some((item) => item.dayId === day.id && item.weekday === index))?.name ?? 'Rest'}</li>)}</ul>}
+      {kind !== 'stop' && <p>Start week: {preview.create?.startWeek ?? preview.change?.startWeek}. End date (inclusive): {(preview.create ? scheduleEnd(preview.create.startWeek, plan?.durationWeeks) : preview.change?.endDate) ?? 'Unbounded'}. {kind === 'remap' && 'Saved schedule duration is unchanged.'}</p>}
+      {kind === 'stop' ? <p>Future unstarted occurrences from this date disappear. Earlier dates, saved sessions, and already-started sessions remain.</p> : kind === 'duration' ? <p>Only the schedule duration changes. Mapping and prescriptions stay unchanged. Dates beyond the boundary disappear only from the effective date onward; started/completed sessions remain.</p> : <ul>{weekdays.map((name, index) => <li key={name}>{name}: {plan?.days.find((day) => mapping.some((item) => item.dayId === day.id && item.weekday === index))?.name ?? 'Rest'}</li>)}</ul>}
       {!!preview.change?.conflicts.length && <><p>These started sessions are affected:</p><ul>{preview.change.conflicts.map((item) => <li key={item.id}>{item.date}: {item.name}</li>)}</ul><label className="check-label"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />Keep these sessions on their original dates, with all entered data.</label></>}
       {error && <p role="alert">{error}</p>}
     </ConfirmDialog>}

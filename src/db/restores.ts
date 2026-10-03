@@ -1,3 +1,4 @@
+import { createId } from '../lib/browser-crypto.ts'
 import { db, type BorosDatabase } from './database.ts'
 import Dexie from 'dexie'
 import { captureProfile } from './backups.ts'
@@ -23,7 +24,7 @@ export function restoreService(database: BorosDatabase, decodePhoto = decodeBack
       const displayName = choice === 'new' ? newName ?? backup!.data.profile.name : match?.name ?? ''
       if (choice === 'new' && await database.profiles.where('nameKey').equals(nameKey(displayName)).first()) throw new Error('A profile with that normalized name already exists. Enter an unused name.')
       const snapshot = targetId ? await captureProfile(targetId, database) : undefined
-      const plan = await buildRestorePlan(backup, snapshot, choice, crypto.randomUUID(), displayName, new Date().toISOString())
+      const plan = await buildRestorePlan(backup, snapshot, choice, createId(), displayName, new Date().toISOString())
       // Image decode and Blob reads finish before the write transaction.
       for (const photo of plan.result.photos) await decodePhoto(photo)
       prepared.set(plan, structuredClone(plan)); return plan

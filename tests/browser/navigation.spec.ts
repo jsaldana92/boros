@@ -1,5 +1,18 @@
 import { expect, test, type Page } from '@playwright/test'
 
+test('failed screen chunk keeps the last opened preference and navigation usable', async ({ page }) => {
+  await page.goto('./')
+  await expect(page.getByRole('heading', { name: 'Train', exact: true })).toBeVisible()
+  const before = await page.evaluate(() => JSON.stringify(sessionStorage))
+  await page.route(/ProgressPage/, (route) => route.abort())
+  await page.getByRole('button', { name: 'Progress', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('This screen could not open')
+  expect(await page.evaluate(() => JSON.stringify(sessionStorage))).toBe(before)
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
+  await page.reload(); await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
+})
+
 const key = 'boros.navigation.screen'
 const labels = ['Train', 'Create', 'Calendar', 'Progress', 'Settings']
 async function start(page: Page) {
@@ -66,6 +79,7 @@ test('Settings returns internally, refresh loses return history and safely retur
   await page.getByRole('button', { name: 'Return to Calendar', exact: true }).click()
   await expect(heading(page, 'Calendar')).toBeVisible()
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await expect(heading(page, 'Settings')).toBeVisible()
   await page.reload()
   await page.getByRole('button', { name: 'Return to Train', exact: true }).click()
   await expect(heading(page, 'Train')).toBeVisible()
@@ -131,6 +145,7 @@ test('browser Back leaves Boros; legacy cleanup replaces entry; dirty unload can
   expect(await page.evaluate(() => history.length)).toBe(before + 1)
   await page.getByRole('button', { name: 'Calendar', exact: true }).click()
   await page.getByRole('button', { name: 'Progress', exact: true }).click()
+  await expect(heading(page, 'Progress')).toBeVisible()
   await page.goBack()
   await expect(heading(page, 'Outside Boros')).toBeVisible()
   await page.goForward()
@@ -138,10 +153,10 @@ test('browser Back leaves Boros; legacy cleanup replaces entry; dirty unload can
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await page.getByRole('button', { name: 'Create Workout', exact: true }).click()
   await page.getByLabel('Exercise name', { exact: true }).fill('Keep this draft')
-  let dialogType = ''
-  page.once('dialog', async (dialog) => { dialogType = dialog.type(); await dialog.dismiss() })
-  await page.goto(outside).catch(() => undefined)
-  expect(dialogType).toBe('beforeunload')
+  const leaving = page.waitForEvent('dialog')
+  await page.evaluate((url) => { setTimeout(() => location.assign(url), 0) }, outside)
+  const warning = await leaving
+  expect(warning.type()).toBe('beforeunload'); await warning.dismiss()
   await expect(page.getByLabel('Exercise name', { exact: true })).toHaveValue('Keep this draft')
   expect(await page.evaluate((key) => sessionStorage.getItem(key), key)).toBe('create')
 })

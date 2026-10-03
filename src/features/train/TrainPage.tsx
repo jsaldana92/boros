@@ -1,3 +1,4 @@
+import { displayDateTime } from '../../lib/display-dates'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Info, NotebookPen } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -60,7 +61,7 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
             </fieldset>}
             <h2 className="library-heading">Saved sessions</h2>
             {!data.sessions.length && <p className="muted">No saved sessions.</p>}
-            {data.sessions.map((session) => <article className="exercise-card" key={session.id} aria-label={`Session ${session.planName} / ${session.day.name}`}><h3>{session.planName} / {session.day.name}</h3><p>{session.partial ? 'Partial session' : 'Complete session'} · {new Date(session.completedAt).toLocaleString()}</p><button onClick={() => { setReview(session); focus() }}>Review session</button></article>)}
+            {data.sessions.map((session) => <article className="exercise-card" key={session.id} aria-label={`Session ${session.planName} / ${session.day.name}`}><h3>{session.planName} / {session.day.name}</h3><p>{session.partial ? 'Partial session' : 'Complete session'} · {displayDateTime(session.completedAt)}</p><button onClick={() => { setReview(session); focus() }}>Review session</button></article>)}
           </>}
         </>}
     {error && <p role="alert">{error}</p>}
@@ -153,7 +154,7 @@ function TimerDisplay({ timer, disabled, onAction }: { timer: RestTimer; disable
 }
 function SessionReview({ session, onClose }: { session: CompletedSession; onClose: () => void }) {
   const [info, setInfo] = useState<ExerciseInput>()
-  return <section aria-label="Saved session details"><h2>{session.planName} / {session.day.name}</h2><p>{session.partial ? 'Partial session' : 'Complete session'}</p>{session.occurrence && <p>Scheduled: {session.occurrence.scheduledDate} · Week of {session.occurrence.scheduledWeek} · {session.occurrence.timeZone} · Completed</p>}<p>Started: {session.startedAt}<br />Completed: {session.completedAt}<br />Logged: {session.loggedAt}</p><p className="plain-text">Session note: {session.notes || 'None'}</p>
+  return <section aria-label="Saved session details"><h2>{session.planName} / {session.day.name}</h2><p>{session.partial ? 'Partial session' : 'Complete session'}</p>{session.occurrence && <p>Scheduled: {session.occurrence.scheduledDate} · Week of {session.occurrence.scheduledWeek} · {session.occurrence.timeZone} · Completed</p>}<p>Started: {displayDateTime(session.startedAt)}<br />Completed: {displayDateTime(session.completedAt)}<br />Logged: {displayDateTime(session.loggedAt)}</p><p className="plain-text">Session note: {session.notes || 'None'}</p>
     {session.day.exercises.map((exercise, e) => <section className="training-exercise" key={exercise.id}><div className="training-heading"><h3>{exercise.prescription.name}</h3><button aria-label={`Information for ${exercise.prescription.name}`} onClick={() => setInfo(exercise.prescription)}><Info aria-hidden="true" size={20} /></button></div><p className="plain-text">Exercise note: {session.exercises[e].notes || 'None'}</p><p className="muted">Rest between sets: {exercise.prescription.restBetweenSeconds ?? 'unspecified'} seconds · After exercise: {exercise.prescription.restAfterSeconds ?? 'unspecified'} seconds</p><ol>{session.exercises[e].sets.map((set, s) => <li key={s}>Set {s + 1}: {set.skipped ? 'Skipped' : `${set.load} ${set.unit} · ${set.reps} reps · ${set.rir === undefined ? 'unspecified' : set.rir} actual RIR`}<p className="muted">Target: {target(exercise.prescription.sets[s].reps)} reps · {target(exercise.prescription.sets[s].rir)} RIR</p></li>)}</ol></section>)}
     {info && <ConfirmDialog title={info.name} confirmLabel="Close" onConfirm={() => setInfo(undefined)} onCancel={() => setInfo(undefined)}><p className="plain-text">{info.instructions || 'No instructions.'}</p><p className="plain-text">Prescription note: {info.notes || 'None'}</p>{info.tutorialUrl && isYouTubeUrl(info.tutorialUrl) && <a className="tutorial-link" href={info.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial</a>}</ConfirmDialog>}
     <button onClick={onClose}>Back to training days</button><p className="muted">To train again, return to training days and deliberately start another session.</p>

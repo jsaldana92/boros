@@ -1,3 +1,4 @@
+import { createId } from '../lib/browser-crypto.ts'
 import { type BorosDatabase, db } from './database.ts'
 import { nameKey, photoSchema, profileInputSchema, themeSchema, workspaceSettingsSchema } from '../schemas/profile.ts'
 import { appendSettingsWeight, latestMeasurement } from './measurements.ts'
@@ -23,6 +24,9 @@ export function profileService(database: BorosDatabase) {
   }
   return {
     async initialize() {
+      // Probe support before opening any editor or writing initialization records.
+      // The probe is discarded; existing ownership IDs are never regenerated.
+      createId()
       await database.open()
       return database.transaction('rw', database.tables, async () => {
         const settings = await database.settings.get('workspace')
@@ -35,7 +39,7 @@ export function profileService(database: BorosDatabase) {
           throw new Error('Workspace settings are missing but records exist. No data was replaced. Keep this browser data and seek recovery assistance.')
         }
         const now = new Date().toISOString()
-        const guest: Profile = { id: crypto.randomUUID(), kind: 'guest', name: 'Guest', nameKey: nameKey('Guest'), weightUnit: 'kg', heightUnit: 'cm', revision: 1, createdAt: now, updatedAt: now }
+        const guest: Profile = { id: createId(), kind: 'guest', name: 'Guest', nameKey: nameKey('Guest'), weightUnit: 'kg', heightUnit: 'cm', revision: 1, createdAt: now, updatedAt: now }
         await database.profiles.add(guest)
         const initial = { id: 'workspace' as const, activeProfileId: guest.id, theme: 'dark' as const, noticeAccepted: false }
         await database.settings.add(initial)
@@ -72,7 +76,7 @@ export function profileService(database: BorosDatabase) {
       return database.transaction('rw', database.profiles, database.settings, async () => {
         await checkName(input.name)
         const now = new Date().toISOString()
-        const profile: Profile = { id: crypto.randomUUID(), name: input.name, nameKey: nameKey(input.name), kind: 'named', revision: 1, weightUnit: 'kg', heightUnit: 'cm', createdAt: now, updatedAt: now }
+        const profile: Profile = { id: createId(), name: input.name, nameKey: nameKey(input.name), kind: 'named', revision: 1, weightUnit: 'kg', heightUnit: 'cm', createdAt: now, updatedAt: now }
         await database.profiles.add(profile)
         if (!await database.settings.update('workspace', { activeProfileId: profile.id })) throw new Error('Workspace settings are unavailable.')
         return profile
@@ -89,7 +93,7 @@ export function profileService(database: BorosDatabase) {
         const { weightKg, ...fields } = input
         const next: Profile = { ...original, ...fields, name: displayName, nameKey: nameKey(displayName), kind: input.name ? 'named' : original.kind, revision: original.revision + 1, updatedAt: new Date().toISOString() }
         if (photo !== undefined) {
-          next.photoId = photo ? crypto.randomUUID() : undefined
+          next.photoId = photo ? createId() : undefined
           if (photo) await database.photos.add({ ...photo, profileId, id: next.photoId!, createdAt: next.updatedAt, role: 'avatar' })
         }
         if (weightKg !== undefined) await appendSettingsWeight(database, profileId, weightKg)

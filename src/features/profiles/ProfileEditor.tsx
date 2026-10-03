@@ -4,6 +4,7 @@ import { useWorkspace } from '../../app/workspace-context'
 import { displayNumber, fromKg, toKg, type HeightUnit, type PreparedPhoto, type WeightUnit } from '../../schemas/profile'
 import { preparePhoto } from './photos'
 import { Avatar } from './Avatar'
+import { displayDateTime } from '../../lib/display-dates'
 
 function initialForm(snapshot: ProfileSnapshot) {
   const p = snapshot.profile
@@ -89,15 +90,16 @@ export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
       <p className="muted">JPEG, PNG, or WebP. Up to 5 MB and 4096 pixels per side. Stored only in this browser.</p>
       {photoError && <p role="alert">{photoError}</p>}
       {(photo || baseline.photo) && photo !== null && <button type="button" onClick={() => { setPhoto(null); setDirty(true); setStatus('') }}>Remove photo</button>}
-      <div className="field-grid">
-        <label>Age (optional)<input name="age" inputMode="numeric" value={form.age} onChange={(e) => change('age', e.target.value)} /></label>
+      <label className="age-field">Age (optional)<input name="age" inputMode="numeric" value={form.age} onChange={(e) => change('age', e.target.value)} /></label>
+      <div className="measurement-unit-row">
+        {form.heightUnit === 'cm' ? <label>Height (cm, optional)<input inputMode="decimal" value={form.height} onChange={(e) => { change('height', e.target.value); setHeightChanged(true) }} /></label> : <div className="height-parts"><label>Height (feet)<input inputMode="numeric" value={form.feet} onChange={(e) => { change('feet', e.target.value); setHeightChanged(true) }} /></label><label>Height (inches)<input inputMode="decimal" value={form.inches} onChange={(e) => { change('inches', e.target.value); setHeightChanged(true) }} /></label></div>}
         <label>Height unit<select value={form.heightUnit} onChange={(e) => changeHeightUnit(e.target.value as HeightUnit)}><option value="cm">cm</option><option value="ft">ft / in</option></select></label>
-        {form.heightUnit === 'cm' ? <label>Height (cm, optional)<input inputMode="decimal" value={form.height} onChange={(e) => { change('height', e.target.value); setHeightChanged(true) }} /></label> : <div className="field-grid"><label>Height (feet)<input inputMode="numeric" value={form.feet} onChange={(e) => { change('feet', e.target.value); setHeightChanged(true) }} /></label><label>Height (inches)<input inputMode="decimal" value={form.inches} onChange={(e) => { change('inches', e.target.value); setHeightChanged(true) }} /></label></div>}
-        <label>Weight unit<select value={form.weightUnit} onChange={(e) => changeWeightUnit(e.target.value as WeightUnit)}><option value="kg">kg</option><option value="lb">lb</option></select></label>
-        <label>Weight ({form.weightUnit}, optional)<input inputMode="decimal" value={weightChanged ? form.weight : latest.measurement ? displayNumber(fromKg(latest.measurement.weightKg, form.weightUnit)) : ''} onChange={(e) => { change('weight', e.target.value); setWeightChanged(true) }} /></label>
       </div>
-      <p className="muted">A changed weight adds a dated measurement. Blank keeps the previous weight; changing units preserves the measurement.</p>
-      {latest.measurement ? <p className="muted">Last weight recorded: {new Date(latest.measurement.measuredAt).toLocaleString()}</p> : <p className="muted">No recorded weight.</p>}
+      <div className="measurement-unit-row">
+        <label>Weight ({form.weightUnit}, optional)<input inputMode="decimal" value={weightChanged ? form.weight : latest.measurement ? displayNumber(fromKg(latest.measurement.weightKg, form.weightUnit)) : ''} onChange={(e) => { change('weight', e.target.value); setWeightChanged(true) }} /></label>
+        <label>Weight unit<select value={form.weightUnit} onChange={(e) => changeWeightUnit(e.target.value as WeightUnit)}><option value="kg">kg</option><option value="lb">lb</option></select></label>
+      </div>
+      {latest.measurement ? <p className="muted">Last weight recorded: {displayDateTime(latest.measurement.measuredAt)}</p> : <p className="muted">No recorded weight.</p>}
       {error && <p role="alert">{error}</p>}
       <p role="status">{status}</p>
       <div className="actions"><button className="primary" type="submit">{busy ? 'Saving...' : 'Save profile'}</button><button type="button" onClick={() => { if (window.confirm('Discard your unsaved input and load the latest saved profile?')) { reset(latest); setStatus('Latest saved profile loaded.') } }}>Reload saved profile</button></div>

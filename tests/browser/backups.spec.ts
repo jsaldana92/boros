@@ -14,12 +14,12 @@ async function seed(page: Page) {
   try {
     const fixture = await representativeProfile(database)
     const stores = await Promise.all(database.tables.map(async (table) => ({ name: table.name, records: await Promise.all((await table.toArray()).map(async (record) => record.blob ? { ...record, blob: undefined, image: { type: record.blob.type, bytes: Array.from(new Uint8Array(await record.blob.arrayBuffer())) } } : record)) })))
-    await page.goto('./'); await button(page, 'Settings').click(); const notice = button(page, 'Understood'); if (await notice.isVisible()) await notice.click()
+    await page.goto('./'); await button(page, 'Settings').click(); await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible(); const notice = button(page, 'Understood'); if (await notice.isVisible()) await notice.click()
     await page.evaluate(async (stores) => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('boros'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error) })
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(stores.map((store) => store.name), 'readwrite')
-        tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error)
+        tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error); tx.onerror = (event) => reject((event.target as IDBRequest).error ?? tx.error)
         for (const store of stores) for (const item of store.records) { const { image, ...record } = item; if (image) record.blob = new Blob([new Uint8Array(image.bytes)], { type: image.type }); if (store.name === 'settings') record.noticeAccepted = true; tx.objectStore(store.name).put(record) }
       }); db.close()
     }, stores)

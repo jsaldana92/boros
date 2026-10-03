@@ -3,6 +3,7 @@ import { useWorkspace } from '../../app/workspace-context'
 import { captureProfile } from '../../db/backups'
 import packageInfo from '../../../package.json'
 import { startDownload } from './download'
+import { requireBackupCrypto } from '../../lib/browser-crypto'
 
 export function DownloadData() {
   const { snapshot, dirty } = useWorkspace()
@@ -19,10 +20,11 @@ export function DownloadData() {
     locked.current = true; setBusy(true); setStatus(`Reading saved data for ${name}`)
     const fail = (message: string) => { if (ticket.current !== request) return; worker.current?.terminate(); worker.current = undefined; locked.current = false; setBusy(false); setError(`Export failed. ${message} No download was started; saved data is unchanged.`); setStatus('') }
     try {
+      requireBackupCrypto()
       const captured = await captureProfile(profileId)
       if (ticket.current !== request) return
       const task = new Worker(new URL('./export.worker.ts', import.meta.url), { type: 'module' }); worker.current = task
-      task.onerror = () => fail('The export worker could not run. Retry, and check browser storage/download permissions.')
+      task.onerror = () => fail('The export worker could not load or run. Check the connection and browser worker support, then retry.')
       task.onmessage = (event: MessageEvent<{ kind: string; message: string; filename: string; blob: Blob }>) => {
         if (ticket.current !== request) return
         const result = event.data
@@ -41,7 +43,7 @@ export function DownloadData() {
     <p>The ZIP contains personal records and photos. It is not password-protected. Use Upload data below to validate and preview a restore.</p>
     <p id="export-scope">Only committed records are included. Save edits and Apply notes, then wait for “Draft saved locally” in every training tab. Pending or failed autosaves and unsaved forms are excluded; Boros cannot flush another tab’s input.</p>
     <label className="check-label"><input type="checkbox" checked={acknowledged} disabled={busy} onChange={(event) => setAcknowledged(event.target.checked)} />I understand this exports saved data only.</label>
-    <p className="muted">Preparation runs locally. Leaving Settings or switching profiles cancels preparation. Large exports need browser memory; capacity has not been benchmarked.</p>
+    <p className="muted">Preparation runs locally. Leaving Settings or switching profiles cancels preparation. Large exports need browser memory; available capacity depends on your device.</p>
     <div className="actions"><button type="button" className="primary" aria-describedby="export-scope" disabled={busy} onClick={() => void download()}>{busy ? 'Preparing export…' : 'Download data'}</button>{busy && <button type="button" onClick={cancel}>Cancel export</button>}</div>
     <p role="status" aria-live="polite">{status}</p>{error && <p role="alert">{error}</p>}
   </div>

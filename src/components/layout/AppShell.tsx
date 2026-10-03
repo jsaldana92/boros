@@ -6,7 +6,6 @@ import { pages } from '../../app/pages'
 import { useWorkspace } from '../../app/workspace-context'
 import { Avatar } from '../../features/profiles/Avatar'
 import { StorageNotice } from '../../features/profiles/StorageNotice'
-import { Ouroboros } from './Ouroboros'
 
 export function AppShell() {
   const { screen } = useScreenNavigation()
@@ -22,15 +21,32 @@ export function AppShell() {
       previousPath.current = pathname
     }
   }, [pathname])
-  return <div className="app-shell">
+  return <div className="app-shell" onClickCapture={(event) => {
+    // WebKit does not focus pointer-clicked buttons by default. Give dialogs
+    // the actual invoking control to restore, rather than a previous input.
+    const button = (event.target as Element).closest('button')
+    if (button && !button.disabled) button.focus({ preventScroll: true })
+  }}>
     <button type="button" className="skip-link" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView() }}>Skip to content</button>
     <header className="app-header">
-      <ScreenButton to="train" className="brand" aria-label="Boros home"><Ouroboros /><span><strong>Boros</strong><small>Ask not for a lighter burden</small></span></ScreenButton>
-      <ScreenButton to="settings" className="profile-link" aria-label="Settings" title={workspace.snapshot.profile.name}>
-        <Avatar blob={workspace.snapshot.photo?.blob} name={workspace.snapshot.profile.name} /><span className="profile-label"><strong>{workspace.snapshot.profile.name}</strong><small>Settings</small></span>
+      <ScreenButton to="train" className="brand" aria-label="Boros home" title="Return to Train"><img className="brand-snake" src={`${import.meta.env.BASE_URL}snake.png`} alt="Ouroboros: a snake eating its tail" /><span><img className="brand-wordmark" src={`${import.meta.env.BASE_URL}logo.png`} alt="Boros" /><small>Ask not for a lighter burden</small></span></ScreenButton>
+      <ScreenButton to="settings" className="profile-link" aria-label="Settings" title="Settings">
+        <Avatar blob={workspace.snapshot.photo?.blob} name={workspace.snapshot.profile.name} />
       </ScreenButton>
     </header>
-    <main id="main-content" ref={mainRef} tabIndex={-1} className="main-content">
+    <main id="main-content" ref={mainRef} tabIndex={-1} className="main-content" onFocusCapture={(event) => {
+      const control = event.target as HTMLElement
+      if (!control.matches('input, textarea, select, button') || control.closest('dialog, .session-actions')) return
+      // Native focus scrolling does not consistently honor scroll-margin in
+      // every engine. Keep focused fields above the fixed actions/navigation.
+      requestAnimationFrame(() => {
+        if (document.activeElement !== control) return
+        const rect = control.getBoundingClientRect()
+        const boundary = document.querySelector('.session-actions') ?? document.querySelector('.main-nav')
+        const bottom = Math.min(boundary?.getBoundingClientRect().top ?? innerHeight, (visualViewport?.height ?? innerHeight) + (visualViewport?.offsetTop ?? 0))
+        if (rect.bottom > bottom - 8 || rect.top < 0) control.scrollIntoView({ block: 'center' })
+      })
+    }}>
       {!workspace.noticeAccepted && <StorageNotice />}
       <Outlet />
     </main>

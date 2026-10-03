@@ -44,7 +44,7 @@ function ProgressWorkspace() {
         {!result.entries.length && <p>No measurements yet. Add your first weight.</p>}
         {result.entries.map((entry) => <article className="exercise-card measurement-card" key={entry.id} aria-label={`${displayNumber(fromKg(entry.weightKg, unit))} ${unit}, ${measurementDateLabel(entry)}`}>
           <h3>{displayNumber(fromKg(entry.weightKg, unit))} {unit}</h3><p>Measured: <time dateTime={entry.measuredAt}>{measurementDateLabel(entry)}</time></p>
-          <details><summary>Exact values and record details</summary><p>Weight: {fromKg(entry.weightKg, unit)} {unit} · Canonical: {entry.weightKg} kg</p><p>Measured instant (UTC): {entry.measuredAt}<br />Created: {entry.loggedAt}<br />Updated: {entry.updatedAt ?? entry.loggedAt}<br />Entry ID: {entry.id}</p></details>
+          <details><summary>Exact values and record details</summary><p>Weight: {fromKg(entry.weightKg, unit)} {unit} · Canonical: {entry.weightKg} kg</p><p>Measured (UTC): {displayDateTime(entry.measuredAt, 'UTC')}<br />Created: {displayDateTime(entry.loggedAt)}<br />Updated: {displayDateTime(entry.updatedAt ?? entry.loggedAt)}<br />Entry ID: {entry.id}</p></details>
           <div className="actions"><button onClick={() => { setEditor({ initial: entry }); setStatus(''); setError('') }}>Edit measurement</button>{entry.photoId && <button onClick={() => setPhoto(entry)}>View progress photo</button>}<button onClick={() => { setRemove(entry); setError('') }}>Delete measurement</button></div>
         </article>)}
       </>}
@@ -53,3 +53,4 @@ function ProgressWorkspace() {
     {photo && <ConfirmDialog title="Progress photo" confirmLabel="Close photo" onCancel={() => setPhoto(undefined)} onConfirm={() => setPhoto(undefined)}><p>{measurementDateLabel(photo)}</p><SavedPhoto profileId={profileId} entryId={photo.id} /></ConfirmDialog>}
   </>
 }
+import { displayDateTime } from '../../lib/display-dates'

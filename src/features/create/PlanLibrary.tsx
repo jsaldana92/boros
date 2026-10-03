@@ -1,3 +1,5 @@
+import { displayDateTime } from '../../lib/display-dates'
+import { createId } from '../../lib/browser-crypto.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { plans } from '../../db/plans'
@@ -24,9 +26,9 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
   const heading = useRef<HTMLHeadingElement>(null)
   const previousStart = useRef(startNew)
   useEffect(() => {
-    if (startNew !== previousStart.current) { previousStart.current = startNew; setEditor({ key: crypto.randomUUID() }); setError(''); setStatus('') }
+    if (startNew !== previousStart.current) { previousStart.current = startNew; setEditor({ key: createId() }); setError(''); setStatus('') }
   }, [startNew])
-  const open = (draft?: PlanInput, original?: Plan) => { trigger.current = document.activeElement as HTMLElement; setEditor({ key: crypto.randomUUID(), draft, original }); setError(''); setStatus(''); onEditing(true) }
+  const open = (draft?: PlanInput, original?: Plan) => { trigger.current = document.activeElement as HTMLElement; setEditor({ key: createId(), draft, original }); setError(''); setStatus(''); onEditing(true) }
   const close = () => { setEditor(undefined); onEditing(false); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : heading.current)?.focus()) }
   const toggleArchive = async (plan: Plan) => {
     setBusy(true); setError(''); setStatus('')
@@ -44,7 +46,7 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
       {data && <><div className="field-grid"><label>Search plans<input type="search" value={search} onChange={(e) => setSearch(e.target.value)} /></label><label>Sort plans<select value={sort} onChange={(e) => setSort(e.target.value as LibrarySort)}><option value="az">A-Z</option><option value="za">Z-A</option><option value="newest">Newest added</option><option value="oldest">Oldest added</option></select></label></div>
         <label className="check-label"><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />Show archived plans</label>
         {!visible.length && <p>{search ? 'No plans match this search.' : archived ? 'No archived plans.' : 'No plans yet. Choose Create Plan to add one.'}</p>}
-        {visible.map((plan) => <article className="exercise-card" key={plan.id} aria-label={`Plan ${plan.name}`}><h3>{plan.name}</h3><p>{plan.days.length} training days; {7 - plan.days.length} rest days.</p><ol>{plan.days.map((day) => <li key={day.id}>{day.name}: {day.exercises.map((exercise) => exercise.prescription.name).join(', ')}</li>)}</ol><p className="muted">Added {new Date(plan.createdAt).toLocaleString()} / Updated {new Date(plan.updatedAt).toLocaleString()}</p><div className="actions"><button disabled={busy} onClick={() => open(planToInput(plan), plan)}>Edit plan</button><button disabled={busy} onClick={async () => { setBusy(true); setError(''); try { open(await plans.duplicateDraft(profileId, plan.id)) } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }}>Duplicate plan</button><button disabled={busy} onClick={() => plan.archivedAt ? void toggleArchive(plan) : setArchiveTarget(plan)}>{plan.archivedAt ? 'Restore plan' : 'Archive plan'}</button></div></article>)}
+        {visible.map((plan) => <article className="exercise-card" key={plan.id} aria-label={`Plan ${plan.name}`}><h3>{plan.name}</h3><p>{plan.days.length} training days; {7 - plan.days.length} rest days.</p><ol>{plan.days.map((day) => <li key={day.id}>{day.name}: {day.exercises.map((exercise) => exercise.prescription.name).join(', ')}</li>)}</ol><p className="muted">Added {displayDateTime(plan.createdAt)} / Updated {displayDateTime(plan.updatedAt)}</p><div className="actions"><button disabled={busy} onClick={() => open(planToInput(plan), plan)}>Edit plan</button><button disabled={busy} onClick={async () => { setBusy(true); setError(''); try { open(await plans.duplicateDraft(profileId, plan.id)) } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }}>Duplicate plan</button><button disabled={busy} onClick={() => plan.archivedAt ? void toggleArchive(plan) : setArchiveTarget(plan)}>{plan.archivedAt ? 'Restore plan' : 'Archive plan'}</button></div></article>)}
       </>}
       <p role="status">{status}</p>{error && <p role="alert">{error}</p>}
     </div>

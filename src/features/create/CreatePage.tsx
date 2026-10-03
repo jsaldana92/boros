@@ -1,3 +1,5 @@
+import { displayDateTime } from '../../lib/display-dates'
+import { createId } from '../../lib/browser-crypto.ts'
 import { ImportPanel } from './ImportPanel'
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -42,7 +44,7 @@ function ExerciseLibrary({ profileId, planOpen, onPlan, onEditing, onImport }: {
   const createButton = useRef<HTMLButtonElement>(null)
   const open = (draft?: ExerciseInput, original?: Exercise) => {
     trigger.current = document.activeElement as HTMLElement
-    setError(''); setStatus(''); setEditor({ key: crypto.randomUUID(), draft, original }); onEditing(true)
+    setError(''); setStatus(''); setEditor({ key: createId(), draft, original }); onEditing(true)
   }
   const close = () => { setEditor(undefined); onEditing(false); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : createButton.current)?.focus()) }
   const toggleArchive = async (record: Exercise) => {
@@ -74,7 +76,7 @@ function ExerciseLibrary({ profileId, planOpen, onPlan, onEditing, onImport }: {
             {record.instructions && <p className="plain-text">{record.instructions}</p>}{record.notes && <p className="plain-text">Notes: {record.notes}</p>}
             {record.tutorialUrl && <a className="tutorial-link" href={record.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial (new tab)</a>}
           </details>
-          <p className="muted">Added {new Date(record.createdAt).toLocaleString()} · Updated {new Date(record.updatedAt).toLocaleString()}</p>
+          <p className="muted">Added {displayDateTime(record.createdAt)} · Updated {displayDateTime(record.updatedAt)}</p>
           <div className="actions"><button disabled={busy} onClick={() => open(exerciseToInput(record, data.tags), record)}>View / edit</button><button disabled={busy} onClick={async () => {
             setBusy(true); setError('')
             try { open(await exercises.duplicateDraft(profileId, record.id)) } catch (e) { setError((e as Error).message) } finally { setBusy(false) }

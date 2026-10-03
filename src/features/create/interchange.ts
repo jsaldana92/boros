@@ -1,3 +1,4 @@
+import { createId } from '../../lib/browser-crypto.ts'
 import { interchangeSchema, interchangeExample, type ImportKind, type Interchange, type InterchangeExercise } from '../../schemas/interchange.ts'
 import type { ExerciseInput } from '../../schemas/exercise.ts'
 import { copyExercise, type PlanInput } from '../../schemas/plan.ts'
@@ -33,7 +34,7 @@ function toExercise(value: InterchangeExercise): ExerciseInput {
 export type ImportDraft = { kind: 'workout'; input: ExerciseInput } | { kind: 'plan'; input: PlanInput }
 export function toImportDraft(value: Interchange): ImportDraft {
   if (value.kind === 'workout') return { kind: 'workout', input: toExercise(value.workout) }
-  return { kind: 'plan', input: { name: value.plan.name, days: value.plan.days.map((day) => ({ id: crypto.randomUUID(), name: day.name, exercises: day.exercises.map((exercise) => copyExercise(toExercise(exercise))) })) } }
+  return { kind: 'plan', input: { name: value.plan.name, days: value.plan.days.map((day) => ({ id: createId(), name: day.name, exercises: day.exercises.map((exercise) => copyExercise(toExercise(exercise))) })) } }
 }
 export function formattingInstructions(kind: ImportKind) {
   const example = interchangeExample(kind)

@@ -3,6 +3,8 @@ import { useWorkspace } from '../../app/workspace-context'
 import { restores, StaleRestoreError } from '../../db/restores'
 import { RESTORE_LIMITS, type ValidatedBackup } from './restore-format'
 import { ownedStores, type RestoreChoice, type RestorePlan } from './restore-plan'
+import { requireBackupCrypto } from '../../lib/browser-crypto'
+import { displayDateTime } from '../../lib/display-dates'
 
 const labels = { replace: 'Replace this profile', device: 'Merge — prefer this device', import: 'Merge — prefer imported file', new: 'Import under a new name', clear: 'Clear this profile' }
 export function RestoreData() {
@@ -22,6 +24,7 @@ export function RestoreData() {
     const request = ++ticket.current; locked.current = true; setBusy(true); setStatus('Reading backup locally')
     const fail = (message: string) => { if (ticket.current !== request) return; worker.current?.terminate(); locked.current = false; setBusy(false); setError(`Upload failed. ${message} Saved data is unchanged.`); setStatus('') }
     try {
+      requireBackupCrypto()
       const bytes = new Uint8Array(await file.arrayBuffer()); if (ticket.current !== request) return
       const task = new Worker(new URL('./import.worker.ts', import.meta.url), { type: 'module' }); worker.current = task
       task.onerror = () => fail('The validation worker could not run. Try again in a browser with worker support.')
@@ -67,7 +70,7 @@ export function RestoreData() {
     <h3>Upload data</h3><p>Choose a Boros backup ZIP. Validation and preview stay in this browser; nothing changes until you confirm.</p>
     <label>Backup ZIP<input type="file" accept=".zip,application/zip" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} /></label>
     <p className="muted">Limits: 64 MiB ZIP, 128 MiB expanded, 4,096 files, 32 MiB per text file (2 MiB manifest), 5 MiB per photo. Use an original Boros export.</p>
-    {backup && !plan && <section aria-label="Backup selection"><h3 ref={heading} tabIndex={-1}>Validated backup: {backup.data.profile.name}</h3><p>Exported: {backup.manifest.exportedAt}. Profile modified: {backup.data.profile.updatedAt}.</p><p>{Object.entries(backup.manifest.counts).map(([key, value]) => `${value} ${key}`).join(' · ')}</p>
+    {backup && !plan && <section aria-label="Backup selection"><h3 ref={heading} tabIndex={-1}>Validated backup: {backup.data.profile.name}</h3><p>Exported: {displayDateTime(backup.manifest.exportedAt)}. Profile modified: {displayDateTime(backup.data.profile.updatedAt)}.</p><p>{Object.entries(backup.manifest.counts).map(([key, value]) => `${value} ${key}`).join(' · ')}</p>
       {matched ? <><p>Matches this device: <strong>{matched}</strong>.</p><label>Import choice<select value={choice} disabled={busy} onChange={(e) => setChoice(e.target.value as RestoreChoice)}>{(['replace', 'device', 'import', 'new'] as const).map((value) => <option key={value} value={value}>{labels[value]}</option>)}</select></label><p>The chosen source determines precedence, regardless of timestamps. A conflicting plan includes its complete history, saved drafts and schedules.</p></> : <p>No name match. This imports as an independent profile.</p>}
       {choice === 'new' && <label>Imported profile name<input maxLength={80} value={name} disabled={busy} onChange={(e) => setName(e.target.value)} /></label>}
       <div className="actions"><button disabled={busy} onClick={() => void preview()}>Preview import</button><button disabled={busy} onClick={cancel}>Cancel</button></div>

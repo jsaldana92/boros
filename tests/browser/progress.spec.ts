@@ -47,7 +47,7 @@ test('out-of-order history/chart, local dates/photo reload, units, correction/de
   await page.getByLabel('New profile name', { exact: true }).fill('Second progress'); await button(page, 'Create profile').click(); await button(page, 'Progress').click(); await expect(cards(page)).toHaveCount(0)
   await add(page, '55', '2025-01-04T10:00', true); await expect(cards(page)).toHaveCount(1)
   await button(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await button(page, 'Progress').click(); await expect(cards(page)).toHaveCount(2); await expect(button(page, 'View progress photo')).toHaveCount(0)
-  await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Tokyo' }); await page.reload(); await expect(cards(page).last()).toContainText('2025-01-03 12:00:00.000 · America/New_York')
+  await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Tokyo' }); await page.reload(); await expect(cards(page).last()).toContainText('2025-01-03 12:00 · America/New_York')
   expect(page.url()).toBe(address)
 })
 

@@ -99,7 +99,7 @@ test('combined search, sorting, ANY-tag filters and profile isolation', async ({
   await expect(page.getByRole('article')).toHaveCount(1)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByLabel('Active profile').selectOption({ label: 'Guest' })
-  await expect(page.locator('header')).toContainText('Guest')
+  await expect(page.getByLabel('Active profile').locator('option:checked')).toHaveText('Guest')
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByRole('article')).toHaveCount(3)
   await expect(page.getByText('Private tag', { exact: true })).toHaveCount(0)

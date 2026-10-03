@@ -1,3 +1,4 @@
+import { createId } from '../../lib/browser-crypto.ts'
 import { useEffect, useRef, useState } from 'react'
 import { ZodError } from 'zod'
 import { useWorkspace } from '../../app/workspace-context'
@@ -12,10 +13,10 @@ import { BlobImage, SavedPhoto } from './ProgressPhoto'
 
 export function MeasurementEditor({ profileId, preferredUnit, initial, onClose, onSaved }: { profileId: string; preferredUnit: WeightUnit; initial?: Measurement; onClose: () => void; onSaved: () => void }) {
   const { setDirty } = useWorkspace()
-  const [unit] = useState(preferredUnit), [zone] = useState(browserZone), [id] = useState(() => initial?.id ?? crypto.randomUUID()), [mutationId] = useState(() => crypto.randomUUID())
+  const [unit] = useState(preferredUnit), [zone] = useState(browserZone), [id] = useState(() => initial?.id ?? createId()), [mutationId] = useState(() => createId())
   const [weight, setWeight] = useState(() => initial ? displayNumber(fromKg(initial.weightKg, unit)) : ''), [weightChanged, setWeightChanged] = useState(false)
   const [defaultTime] = useState(() => measurementInstant(initial ? new Date(initial.measuredAt) : undefined))
-  const [date, setDate] = useState(defaultTime.measuredLocal), [dateEdited, setDateEdited] = useState(false), [changeTime, setChangeTime] = useState(!initial)
+  const [date, setDate] = useState(defaultTime.measuredLocal.slice(0, 16)), [dateEdited, setDateEdited] = useState(false), [changeTime, setChangeTime] = useState(!initial)
   const [photo, setPhoto] = useState<PreparedPhoto | null>(), [confirmPhoto, setConfirmPhoto] = useState(false), [large, setLarge] = useState(false)
   const [error, setError] = useState(''), [errors, setErrors] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [dirty, dirtyInput] = useState(false)
   const alive = useRef(true), lock = useRef(false), removedPhoto = useRef(false), heading = useRef<HTMLHeadingElement>(null)
@@ -33,7 +34,7 @@ export function MeasurementEditor({ profileId, preferredUnit, initial, onClose, 
       weightKg = toKg(numeric, unit)
       if (!measurementSchema.shape.weightKg.safeParse(weightKg).success) validation.weight = 'Enter a weight greater than 0 and at most 1000 kg (2204.62 lb).'
     }
-    if (changeTime) { try { time = dateEdited ? measurementTime(date, zone) : defaultTime } catch (error) { validation.date = (error as Error).message } }
+    if (changeTime) { try { time = dateEdited ? measurementTime(date, zone) : initial ? time : defaultTime } catch (error) { validation.date = (error as Error).message } }
     setErrors(validation)
     if (Object.keys(validation).length) { requestAnimationFrame(() => document.querySelector<HTMLElement>('.measurement-editor [aria-invalid="true"]')?.focus()); return }
     lock.current = true; setBusy(true)
@@ -49,7 +50,7 @@ export function MeasurementEditor({ profileId, preferredUnit, initial, onClose, 
     <form onSubmit={(event) => { event.preventDefault(); void save() }}><fieldset disabled={busy}>
       <Field label={`Weight (${unit})`} required inputMode="decimal" value={weight} error={errors.weight} onChange={(e) => { setWeight(e.target.value); setWeightChanged(true); changed() }} />
       {initial && <><p>Measured: {measurementDateLabel(initial)}</p><label className="check-label"><input type="checkbox" checked={changeTime} onChange={(e) => { setChangeTime(e.target.checked); changed() }} />Change measurement date/time</label></>}
-      {changeTime && <><Field label="Measurement date/time" type="datetime-local" step="0.001" required value={date} error={errors.date} onChange={(e) => { setDate(e.target.value); setDateEdited(true); changed() }} /><p className="muted">Time zone: {zone}. Backdated entries are allowed. During a repeated daylight-saving hour, a changed time uses the earlier occurrence.</p></>}
+      {changeTime && <><Field label="Measurement date/time" type="datetime-local" step="60" required value={date} error={errors.date} onChange={(e) => { setDate(e.target.value); setDateEdited(true); changed() }} /><p className="muted">Time zone: {zone}. Backdated entries are allowed. During a repeated daylight-saving hour, a changed time uses the earlier occurrence.</p></>}
       <label className="photo-upload">Progress photo (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={async (e) => {
         const file = e.target.files?.[0]; e.target.value = ''; if (!file || lock.current) return
         lock.current = true; setBusy(true); changed()

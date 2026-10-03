@@ -7,7 +7,8 @@ the authoritative plan and verification record.
 
 ## Local development
 
-Run `npm install`, then `npm run dev`. Use **http://127.0.0.1:5173** consistently.
+Use Node 22 (verified with 22.19.0), run `npm ci` from the committed lockfile,
+then `npm run dev`. Use **http://127.0.0.1:5173** consistently.
 The port is strict so Vite cannot silently move browser data to another
 origin. An existing project dev server can be reused by local browser tests.
 
@@ -28,12 +29,23 @@ is unavailable. These checks do not cover real iOS Safari or Android devices.
 Development and preview are different origins; local data will not be
 shared between them.
 
+Phase 10 adds `playwright.engines.config.ts` (Firefox/WebKit production checks)
+and `playwright.capacity.config.ts` (one disposable larger-profile experiment).
+Commands, dataset sizes, timings and engine limitations are in
+[the Phase 10 verification record](docs/phase10-verification.md). The full Windows
+WebKit run currently fails native IndexedDB Blob storage, so photo/restore coverage
+there is **pending**, not passed. Use TODO.md's current handoff for final totals.
+
 ## Support configuration
 
-Copy `.env.example` to `.env.local`. Set `VITE_KOFI_URL` only when the owner's
-actual HTTPS `ko-fi.com` page is supplied. Restart development or rebuild for
-changes to take effect. Blank or invalid values leave Support disabled with an
-explanation. Valid links open a new tab with `noopener noreferrer`.
+Production builds read the owner's supplied
+`VITE_KOFI_URL=https://ko-fi.com/jhonatansaldana` from `.env.production`.
+For development, set the same public value in `.env.local` if wanted; otherwise
+Support stays unavailable. Shell environment variables and `.env.local` can override
+the production value, including with an empty value: check the actual built Settings
+link after changing configuration. Restart development or rebuild for changes.
+Blank/invalid values retain an honest unavailable state. Valid links open only on
+click, in a new tab with `noopener noreferrer`; no automatic embed or request.
 
 ## Implementation notes
 
@@ -42,7 +54,7 @@ Tailwind 4 uses its [official Vite integration](https://tailwindcss.com/docs/ins
 React Router memory routing keeps every screen at the same public address;
 relative build assets support deployment beneath a path. Shared shell components live in
 `src/components/layout`; navigation and configuration live in `src/app`.
-Feature modules will be created as their phases begin.
+Implemented feature modules live in `src/features`; database operations remain in services.
 
 ## Single-address navigation and static hosting
 
@@ -140,7 +152,7 @@ Exercise and inline-tag writes are one transaction. Tags reuse normalized names
 within the owner profile. Exercise edits/archive/restore use revision checks;
 errors retain input and do not claim success. For a stale exercise, cancel the
 editor (confirm discard only after reviewing/copying anything needed), then
-reopen View / edit to load the latest record. Plan copies are independent snapshots; session snapshots belong to a later phase.
+reopen View / edit to load the latest record. Plan copies and started/saved session prescriptions are independent snapshots.
 
 YouTube links support HTTPS watch?v=, youtu.be, shorts, live, and embed video URLs
 with an 11-character video ID on the explicitly supported YouTube hosts. They
@@ -537,8 +549,8 @@ The chart uses elapsed measurement time horizontally, explicit endpoint dates
 and weight units, and every recorded point, including irregular/repeated dates.
 Coincident points can overlap; history retains every record with accessible exact
 values, canonical kilograms, dates, and record details. Empty and single-entry
-states work in both themes. History currently reads all profile measurements;
-large-dataset rendering performance has not been benchmarked.
+states work in both themes. History reads all profile measurements. Phase 10
+measured a 730-entry history; see its verification record for timings and limits.
 
 Phase 7 checks passed: `npm run build`, `npm run typecheck`, `npm run lint`,
 `git diff --check`, and `npm run test:data` (66/66). Full development and production
@@ -676,7 +688,88 @@ plain-static root/project hosting passed **240/240**, without SPA rewrites. Phas
 is complete; see TODO.md for the full handoff. Main bundle: **579.00 kB / 174.33 kB gzip**, export worker
 **197.72 kB**, import worker **200.83 kB**; the existing Vite advisory remains.
 
-Physical phones/save sheets, Safari/Firefox, screen readers/voice control, live Ko-fi,
-real quota exhaustion, background-device timers, spreadsheet applications and
-large-data memory/latency remain unverified. The final TODO.md handoff gives exact
-manual checks using disposable profiles. No Phase 10 or release work is included.
+Those Phase 9 results are historical. Phase 10 adds the complete manual/AI training,
+progress/photo and semantic restore journey, Firefox/Windows WebKit engine runs,
+and measured larger-data checks. Current results and remaining owner checks are in
+TODO.md and [docs/phase10-verification.md](docs/phase10-verification.md).
+
+Screens now load on demand. Loading and failed-screen states keep shell navigation
+available; only a successfully opened screen changes the session preference. A
+failed chunk can be recovered by reloading after checking the connection or by
+choosing another screen. This preserves single-address navigation and the actual
+root/project deployment path; no server rewrites or 404 workaround are needed.
+The entry chunk is 274.59 kB (88.01 kB gzip), with additional shared/route chunks;
+Vite's former >500 kB warning is resolved. This is not an offline cold-start promise.
+
+Phase 10 remains **verification pending** for photo/restore checks in a Blob-capable
+WebKit/Safari environment. Physical-phone, screen-reader/voice-control, live Ko-fi,
+spreadsheet, real-quota and background-device checks remain explicit owner checks.
+Phase 11 and published-origin verification are separate. The working
+`gh-pages -d dist --cname boros-app.com --nojekyll` deployment command, its exact
+6.1.1 dependency pin and relative Vite base are preserved; this work did not publish.
+
+## Existing release process and current readiness
+
+The public repository is [jsaldana92/boros](https://github.com/jsaldana92/boros);
+the intended address is [https://boros-app.com/](https://boros-app.com/).
+`npm run deploy` runs `predeploy` (`npm run build`) before
+`gh-pages -d dist --cname boros-app.com --nojekyll`. The pinned CLI publishes to
+`origin`'s `gh-pages` branch and generates `CNAME`/`.nojekyll`. Do not add a duplicate
+`public/CNAME`, replace the hosting setup, or change the relative Vite base.
+Publishing is an owner action; this preparation did not commit, push or deploy.
+
+As of 2026-10-03, Phase 10 is **Verification pending** for Blob-capable WebKit/Safari
+photo/restore coverage and Phase 11 is **In progress, preparation only**. Independent
+Edge/Node requests to the custom domain fail certificate hostname validation;
+the deployment branch also contains a different bundle from this local candidate.
+The Ko-fi URL was supplied during Group 1 and is now configured for production;
+its automated live visit encounters a Cloudflare challenge. These checks have not
+passed simply because a site already exists. See [release preparation](docs/release-preparation.md) for evidence,
+the single current owner checklist, exact commit/deploy commands and live smoke test.
+
+Run `node scripts/release-audit.mjs` after building to record SHA-256 for every
+output file and the whole inventory. After owner deployment, run
+`node scripts/release-audit.mjs --url https://boros-app.com/` and require the tested
+fingerprint and every remote resource to match. This checks actual HTTPS bytes,
+including lazy chunks/workers; it does not replace the browser smoke test.
+
+Data is stored locally without passwords or a remote recovery service. Anyone
+using the same browser can select its profiles, and clearing site data can remove
+them. Development (`127.0.0.1:5173`), preview (`127.0.0.1:4173`), static tests and
+production each own separate origin storage. A new host, scheme or port gets a
+different database; a path alone on the same origin is not a storage boundary.
+Deployment does not upload or migrate records. Export each desired profile from
+the old address, then import its original ZIP at the new one, preferably under a
+new name. Verify reload, plans/sessions/photos and another profile before retiring
+the source. Follow the [cross-origin procedure](docs/backup-format.md#moving-between-website-addresses).
+
+Restore supports original **backup schema 1 / database schema 5** exports, not CSV
+reconstruction, future schemas or arbitrary repackaged ZIPs. The size/entry/photo
+limits and whole-family merge behavior above remain in force. An export can exceed
+restore limits; keep the original ZIP. Memory/device limits, physical phone/AT and
+real quota checks remain documented limitations. Local storage does not guarantee
+offline cold start or a background timer alarm.
+
+## Group 1 compatibility and owner revisions
+
+Group 1 centralizes secure UUID creation: native `randomUUID` when supported, or
+UUID v4 using `crypto.getRandomValues`. Existing IDs/data are never regenerated.
+Unsupported secure randomness shows a compatibility error; ordinary storage errors
+retain storage-specific handling. Backup export/restore still requires Web Crypto
+SHA-256 and never skips checksum validation. Clipboard failure retains manual copy.
+The compatibility fallback does **not** fix HTTPS or trust an invalid certificate.
+
+The owner reports HTTPS with Chrome's red strikethrough, loading after an explicit
+warning bypass. The certificate covers `*.github.io`, not `boros-app.com`; clean
+Edge/Node sessions reject that hostname mismatch. A separate HTTP probe reproduces
+the missing-UUID startup error without establishing the API state of the owner's
+bypassed HTTPS session. The required Pages certificate/enforcement checks and exact
+remaining evidence are in [Group 1 verification](docs/group1-verification.md).
+
+The header now uses the owner's proportional snake/wordmark PNGs and an avatar-only
+Settings button with an accessible name/tooltip. Both brand images use guarded Train
+navigation. Height/weight units stay beside inputs; Age remains separate. Filters
+are compact; displayed date/time values stop at minutes, while stored timestamps,
+time-zone context and backups keep their original precision on unrelated edits.
+Groups 2–4 (supersets/duration, Calendar/Train, Progress redesign) are recorded in
+TODO.md and **not implemented**. No Group 1 deployment was performed.

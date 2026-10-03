@@ -1,6 +1,7 @@
+import { createId } from '../lib/browser-crypto.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { z } from 'zod'
-import { daySchema } from '../schemas/plan.ts'
+import { daySchema, roundCount, trainingBlocks } from '../schemas/plan.ts'
 import { occurrences, occurrenceKey, dateSchema } from '../schemas/schedule.ts'
 import { assessSession, blankSession, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
 
@@ -27,7 +28,7 @@ export function sessionService(database: BorosDatabase) {
         const event = schedule && occurrences(schedule, date, date).find((item) => item.ref.dayId === dayId)
         if (!event) throw new Error('This occurrence changed or needs mapping repair. Refresh Calendar.')
         const now = new Date().toISOString(), day = daySchema.parse(structuredClone(event.day))
-        const value: SessionDraft = { id: crypto.randomUUID(), profileId, revision: 1, sourcePlanId: event.planId, sourceDayId: dayId, occurrence: event.ref, occurrenceKey: key, activeSourceKey: `scheduled:${key}`, planName: event.planName, day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
+        const value: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: event.planId, sourceDayId: dayId, occurrence: event.ref, occurrenceKey: key, activeSourceKey: `scheduled:${key}`, planName: event.planName, day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
         await database.drafts.add(value); return { draft: value }
       })
     },
@@ -46,7 +47,7 @@ export function sessionService(database: BorosDatabase) {
         const plan = await database.plans.get([profileId, planId]), source = plan?.days.find((day) => day.id === dayId)
         if (!plan || plan.archivedAt || !source) throw new Error('This saved training day is unavailable. Choose an active plan.')
         const day = daySchema.parse(structuredClone(source)), now = new Date().toISOString()
-        const result: SessionDraft = { id: crypto.randomUUID(), profileId, revision: 1, sourcePlanId: planId, sourceDayId: dayId, activeSourceKey: key, planName: plan.name, day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
+        const result: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: planId, sourceDayId: dayId, activeSourceKey: key, planName: plan.name, day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
         await database.drafts.add(result); return result
       })
     },
@@ -90,6 +91,7 @@ export function sessionService(database: BorosDatabase) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId); const value = await draft(profileId, draftId); editable(value, revision)
         const index = value.day.exercises.findIndex((exercise) => exercise.id === exerciseId), exercise = value.day.exercises[index]
+        if (exercise?.groupId) throw new Error('Use the superset round rest, not a member rest.')
         if (!exercise || !Number.isInteger(setIndex) || setIndex < 0 || setIndex >= exercise.prescription.sets.length) throw new Error('This rest position is unavailable.')
         const afterExercise = setIndex === exercise.prescription.sets.length - 1
         if (afterExercise && index === value.day.exercises.length - 1) throw new Error('There is no next exercise for this rest.')
@@ -97,7 +99,22 @@ export function sessionService(database: BorosDatabase) {
         if (seconds === undefined) throw new Error('Enter a rest duration in seconds.')
         const endAt = timerEnd(seconds)
         if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
-        const timer: RestTimer = { id: 'active', token: crypto.randomUUID(), profileId, draftId, label: `${exercise.prescription.name}: ${afterExercise ? 'between exercises' : `after set ${setIndex + 1}`}`, durationSeconds: seconds, endAt }
+        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `${exercise.prescription.name}: ${afterExercise ? 'between exercises' : `after set ${setIndex + 1}`}`, durationSeconds: seconds, endAt }
+        await database.restTimers.put(timer); return timer
+      })
+    },
+    async startGroupTimer(profileId: string, draftId: string, revision: number, groupId: string, round: number, manualSeconds?: number) {
+      return database.transaction('rw', tables, async () => {
+        await owner(profileId); const value = await draft(profileId, draftId); editable(value, revision)
+        const blocks = trainingBlocks(value.day), index = blocks.findIndex((block) => block.group?.id === groupId), block = blocks[index]
+        if (!block?.group || !Number.isInteger(round) || round < 0 || round >= roundCount(block.members)) throw new Error('This superset rest position is unavailable.')
+        const after = round === roundCount(block.members) - 1
+        if (after && index === blocks.length - 1) throw new Error('There is no next training block for this rest.')
+        const seconds = (after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds) ?? manualSeconds
+        if (seconds === undefined) throw new Error('Enter a rest duration in seconds.')
+        const endAt = timerEnd(seconds)
+        if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
+        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `Superset ${block.group.number}: ${after ? 'after group' : `after round ${round + 1}`}`, durationSeconds: seconds, endAt }
         await database.restTimers.put(timer); return timer
       })
     },
@@ -107,7 +124,7 @@ export function sessionService(database: BorosDatabase) {
         const timer = await database.restTimers.get('active')
         if (!timer || timer.profileId !== profileId || timer.draftId !== draftId || timer.token !== token) throw new Error('This timer changed or is unavailable in this session.')
         if (action === 'stop') await database.restTimers.delete('active')
-        else await database.restTimers.put({ ...timer, token: crypto.randomUUID(), endAt: timerEnd(timer.durationSeconds) })
+        else await database.restTimers.put({ ...timer, token: createId(), endAt: timerEnd(timer.durationSeconds) })
       })
     },
   }

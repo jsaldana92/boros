@@ -5,7 +5,7 @@ const destinations = [
   ['Progress', 'progress'], ['Settings', 'settings'],
 ]
 
-test('navigation, remembered refresh, unchanged address, and runtime errors', async ({ page }) => {
+test('navigation, remembered refresh, unchanged address, and runtime errors', async ({ page }, info) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('console', (message) => { if (message.type() === 'error') errors.push(`${message.text()} ${message.location().url}`) })
@@ -28,8 +28,12 @@ test('navigation, remembered refresh, unchanged address, and runtime errors', as
   await expect(page).toHaveURL(address)
   await expect(page.getByRole('button', { name: 'Support Boros' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Support Boros' })).toBeDisabled()
-  await expect(page.getByText('Support link coming soon.')).toBeVisible()
+  if (new URL(info.project.use.baseURL!).port === '5173') {
+    await expect(page.getByRole('button', { name: 'Support Boros' })).toBeDisabled()
+    await expect(page.getByText('Support link coming soon.')).toBeVisible()
+  } else {
+    await expect(page.getByRole('link', { name: 'Support Boros' })).toHaveAttribute('href', 'https://ko-fi.com/jhonatansaldana')
+  }
   expect(errors).toEqual([])
 })
 
@@ -60,8 +64,9 @@ test('responsive layout, touch targets, and screenshots', async ({ page }, testI
       const link = page.getByRole('button', { name: label, exact: true })
       await expect(link).toBeInViewport()
       const box = await link.boundingBox()
-      expect(box?.height).toBeGreaterThanOrEqual(44)
-      expect(box?.width).toBeGreaterThanOrEqual(44)
+      // Firefox can serialize a CSS 44px box as 43.999996px. Compare at 0.01px.
+      expect(Math.round(box!.height * 100) / 100).toBeGreaterThanOrEqual(44)
+      expect(Math.round(box!.width * 100) / 100).toBeGreaterThanOrEqual(44)
     }
     await page.screenshot({ path: testInfo.outputPath(`shell-${width}.png`), fullPage: true })
   }

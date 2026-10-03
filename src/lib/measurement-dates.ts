@@ -22,5 +22,5 @@ export function validateTimeContext(value: { measuredAt: string; measuredLocal?:
   if (local !== value.measuredLocal || Date.parse(`${local}Z`) + value.offsetMinutes * 60000 !== instant.getTime()) throw new Error('Measurement time does not match its saved zone and offset.')
 }
 export function measurementDateLabel(value: Measurement) {
-  return value.measuredLocal ? `${value.measuredLocal.replace('T', ' ')} · ${value.timeZone}` : `${value.measuredAt} (UTC)`
+  return value.measuredLocal ? `${value.measuredLocal.slice(0, 16).replace('T', ' ')} · ${value.timeZone}` : `${value.measuredAt.slice(0, 16).replace('T', ' ')} (UTC)`
 }

@@ -3,6 +3,7 @@ import { nameKey, type PhotoAsset, type Profile } from '../../schemas/profile.ts
 import type { TrainingDay } from '../../schemas/plan.ts'
 import { occurrenceKey } from '../../schemas/schedule.ts'
 import { sha256 } from './integrity.ts'
+import { displayDateTime } from '../../lib/display-dates.ts'
 import { canonicalSnapshot, validateRestoreRecords } from './restore-records.ts'
 import type { ValidatedBackup } from './restore-format.ts'
 
@@ -108,7 +109,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   const localMeasurements = merging ? device!.measurements : [], measurementIds = new Set(file.measurements.map((m) => m.id))
   for (const m of file.measurements) {
     const same = localMeasurements.find((row) => row.id === m.id)
-    if (same) { counts.measurements.conflicts++; conflicts.push(`measurement: ${m.id} (${same.measuredAt} / ${m.measuredAt})`); if (same.measuredAt !== m.measuredAt || same.loggedAt !== m.loggedAt) warnings.push(`Measurement ${m.id} has different date/origin metadata. The selected source wins this ID.`) }
+    if (same) { counts.measurements.conflicts++; conflicts.push(`measurement: ${m.id} (${displayDateTime(same.measuredAt, 'UTC')} / ${displayDateTime(m.measuredAt, 'UTC')} UTC)`); if (same.measuredAt !== m.measuredAt || same.loggedAt !== m.loggedAt) warnings.push(`Measurement ${m.id} has different date/origin metadata. The selected source wins this ID.`) }
     if (m.lastMutationId && localMeasurements.some((row) => row.id !== m.id && row.lastMutationId === m.lastMutationId)) throw new Error('Ambiguous measurement: the same saved mutation has different IDs. Import under a new name and review the measurements separately.')
   }
   const selectedMeasurements = file.measurements.filter((m) => preferImport || !localMeasurements.some((row) => row.id === m.id))

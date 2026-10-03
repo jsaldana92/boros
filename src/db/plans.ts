@@ -1,9 +1,10 @@
+import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { resolveTags } from './tags.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { exerciseToInput } from './exercises.ts'
 import { nameKey } from '../schemas/profile.ts'
-import { copyExercise, planInputSchema, planToInput, type ExerciseSource, type Plan, type PlanInput } from '../schemas/plan.ts'
+import { duplicateDay, planInputSchema, planToInput, type ExerciseSource, type Plan, type PlanInput } from '../schemas/plan.ts'
 import type { ExerciseInput } from '../schemas/exercise.ts'
 import { appendRevision } from '../schemas/schedule.ts'
 import { localToday, nextMonday } from '../lib/calendar-dates.ts'
@@ -41,7 +42,7 @@ export function planService(database: BorosDatabase) {
           choices.push({ id: `exercise:${exercise.id}`, nameKey: exercise.nameKey, createdAt: exercise.createdAt, tagIds: prescription.tagNames.map(nameKey), label: `Library: ${exercise.name}`, prescription, source: { kind: 'exercise', id: exercise.id } })
         }
         for (const plan of plans.filter((item) => !item.archivedAt)) for (const [dayIndex, day] of plan.days.entries()) for (const [index, occurrence] of day.exercises.entries()) {
-          choices.push({ id: `plan:${plan.id}:${occurrence.id}`, nameKey: nameKey(occurrence.prescription.name), createdAt: plan.createdAt, tagIds: occurrence.prescription.tagNames.map(nameKey), label: `Plan: ${plan.name} / Day ${dayIndex + 1}: ${day.name} / Exercise ${index + 1}: ${occurrence.prescription.name}`, prescription: structuredClone(occurrence.prescription), source: { kind: 'plan', id: plan.id, dayId: day.id, occurrenceId: occurrence.id } })
+          choices.push({ id: `plan:${plan.id}:${occurrence.id}`, nameKey: nameKey(occurrence.prescription.name), createdAt: plan.createdAt, tagIds: occurrence.prescription.tagNames.map(nameKey), label: `Plan: ${plan.name} / Day ${dayIndex + 1}: ${day.name} / Exercise ${index + 1}: ${occurrence.prescription.name}`, prescription: structuredClone(occurrence.prescription), source: { kind: 'plan', id: plan.id, dayId: day.id, occurrenceId: occurrence.id, ...(occurrence.source ? { libraryId: occurrence.source.kind === 'exercise' ? occurrence.source.id : occurrence.source.libraryId } : {}) } })
         }
         return { plans, choices, tags }
       })
@@ -53,11 +54,12 @@ export function planService(database: BorosDatabase) {
         await owner(profileId)
         if (creationId) { const committed = await database.plans.get([profileId, creationId]); if (committed) return committed }
         const old = existing ? await get(profileId, existing.id) : undefined
+        if ((!old || old.durationWeeks !== undefined) && input.durationWeeks === undefined) throw new Error('Enter a positive whole duration in weeks. Existing finite plans cannot silently become unbounded.')
         if (old) checkRevision(old, existing!.revision)
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
         const now = new Date().toISOString()
         if (creationId) await resolveTags(database, profileId, input.days.flatMap((day) => day.exercises.flatMap((exercise) => exercise.prescription.tagNames)), now)
-        const result: Plan = { ...input, profileId, id: old?.id ?? creationId ?? crypto.randomUUID(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
+        const result: Plan = { ...input, profileId, id: old?.id ?? creationId ?? createId(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.plans.put(result)
         if (old && (old.days.length !== result.days.length || old.days.some((day) => !result.days.some((next) => next.id === day.id)))) {
           const schedules = await database.schedules.where('[profileId+planId]').equals([profileId, result.id]).toArray()
@@ -65,7 +67,7 @@ export function planService(database: BorosDatabase) {
             const last = schedule.revisions.at(-1)!
             const cutoff = nextMonday(localToday(schedule.timeZone)), effectiveFrom = cutoff > schedule.startWeek ? cutoff : schedule.startWeek
             // Preserve past/missed dates, suspend affected future dates until remapped.
-            await database.schedules.put({ ...schedule, revision: schedule.revision + 1, updatedAt: now, revisions: appendRevision(schedule, { ...last, id: crypto.randomUUID(), effectiveFrom, effectiveUntil: undefined, createdAt: now, needsRepair: true }) })
+            await database.schedules.put({ ...schedule, revision: schedule.revision + 1, updatedAt: now, revisions: appendRevision(schedule, { ...last, id: createId(), effectiveFrom, effectiveUntil: undefined, createdAt: now, needsRepair: true }) })
           }
         }
         return result
@@ -90,7 +92,7 @@ export function planService(database: BorosDatabase) {
       const names = new Set(plans.filter((plan) => !plan.archivedAt).map((plan) => plan.nameKey))
       let suffix = 1, name = `${original.name.slice(0, 100)} (copy)`
       while (names.has(nameKey(name))) name = `${original.name.slice(0, 100)} (copy ${++suffix})`
-      return { ...planToInput(original), name, days: original.days.map((day) => ({ ...day, id: crypto.randomUUID(), exercises: day.exercises.map((exercise) => copyExercise(exercise.prescription, exercise.source)) })) }
+      return { ...planToInput(original), name, days: original.days.map(duplicateDay) }
     },
   }
 }

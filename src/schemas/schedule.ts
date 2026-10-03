@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { TrainingDay } from './plan.ts'
-import { dateRange, monday, validDate, validZone, weekday } from '../lib/calendar-dates.ts'
+import { positiveInteger, type TrainingDay } from './plan.ts'
+import { addDays, dateRange, monday, validDate, validZone, weekday } from '../lib/calendar-dates.ts'
 
 export const dateSchema = z.string().refine(validDate, 'Enter a valid calendar date.')
 export const mappingSchema = z.array(z.object({ dayId: z.string().uuid(), weekday: z.number().int().min(0).max(6) }).strict()).min(1).max(7)
@@ -10,7 +10,17 @@ export const scheduleInputSchema = z.object({ planId: z.string().uuid(), planRev
 export type Mapping = z.infer<typeof mappingSchema>
 export type ScheduleInput = z.infer<typeof scheduleInputSchema>
 export interface ScheduleRevision { id: string; effectiveFrom: string; effectiveUntil?: string; createdAt: string; planRevision: number; planName: string; days: TrainingDay[]; mapping: Mapping; needsRepair?: boolean }
-export interface Schedule { id: string; profileId: string; planId: string; revision: number; timeZone: string; startWeek: string; createdAt: string; updatedAt: string; stoppedFrom?: string; revisions: ScheduleRevision[] }
+export interface DurationChange { id: string; effectiveFrom: string; durationWeeks?: number; endDate?: string }
+export interface Schedule { id: string; profileId: string; planId: string; revision: number; timeZone: string; startWeek: string; createdAt: string; updatedAt: string; stoppedFrom?: string; durationWeeks?: number; endDate?: string; durationChanges?: DurationChange[]; revisions: ScheduleRevision[] }
+export function scheduleEnd(startWeek: string, durationWeeks?: number) {
+  if (durationWeeks === undefined) return undefined
+  positiveInteger.parse(durationWeeks)
+  return addDays(startWeek, durationWeeks * 7 - 1)
+}
+export function scheduleActiveOn(schedule: Schedule, date: string) {
+  const boundary = schedule.durationChanges?.findLast((item) => item.effectiveFrom <= date) ?? schedule
+  return date >= schedule.startWeek && (!schedule.stoppedFrom || date < schedule.stoppedFrom) && (!boundary.endDate || date <= boundary.endDate)
+}
 export interface OccurrenceRef { key: string; scheduleId: string; dayId: string; scheduledDate: string; scheduledWeek: string; timeZone: string; scheduleRevisionId: string }
 export interface Occurrence { ref: OccurrenceRef; planId: string; planName: string; day: TrainingDay }
 export const occurrenceKey = (scheduleId: string, dayId: string, date: string) => `${scheduleId}:${dayId}:${date}`
@@ -21,7 +31,7 @@ export function validateMapping(mapping: Mapping, days: TrainingDay[]) {
 export function revisionAt(schedule: Schedule, date: string) { return schedule.revisions.findLast((item) => item.effectiveFrom <= date && (!item.effectiveUntil || date < item.effectiveUntil)) }
 export function occurrences(schedule: Schedule, start: string, end: string): Occurrence[] {
   return dateRange(start, end).flatMap((date) => {
-    if (date < schedule.startWeek || (schedule.stoppedFrom && date >= schedule.stoppedFrom)) return []
+    if (!scheduleActiveOn(schedule, date)) return []
     const revision = revisionAt(schedule, date)
     if (!revision || revision.needsRepair) return []
     const assignment = revision.mapping.find((item) => item.weekday === weekday(date)), day = revision.days.find((item) => item.id === assignment?.dayId)

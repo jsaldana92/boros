@@ -1,3 +1,4 @@
+import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { db, type BorosDatabase } from './database.ts'
 import { measurementSchema, photoSchema, type Measurement, type PreparedPhoto } from '../schemas/profile.ts'
@@ -16,7 +17,7 @@ export async function appendSettingsWeight(database: BorosDatabase, profileId: s
   const now = new Date().toISOString(), date = new Date(Math.max(Date.now(), last ? Date.parse(last.measuredAt) + 1 : 0))
   // Preserve the exact instant even during the second half of a DST fold.
   const measurement = measurementSchema.parse({ weightKg, ...measurementInstant(date) })
-  await database.measurements.add({ ...measurement, profileId, id: crypto.randomUUID(), loggedAt: now, updatedAt: now, revision: 1 })
+  await database.measurements.add({ ...measurement, profileId, id: createId(), loggedAt: now, updatedAt: now, revision: 1 })
 }
 export function measurementService(database: BorosDatabase) {
   const tables = [database.profiles, database.measurements, database.photos]
@@ -43,7 +44,7 @@ export function measurementService(database: BorosDatabase) {
         if (old?.lastMutationId === mutationId) return old
         if (expectedRevision === undefined && old) throw new Error('This measurement already exists. Reopen it before editing.')
         if (expectedRevision !== undefined) { if (!old) throw new Error('This measurement was deleted. Your input is kept.'); check(old, expectedRevision) }
-        const now = new Date().toISOString(), photoId = photo === undefined ? old?.photoId : photo === null ? undefined : crypto.randomUUID()
+        const now = new Date().toISOString(), photoId = photo === undefined ? old?.photoId : photo === null ? undefined : createId()
         const result: Measurement = { ...input, profileId, id, photoId, loggedAt: old?.loggedAt ?? now, updatedAt: now, revision: old ? measurementRevision(old) + 1 : 1, lastMutationId: mutationId }
         if (photo) await database.photos.add({ ...photo, id: photoId!, profileId, role: 'progress', createdAt: now })
         await database.measurements.put(result)

@@ -1,3 +1,4 @@
+import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { resolveTags } from './tags.ts'
 import { db, type BorosDatabase } from './database.ts'
@@ -41,7 +42,7 @@ export function exerciseService(database: BorosDatabase) {
         const now = new Date().toISOString()
         const tagIds = await resolveTags(database, profileId, input.tagNames, now)
         const { tagNames: _tagNames, ...fields } = input
-        const result: Exercise = { ...fields, profileId, id: old?.id ?? creationId ?? crypto.randomUUID(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), tagIds, archivedAt: old?.archivedAt, createdAt: old?.createdAt ?? now, updatedAt: now, revision: (old?.revision ?? 0) + 1 }
+        const result: Exercise = { ...fields, profileId, id: old?.id ?? creationId ?? createId(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), tagIds, archivedAt: old?.archivedAt, createdAt: old?.createdAt ?? now, updatedAt: now, revision: (old?.revision ?? 0) + 1 }
         await database.exercises.put(result)
         return result
       })

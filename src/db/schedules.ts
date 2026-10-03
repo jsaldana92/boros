@@ -1,11 +1,12 @@
+import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { db, type BorosDatabase } from './database.ts'
-import { appendRevision, dateSchema, mappingSchema, occurrences, scheduleInputSchema, validateMapping, type Mapping, type Occurrence, type Schedule, type ScheduleInput } from '../schemas/schedule.ts'
+import { appendRevision, dateSchema, mappingSchema, occurrences, scheduleEnd, scheduleInputSchema, validateMapping, type Mapping, type Occurrence, type Schedule, type ScheduleInput } from '../schemas/schedule.ts'
 import { localToday, nextMonday, weekday } from '../lib/calendar-dates.ts'
 import type { CompletedSession, SessionDraft } from '../schemas/session.ts'
 
-export interface ScheduleChange { scheduleId: string; revision: number; effectiveFrom: string; kind: 'remap' | 'stop'; mapping: Mapping }
-export interface ChangePreview { change: ScheduleChange; fingerprint: string; conflicts: { id: string; date: string; name: string }[]; planName: string }
+export interface ScheduleChange { scheduleId: string; revision: number; effectiveFrom: string; kind: 'remap' | 'stop' | 'duration'; mapping: Mapping }
+export interface ChangePreview { change: ScheduleChange; fingerprint: string; conflicts: { id: string; date: string; name: string }[]; planName: string; startWeek: string; durationWeeks?: number; endDate?: string }
 export interface CalendarEvent extends Occurrence { session?: CompletedSession; draft?: SessionDraft; retained?: boolean }
 export function scheduleService(database: BorosDatabase) {
   const tables = [database.profiles, database.plans, database.schedules, database.drafts, database.sessions]
@@ -13,7 +14,7 @@ export function scheduleService(database: BorosDatabase) {
   const get = async (profileId: string, id: string) => { const value = await database.schedules.get([profileId, id]); if (!value) throw new Error('This schedule is unavailable in this profile.'); return value }
   const preview = async (profileId: string, raw: ScheduleChange): Promise<ChangePreview> => {
     await owner(profileId)
-    const change = z.object({ scheduleId: z.string().uuid(), revision: z.number().int().positive(), effectiveFrom: dateSchema, kind: z.enum(['remap', 'stop']), mapping: z.array(z.object({ dayId: z.string().uuid(), weekday: z.number().int().min(0).max(6) }).strict()).max(7) }).strict().parse(raw), schedule = await get(profileId, change.scheduleId)
+    const change = z.object({ scheduleId: z.string().uuid(), revision: z.number().int().positive(), effectiveFrom: dateSchema, kind: z.enum(['remap', 'stop', 'duration']), mapping: z.array(z.object({ dayId: z.string().uuid(), weekday: z.number().int().min(0).max(6) }).strict()).max(7) }).strict().parse(raw), schedule = await get(profileId, change.scheduleId)
     if (schedule.revision !== change.revision) throw new Error('This schedule changed. Cancel and reopen it before making a new preview.')
     if (schedule.stoppedFrom) throw new Error('This schedule is already stopped.')
     dateSchema.parse(change.effectiveFrom)
@@ -21,18 +22,20 @@ export function scheduleService(database: BorosDatabase) {
     if (change.effectiveFrom < earliest || change.effectiveFrom < schedule.startWeek) throw new Error(`Effective date must be on or after ${earliest > schedule.startWeek ? earliest : schedule.startWeek}.`)
     const plan = await database.plans.get([profileId, schedule.planId])
     if (!plan) throw new Error('The source plan is unavailable.')
+    if (change.kind === 'duration' && weekday(change.effectiveFrom) !== 0) throw new Error('Duration changes must begin on a Monday.')
     if (change.kind === 'remap') {
       mappingSchema.parse(change.mapping)
       if (weekday(change.effectiveFrom) !== 0) throw new Error('Mapping changes must begin on a Monday.')
       validateMapping(change.mapping, plan.days)
     }
     const drafts = (await database.drafts.where('profileId').equals(profileId).toArray()).filter((draft) => !draft.finalizedAt && draft.occurrence?.scheduleId === schedule.id && draft.occurrence.scheduledDate >= change.effectiveFrom).sort((a, b) => a.id.localeCompare(b.id))
-    return { change, planName: plan.name, fingerprint: JSON.stringify([schedule.revision, plan.revision, drafts.map((draft) => [draft.id, draft.revision])]), conflicts: drafts.map((draft) => ({ id: draft.id, date: draft.occurrence!.scheduledDate, name: draft.day.name })) }
+    const boundary = change.kind === 'duration' ? { durationWeeks: plan.durationWeeks, endDate: scheduleEnd(schedule.startWeek, plan.durationWeeks) } : schedule.durationChanges?.at(-1) ?? schedule
+    return { change, planName: plan.name, startWeek: schedule.startWeek, durationWeeks: boundary.durationWeeks, endDate: boundary.endDate, fingerprint: JSON.stringify([schedule.revision, plan.revision, drafts.map((draft) => [draft.id, draft.revision])]), conflicts: drafts.map((draft) => ({ id: draft.id, date: draft.occurrence!.scheduledDate, name: draft.day.name })) }
   }
   return {
     get,
     async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return { schedules: await database.schedules.where('profileId').equals(profileId).toArray(), plans: await database.plans.where('profileId').equals(profileId).toArray() } }) },
-    async create(profileId: string, raw: ScheduleInput, id = crypto.randomUUID()) {
+    async create(profileId: string, raw: ScheduleInput, id = createId()) {
       const input = scheduleInputSchema.parse(raw); z.string().uuid().parse(id)
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
@@ -42,7 +45,8 @@ export function scheduleService(database: BorosDatabase) {
         if (plan.revision !== input.planRevision) throw new Error('The plan changed after your preview. Cancel and reopen Add Plan.')
         validateMapping(input.mapping, plan.days)
         const now = new Date().toISOString()
-        const schedule: Schedule = { id, profileId, planId: plan.id, revision: 1, startWeek: input.startWeek, timeZone: input.timeZone, createdAt: now, updatedAt: now, revisions: [{ id: crypto.randomUUID(), effectiveFrom: input.startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, days: structuredClone(plan.days), mapping: input.mapping }] }
+        const endDate = scheduleEnd(input.startWeek, plan.durationWeeks)
+        const schedule: Schedule = { id, profileId, planId: plan.id, revision: 1, startWeek: input.startWeek, ...(endDate ? { durationWeeks: plan.durationWeeks, endDate } : {}), timeZone: input.timeZone, createdAt: now, updatedAt: now, revisions: [{ id: createId(), effectiveFrom: input.startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, days: structuredClone(plan.days), mapping: input.mapping }] }
         await database.schedules.add(schedule); return schedule
       })
     },
@@ -55,9 +59,10 @@ export function scheduleService(database: BorosDatabase) {
         const change = fresh.change, schedule = await get(profileId, change.scheduleId), now = new Date().toISOString()
         let result = { ...schedule, revision: schedule.revision + 1, updatedAt: now }
         if (change.kind === 'stop') result.stoppedFrom = change.effectiveFrom
+        else if (change.kind === 'duration') result.durationChanges = [...(schedule.durationChanges ?? []).filter((item) => item.effectiveFrom < change.effectiveFrom), { id: createId(), effectiveFrom: change.effectiveFrom, ...(fresh.durationWeeks === undefined ? {} : { durationWeeks: fresh.durationWeeks, endDate: fresh.endDate }) }]
         else {
           const plan = (await database.plans.get([profileId, schedule.planId]))!
-          result = { ...result, revisions: appendRevision(schedule, { id: crypto.randomUUID(), effectiveFrom: change.effectiveFrom, createdAt: now, planRevision: plan.revision, planName: plan.name, days: structuredClone(plan.days), mapping: change.mapping }) }
+          result = { ...result, revisions: appendRevision(schedule, { id: createId(), effectiveFrom: change.effectiveFrom, createdAt: now, planRevision: plan.revision, planName: plan.name, days: structuredClone(plan.days), mapping: change.mapping }) }
         }
         await database.schedules.put(result); return result
       })

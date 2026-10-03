@@ -178,6 +178,7 @@ test('validation, destructive cancellation, nested drafts, failed saves and mobi
   await expect(days(page)).toHaveCount(2)
   await page.setViewportSize({ width: 320, height: 720 })
   await button(page, 'Save plan').focus()
+  await button(page, 'Save plan').scrollIntoViewIfNeeded()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   const saveBox = await button(page, 'Save plan').boundingBox(), nav = await page.getByRole('navigation').boundingBox()
   expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(nav!.y)

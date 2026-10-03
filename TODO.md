@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-03
-Status: Phase 9 complete; reviewed restore/merge/replace/rename, profile Clear Data and semantic round trip verified.
-Current phase: Phase 9 complete. Phase 10 has not started; earlier verified phases remain unchanged.
+Status: Owner revisions Group 1 implemented and locally verified; production HTTPS and live Support acceptance remain pending. Groups 2–4 recorded below and not started. Phase 10 verification and Phase 11 live release acceptance remain pending.
+Current scope: Group 1 compatibility, Support, branding and general controls only. The owner supplied the Ko-fi destination and confirmed bypassing an HTTPS certificate warning; the app fix does not repair HTTPS. Preserve previous handoffs as historical evidence. No commit, push, deployment or DNS/GitHub settings change is authorized.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -28,7 +28,7 @@ Checkboxes mean verified completion, not intent. Phase states: `Not started`, `I
 
 Boros is a React single-page workout tracker. Its static website is shared, but each browser stores its own profiles, plans, workout logs, progress photos, and settings locally. Multiple profiles can exist in the same browser, without passwords.
 
-Navigation consists of Train, Create, Calendar, and Progress in fixed bottom tabs. The avatar/name entry opens Settings; Support appears only inside Settings and opens the owner's configured Ko-fi page in a new tab.
+Navigation consists of Train, Create, Calendar, and Progress in fixed bottom tabs. The avatar-only entry opens Settings; Support appears only inside Settings and opens the owner's configured Ko-fi page in a new tab.
 
 The user can create everything manually. For AI assistance, Boros supplies formatting instructions that users append to their own prompt in an external chatbot. Users paste the resulting structured output into Boros, validate it, edit a preview, and save it locally.
 
@@ -164,8 +164,8 @@ Nested prescriptions are acceptable; do not normalize every set into its own dat
 | 7     | Progress weights/photos and profile synchronization               | 1, 5              | Complete |
 | 8     | Complete ZIP/CSV/JSON export                                      | 1–7               | Complete |
 | 9     | Backup restore, overwrite, merge, rename, and clear data          | 8                 | Complete |
-| 10    | Integrated verification and usability polish                      | 0–9               | Not started |
-| 11    | Static deployment and release smoke test                          | 10                | Not started |
+| 10    | Integrated verification and usability polish                      | 0–9               | Verification pending |
+| 11    | Static deployment and release smoke test                          | 10                | In progress — preparation only |
 
 The default implementation order is numerical. Dependencies describe actual coupling, not permission to skip unfinished work. Phases are feature boundaries, not claims that each will fit into one prompt or session.
 
@@ -451,18 +451,19 @@ Acceptance: verify new-name import, each precedence mode, full replacement, rena
 
 Goal: the complete workflow is usable and the data rules hold across features.
 
-- [ ] Run the repository's production build, type checks, lint, and relevant automated tests; resolve regressions introduced by this work.
-- [ ] Cover meaningful domain cases: validation, per-set ranges, unit conversion, immutable history, duplicate-save prevention, weekly boundaries, parser failures, backup precedence, and transaction rollback.
-- [ ] Run a browser journey: Guest → named profile → create exercise → create four-day plan → schedule → record sets/timers/notes → save → view completion/history → add progress → export → restore under a new name.
-- [ ] Confirm AI imports and manual plans use the same editor, training UI, and persistence path.
-- [ ] Check phone and desktop layouts, keyboard navigation, form labels, focus management, confirmation dialogs, readable errors, and color-independent completion indicators.
-- [ ] Verify recovery after refresh, profile switching, background tabs, and storage failure. Apply and check the selected concurrent-tab policy.
-- [ ] Check user text, filenames, links, and pasted content remain inert. Confirm no profile data/photos are sent to a provider, analytics service, or application backend.
-- [ ] Open YouTube/Ko-fi only by user action; avoid automatic third-party embeds that contradict local-data expectations.
-- [ ] Verify images are reasonably bounded/compressed as implemented, object URLs are released, and archive creation/import reports progress for larger datasets.
-- [ ] Exercise a realistic larger dataset without loading every photo or every possible calendar occurrence at once. Record the dataset and observed result rather than promising an untested capacity.
-- [ ] Confirm the storage notice, backup instructions, and destructive operation wording match actual behavior.
-- [ ] Remove production demo records, fake success messages, unused dependencies, and unfinished actions masquerading as working buttons.
+- [x] Run production build, type checks, lint, data and affected browser/static suites; resolve introduced regressions. Exact full-suite and targeted follow-up results are in the Phase 10 handoff; the Windows WebKit environment blocker remains separate below.
+- [x] Cover meaningful domain cases: validation, per-set ranges, unit conversion, immutable history, duplicate-save prevention, weekly boundaries, parser failures, backup precedence, and transaction rollback (90 isolated data tests plus existing browser interaction suites).
+- [x] Run the complete Guest → named → exercise → manual four-day plan → schedule → training/rests/notes → completion/history → progress/photo → export → renamed restore journey; include AI plans, unfinished draft recovery, exact canonical/image comparison and another unchanged profile.
+- [x] Confirm AI imports and manual plans use the same editor, training UI, scheduling, history and persistence path.
+- [x] Check automated phone/desktop layouts, keyboard access, labels, focus, dialogs, readable errors and textual completion states in both themes; fix WebKit trigger focus and obscured training fields. Physical-device/accessibility-user checks remain below.
+- [x] Verify refresh, profile switching, simultaneous/stale tabs, failed/pending saves and restore/merge/clear ownership protection. This does not claim suspended-device recovery or real quota exhaustion.
+- [x] Check user text/filenames/imports remain inert and production network requests stay local; only the explicitly clicked tutorial link is requested externally (intercepted by the test).
+- [x] Preserve explicit-click tutorial/Support links with no automatic embeds; unavailable Support checked. Actual configured Ko-fi destination remains unverified.
+- [x] Verify existing image bounds, on-demand display, object URL cleanup and larger-archive progress. Original photo bytes remain uncompressed by Boros; no resizing is claimed.
+- [x] Exercise the documented 100-exercise/20-plan/500-session/730-measurement/12-JPEG dataset; record exact environment, sizes and timings in docs/phase10-verification.md.
+- [x] Confirm storage, saved-only backup, destructive previews and commit-only success wording. Replace obsolete unbenchmarked-capacity wording without promising a maximum.
+- [x] No production demo records or fake feature actions found. Remove unused @hookform/resolvers, react-hook-form and date-fns (plus their now-unused transitive package); preserve the user's gh-pages 6.1.1 pin and deployment scripts.
+- [ ] Complete photo-bearing profile/progress/restore verification in a Blob-capable WebKit/Safari environment. Native Windows WebKit Blob writes fail independently of Boros; do not mark this as passed.
 
 Acceptance: the full journey passes, critical data-integrity tests pass, and remaining limitations are recorded explicitly. No known defect remains that can silently corrupt/erase data or misreport a successful save/restore.
 
@@ -470,16 +471,78 @@ Acceptance: the full journey passes, critical data-integrity tests pass, and rem
 
 Goal: publish the tested SPA at a stable address when the owner authorizes deployment.
 
-- [ ] Obtain the real Ko-fi URL and configure/test the Support link.
-- [ ] Prepare the initial release for free GitHub Pages hosting from a public repository. Confirm the repository and optional custom domain before deployment.
-- [ ] Document local setup, actual scripts, supported backup versions, storage scope, single-address navigation, and release steps in the project README.
-- [ ] Produce the release build and verify unchanged-address navigation, remembered-screen refresh, asset paths, and startup at the configured root or project subpath. No screen-specific server routes are required.
-- [ ] Explain that development and production origins have separate data. Use export/import to move records; changing domain/port/protocol does not carry IndexedDB records automatically.
+- [ ] Finish live Support acceptance: the real Ko-fi URL is supplied and configured for production, and protected opening passes local browser checks. Owner confirmation of the account page remains pending behind its Cloudflare challenge.
+- [x] Inspect and prepare the existing GitHub Pages release: public `jsaldana92/boros`, `origin`/`gh-pages`, `dist`, CLI-generated CNAME for `boros-app.com` and `.nojekyll`; retain exact gh-pages 6.1.1 and current scripts. Domain is confirmed but its HTTPS certificate mismatch remains a release blocker.
+- [x] Document local setup, actual scripts, supported backup versions, storage scope, single-address navigation, and release steps in README and docs/release-preparation.md.
+- [x] Produce the release build and verify unchanged-address navigation, remembered-screen refresh, asset paths, and startup at both static root and project subpath. Current Group 1 candidate: 268 static checks passed initially, all 12 adjusted fixtures passed on rerun; 23/23 resource hashes per mount. Earlier 252/252 results remain historical. No screen-specific server routes are required.
+- [x] Explain separate origin ownership and the original-ZIP export/import procedure; preserve source records until target reload, photos/history and isolation are checked.
 - [ ] Deploy only when instructed, then run the short release smoke test on the published origin.
 - [ ] Create a profile, save/reopen a plan/session, reload, export a backup, and confirm persistence from the published site. Check a phone-sized viewport and the Support link.
 - [ ] Record the release URL/version, verification date, and known limitations.
 
+Preparation evidence is in docs/release-preparation.md; the current candidate fingerprint and verification are in docs/group1-verification.md.
+Phase 11 remains incomplete: Phase 10's required Safari check, HTTPS, Ko-fi, actual
+owner-authorized publication and the newly published artifact's smoke test are pending.
+
 Acceptance: the published app passes the release smoke test, data survives reload at its stable address, and backups work. Offline cold start remains outside the release promise unless separately implemented and verified.
+
+## Owner revisions — Groups 1–4 (approved 2026-10-03)
+
+These owner requirements supersede conflicting earlier UI/default requirements.
+Historical phase handoffs remain evidence of the behavior verified at those dates,
+not authority to omit these revisions. Implement one requested dependency group at
+a time; Groups 2–4 below are **not implemented** by Group 1.
+
+### Group 1 — Compatibility, Support, branding and general controls
+
+Status: **Verification pending** for production HTTPS and live Support acceptance. Application implementation and available local checks are complete; the remaining owner/environment checks below are not application fixes.
+
+- [x] Centralize every application UUID path on native randomUUID or secure getRandomValues UUID v4; retain IDs, ownership, records and schema. No Math.random/time/counter fallback. Data tests cover missing/throwing sources and atomic rollback.
+- [x] Report unsupported random/hash APIs as compatibility issues; retain genuine storage errors, input recovery and strict backup checksums. Preserve manual clipboard fallback.
+- [x] Verify native/missing-randomUUID startup, existing IDs, saved records and isolation after reload through the browser and complete import/training/photo/restore journey.
+- [x] Configure the supplied `https://ko-fi.com/jhonatansaldana` via the existing Vite mechanism in the production build; verify explicit protected new-tab opening. Actual production bundle and popup destination/flags checked locally; remote account content is a separate check below.
+- [x] Use the actual owner snake.png/logo.png, preserved aspect ratios and both themes; avatar-only Settings with accessible name/tooltip; either brand image returns to Train through the existing guard at one address.
+- [x] Pair height/weight units beside their inputs, keep Age separate at phone widths, remove the requested weight explanation, and compact sorting/filter controls without reducing touch targets or labels.
+- [x] Show minute precision in ordinary date/time fields/displays while preserving exact saved UTC/zone context on unrelated edits and full backup precision; deliberate date edits choose a minute explicitly.
+- [x] Finish build/type/lint/data and affected static/browser verification, record actual results and update the candidate fingerprint. Exact runs, fixture corrections and remaining environment limits are in the latest handoff and docs/group1-verification.md.
+- [x] Diagnose HTTPS separately: owner Chrome bypass report and independent default-validation Edge/Node observations establish a certificate hostname mismatch. No security warning bypass, certificate-validation change or checksum weakening in this work.
+- [ ] Owner resolves GitHub Pages certificate provisioning/HTTPS enforcement and verifies normally validated HTTPS, final address, secure-context APIs and mixed-content status. This task did not change hosting or deploy the candidate.
+- [ ] Owner confirms the live Ko-fi account page. Automated live navigation reaches a valid TLS response but a Cloudflare 403 challenge, not verified account content.
+
+### Group 2 — Supersets and plan duration (not started)
+
+- [ ] Permit repeated occurrences of the same exercise in a day, including standalone plus superset occurrences; each occurrence owns a stable ID, prescription, notes and results.
+- [ ] Add per-exercise Superset toggle and positive-integer group number in the plan editor. Matching numbers group at least two exercises within that training day only; never join days/plans by a number alone.
+- [ ] Define unequal-set handling, member order, invalid one-member groups and rest between rounds/after the group before implementation. Never fabricate sets or silently discard prescriptions.
+- [ ] Train presents “Superset 1”, member/prescription summary, then ordered rounds: Set 1 A weight/reps, B weight/reps, REST; Set 2 likewise. Support more than two members.
+- [ ] Support supersets in manual creation and external AI instructions, parser and editable preview.
+- [ ] Add explicit plan duration in weeks and stop generating scheduled occurrences after its boundary. Preserve legacy indefinite schedules and historical records without inventing durations.
+- [ ] Update domain schemas, additive migrations if needed, occurrence identity, plan/schedule/session snapshots, drafts/history, AI interchange and backup export/restore together; retain existing valid backups and record integrity fixtures.
+
+### Group 3 — Calendar and Train (not started; depends on Group 2)
+
+- [ ] Move editable time-zone preference to profile Settings; existing schedules retain their recorded zone and dates when the preference changes.
+- [ ] Remove Calendar's Create Plan action; retain Add Plan for existing plans. Default to the current calendar month with complete Monday–Sunday weeks and dim adjacent-month dates while retaining events.
+- [ ] Inspect/reuse the existing distinct-weekday mapping and preview before changing it. Add Plan maps each training day to a distinct Monday–Sunday weekday and repeats for the explicit plan duration.
+- [ ] Train empty state: “Train” and “No active plan(s) selected.” Preserve access to saved history through the redesigned Progress flow; coordinate that move with Group 4 rather than hiding existing history prematurely.
+- [ ] Persist active-plan selection per profile. One selected plan opens directly; multiple selected plans show selectable cards and clear internal Back navigation.
+- [ ] Scheduled cards show last completed workout date and next pending scheduled date, with PAST DUE (red), DUE TODAY, COMPLETED or ON GOING status pills.
+- [ ] Define status precedence using actual pending/completed occurrences. An expired plan with missed sessions is not automatically completed; do not infer history from display names.
+- [ ] Preserve draft recovery, partial completion, notes, timers, edit guards and immutable session history at every drill-down level; keep the public address unchanged.
+
+### Group 4 — Progress redesign (not started; depends on identities from Group 2)
+
+- [ ] Body weight: make the graph primary; remove the visible history/debug dump, canonical values, IDs and technical timestamps. Remove “Vertical scale...” and “One recorded point. Coincident points may overlap...” copy.
+- [ ] Add numeric Y-axis labels, angled X-axis dates, prominent colored points and clearer section dividers. Keep entry/correction/deletion/photos and accessible record selection; never delete underlying history.
+- [ ] Plan progress: horizontal selectable plan-card carousel, completed-day/workout counts with explicit counting rules, then exercise/superset drill-down.
+- [ ] Exercise details show starting/latest actual weights and reps, minimum/maximum recorded weights with associated reps/dates, and a weight-by-date graph.
+- [ ] Workout progress: alphabetically arranged saved exercises/supersets in three columns with readable responsive behavior; equivalent statistics across plans.
+- [ ] Aggregate by reliable exercise identity, never name equality alone. Define legacy/unlinked records without silently merging unrelated movements; use completed-session actual results, convert units, exclude blank/skipped sets and retain valid zero loads.
+- [ ] Define multiple-set and tied-date presentation. For supersets use separate member sections/graphs/dividers without combining different exercises' loads. Distinguishable point colors need accessible labels; an additional repetition graph is optional.
+- [ ] Keep saved-session history reachable through Progress and add Back controls at each level without changing the public URL. Add integrity, accessible graph and navigation tests before calling the redesign complete.
+
+Next dependency group after verified Group 1: Group 2's coordinated superset identity,
+duration and schema/backup/AI changes, only when requested. Do not implement it here.
 
 ## 6. Required test fixtures
 
@@ -499,8 +562,8 @@ These do not block Phase 0 unless the owner changes the scope.
 
 | Input                         | Needed by            | Current handling                                                          |
 | ----------------------------- | -------------------- | ------------------------------------------------------------------------- |
-| Ko-fi page URL                | Phase 11             | Configurable unavailable state; never invent a live URL                   |
-| Hosting repository/domain     | Phase 11             | Free GitHub Pages selected; repository and optional custom domain pending |
+| Ko-fi page URL                | Group 1 / Phase 11   | Supplied: https://ko-fi.com/jhonatansaldana; configured in .env.production, remote challenge may require owner confirmation |
+| Hosting repository/domain     | Phase 11             | Confirmed public jsaldana92/boros and boros-app.com; observed HTTPS hostname mismatch needs owner resolution |
 | Visual brand preferences/logo | During UI refinement | Use a clean, accessible neutral design and text wordmark initially        |
 
 ## 8. Decision log
@@ -556,17 +619,31 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-03 | One atomic transaction rechecks all target records and photo hashes; private reviewed plan and shared commit receipt | Reject stale previews, including same-size Blob changes; rollback assets/records/selection together; repeated clicks cannot duplicate the operation |
 | 2026-10-03 | Decode assets before commit; use Dexie.waitFor only for the byte-level concurrency check inside the locked transaction | Protect against changed photo bytes while preserving atomicity; 60-second timeout rolls back, and large-target CPU/latency remains unbenchmarked |
 | 2026-10-03 | Clear Data retains profile name/kind and unit preferences, removes owned records/photos/timer and demographics | Return an empty usable workspace with an explicit scope and backup opportunity while preserving all other profiles |
+| 2026-10-03 | Lazy-load existing screens; remember only committed screens; keep shell/error recovery available | Reduce initial code without changing memory routing, guards, schema or root/subpath hosting |
+| 2026-10-03 | Focus pointer-activated buttons and keep focused fields above actual fixed controls | Fix demonstrated WebKit dialog-return and training-field visibility differences while preserving native dialogs and keyboard access |
+| 2026-10-03 | Keep the Windows WebKit native Blob failure visible and Phase 10 verification pending | Independent native repro proves an engine/environment blocker; do not redesign persistence or claim Safari coverage from this run |
+| 2026-10-03 | Remove only three confirmed unused direct dependencies; retain exact gh-pages 6.1.1 and deployment commands | Complete Phase 10 dependency cleanup without upgrading packages or replacing the working deployment configuration |
+| 2026-10-03 | Continue Phase 11 preparation while Phase 10 stays verification pending; do not repeat unchanged Windows Blob probes | No suitable alternative WebKit/Safari environment available; retain the required acceptance gate without storage workarounds |
+| 2026-10-03 | Preserve origin/gh-pages, dist, relative assets, CLI CNAME/nojekyll and concurrent favicon/images | Existing supported publication mechanism; no duplicate CNAME, routing, dependencies or DNS changes needed for preparation |
+| 2026-10-03 | Fingerprint every output file and compare HTTPS bytes after owner publication | Distinguish tested working-tree artifacts from package 0.0.0, older deployment and cache; fail on mismatched assets or invalid TLS |
+| 2026-10-03 | Treat observed boros-app.com certificate-name mismatch as a release blocker; leave missing Support honest | Public branch inspection does not prove custom-domain startup or candidate deployment; no invented URL or TLS bypass |
+| 2026-10-03 | Centralize UUID v4 on native randomUUID/getRandomValues and classify unsupported APIs separately | Reproduce the reported startup failure without clearing records; no weak identities or checksum fallback |
+| 2026-10-03 | Keep certificate repair separate from UUID compatibility | Owner confirms HTTPS warning bypass; certificate SANs do not cover boros-app.com. Validated HTTPS runtime remains inaccessible; HTTP probe is independent evidence |
+| 2026-10-03 | Supply the real public Ko-fi URL through .env.production | Existing Vite mechanism embeds it in the actual production build; preserve disabled state for blank/invalid overrides and explicit protected opening |
+| 2026-10-03 | Owner PNG branding, avatar-only Settings, paired units, compact filters and minute-only display | Group 1 supersedes earlier header/default UI requirements; unchanged measurements/time context and backup precision remain authoritative |
+| 2026-10-03 | Record Groups 2–4 as coordinated future dependency groups | Superset occurrence identity and plan duration must reach schemas/AI/snapshots/backups before dependent Calendar/Train/Progress redesign; no partial feature implementation here |
 
 ## 9. Current checkpoint
 
-- Phase 9 is complete; acceptance passed in isolated data, Edge desktop/emulated-phone development, production-preview and plain-static root/project suites. Earlier verified phases and historical handoffs remain unchanged; Phase 10 has not started.
-- Settings Upload data accepts original schema 1/database v5 ZIPs with path/size/version/schema/count/CRC/SHA-256/reference/image checks, a no-write preview, the required name-match choices and explicit confirmation. Worker cancellation/navigation/profile switching discards preparation. Contract: [docs/backup-format.md](docs/backup-format.md).
-- Pure planning selects whole conflicting plan families; device priority skips imported unique logs and file priority removes local unique logs. Unrelated families and independent libraries/tags/measurements survive as specified. Name/ID ambiguities are explicit; same-date measurements are not silently deduplicated. Shared assets and deterministic collision remaps are verified.
-- Commit rechecks captured records and actual photo bytes in one transaction, atomically retires the old ownership ID and installs the selected result. Existing record IDs, historical snapshots/revisions, zones, ordering, timestamps, units, nulls/zeros remain unless a documented reference remap is necessary. Old-tab input remains copyable; stale/new-form writes and delayed autosaves fail owner checks. Clear Data uses the same protection and leaves an empty named workspace with unit preferences.
-- Final checks: build/typecheck/lint/diff pass with no lint warnings; data **90/90**; full development **118 passed / 2 expected static-only skips**, followed by final focused restore development **14/14** after mobile-count/CSV/photo-byte safeguards. Full production preview **118 passed / 2 expected static-only skips**; plain-static root/project **240/240**, no skips. Semantic export → new-name import → export comparison passes; independent whole-family merge tests pass. Dark/light 320px enlarged-text restore previews visually inspected; no-overflow/action-spacing assertions pass.
-- Bundle advisory remains: main JavaScript **579.00 kB / 174.33 kB gzip**, export worker **197.72 kB**, import worker **200.83 kB**, CSS **18.97 kB / 5.04 kB gzip**. No thresholds suppressed, packages installed, configuration replaced or database schema changed.
-- Still unverified: physical phones/save sheets/keyboards/safe areas, Safari/Firefox, screen readers/voice control, spreadsheet applications, live Ko-fi, real storage exhaustion/background-device behavior and large-data/memory/latency. Limits are not a capacity guarantee; snapshots/payloads still use memory and transaction photo hashing can hold a write lock until completion or timeout.
-- Next action: owner spot checks below using disposable profiles; Phase 10 only when requested. No Phase 10 work, publication, push, staging or commit performed.
+- Group 1 implements secure UUID fallback/compatibility errors, configured production Support, actual PNG branding/avatar-only Settings, paired units/compact filters and minute-only date presentation with stored precision intact. Groups 2–4 are unchecked above. Phases 0–9 retain their recorded completion; Phase 10 stays **Verification pending** and Phase 11 **In progress**, not live-verified.
+- Startup diagnosis: Guest initialization directly invoked missing randomUUID, and the provider mislabeled that failure as storage unavailability. Every application ID path now shares a secure generator; unsupported sources fail before initialization writes. Existing ownership, stale-edit guards, transactions, checksum verification, database v5 and backup schema 1 are preserved.
+- Owner confirms HTTPS loads after bypassing Chrome's red certificate warning. Independently, Edge/Node reject the certificate's hostname; its SANs cover GitHub domains, not boros-app.com. Validated HTTPS page runtime/mixed-content state remains unknown; no warning was bypassed here. Separate HTTP probe returns 200 without redirection, isSecureContext false, randomUUID/subtle undefined and getRandomValues available, reproducing the startup message. Do not equate that probe with the owner's HTTPS session.
+- At task start the current public branch HTML matched the pre-edit local dist (entry index-C_gTw0vp.js); it does not contain Group 1's new artifact. Current build entry **274.37 kB / 87.99 kB gzip**, shared **166.06 kB**, export/import workers **198.09/201.20 kB**, CSS **19.44 kB**, no large-chunk warning. User favicon/images and deployment configuration/pins untouched.
+- Group 1 build/typecheck/lint pass; data **97/97**. Full static suite first **268 passed / 12 obsolete-expectation/scroll-fixture failures**, then all affected **12/12 passed** on the unchanged candidate. Full Firefox first **130 passed / 2 touch-target floating-point assertion failures / 2 expected static-only skips**, then **2/2 passed** after rounding the assertion to hundredths of a pixel. Affected development suite **44 passed / 2 expected production-Support skips**. No failure remains; these are combined initial/rerun results, not fresh full-suite passes. Both static mounts pass **23/23** HTTP resource/hash checks.
+- Candidate: **23 files / 2,047,113 bytes**, inventory SHA-256 `33a2a1cc3b7ba3090f829c52bc0e1788f93bbb4c7e19951285a8ee33cfa73e68`. The older release-preparation fingerprints/results are historical; use this Group 1 record for the changed app. Any later source/configuration/asset changes require a new build and affected checks.
+- Support URL is supplied and configured in .env.production. Protected explicit new-tab opening is browser-tested; direct account-page content remains unverified because Ko-fi returns a Cloudflare challenge. Exact live evidence/hosting actions: [docs/group1-verification.md](docs/group1-verification.md). Current owner checklist: [docs/release-preparation.md](docs/release-preparation.md#current-owner-checklist).
+- Previous Windows WebKit native Blob failure remains a blocker for photo-backed Safari acceptance; unchanged probes were not rerun. Physical phone, AT/voice control, real quota, spreadsheets and suspended-device timers remain unverified. Earlier capacity observations are retained in their historical handoff, not rerun or extrapolated to this changed build.
+- Next: owner completes the documented HTTPS/Support checks; Group 2's coordinated superset occurrence identity/duration/schema/AI/backup work is the next implementation group, only when requested. Verify any newly published artifact after separate owner authorization. No staging, commit, push, tag, deployment, DNS/GitHub mutation or owner-data clearing in this task.
 
 ## 10. Handoff entry template
 
@@ -658,11 +735,10 @@ Use locally bundled Roboto if available, otherwise a system sans-serif stack.
 - Left: an ouroboros logo—a snake eating its own tail—beside “Boros”.
 - Render the logo in a color that contrasts with the active theme.
 - Place “Ask not for a lighter burden” beneath the wordmark.
-- Right: circular profile photo, with the username beside it and “Settings”
-  directly beneath the username.
+- Right: circular profile avatar only, with accessible name and tooltip “Settings”.
 - Use a generic avatar when no profile photo exists.
-- Show the actual active profile name, or Guest.
-- The avatar/name/Settings area opens profile settings.
+- Keep the active profile's identity in Settings, not visible text beside the header avatar.
+- The avatar opens profile settings; either owner brand image returns to Train through the navigation guard.
 - Do not use the previous large “Profile & settings” button.
 - Handle long profile names without pushing the brand offscreen.
 
@@ -1058,3 +1134,101 @@ Use a separate test browser profile without clearing existing user data. Prepare
   5. In a disposable browser profile, exercise actual quota exhaustion and a realistically large photo/history dataset. Record ZIP sizes and validation/preview/commit time/memory, cancellation and rollback/input recovery. Test prior training timers after real backgrounding separately. These capacity/device checks have not passed merely because injected failures and archive limits pass.
   6. In Excel/LibreOffice, inspect downloaded UTF-8 CSV quoting, Unicode/multiline text, zero versus blanks, relationships and inert formula-like text; compare canonical JSON. When the owner's real `VITE_KOFI_URL` is configured, click Settings → Support and verify the intended page opens separately. Neither external application nor live destination has been tested here.
 - Next action: the owner can perform the exact disposable-profile manual checks above. No Phase 9 acceptance item remains pending in the available automated environments; carried-forward manual/device/capacity checks remain explicitly unverified. Phase 10 only on request. No publication, push, staging or commit performed.
+
+### 2026-10-03 — Phase 10: integrated verification and focused usability fixes
+
+- Status: **Verification pending**. The complete journey and critical integrity checks pass in Edge/Firefox. Windows WebKit's independently reproduced inability to persist IndexedDB Blobs blocks its photo/restore acceptance. Phase 11 remains separate; no published-origin verification or deployment was performed.
+- Implemented: shared pointer-trigger focus and focused-field visibility fixes demonstrated by WebKit; lazy screen loading with accessible pending/error states and commit-only remembered-screen updates; truthful device-capacity wording. Removed only the confirmed unused @hookform/resolvers, react-hook-form and date-fns dependencies offline (four installed packages including an unused transitive dependency). Kept existing schema, services, ownership guards, memory navigation, Vite base, deployment scripts and the user's exact gh-pages 6.1.1 pin. Concurrent index.html/favicon changes remain untouched.
+- Added: complete manual/AI UI journey with scheduled completion, source-edit-independent history, saved-draft export/restore/resume, progress/photo byte comparison, restored measurement correction/deletion/unit synchronization, unchanged second profile and production network audit; native IndexedDB Blob probe; failed-screen-chunk recovery check; larger-data fixture and timing report; separate production engine/capacity configs. No product features added.
+- Baseline: build/typecheck/lint pass, data **90/90**, production Edge **118 passed / 2 static-only skips**. Existing suites were retained for zero/optional validation, duplicates, schedule boundaries, late/partial completion, failed/pending/simultaneous saves, stale profiles/editors/autosaves, whole-plan-family merges, cancellation, limits and transaction rollback.
+
+Actual verification (isolated contexts/test databases; no user data cleared):
+
+| Command / scope | Actual result |
+| --- | --- |
+| `npm run build`; `npm run typecheck`; `npm run lint` after final source/dependency changes | Pass; no lint warnings or bundle-size advisory |
+| `npm run test:data` | **90/90** after cleanup. An earlier sandboxed invocation failed to spawn workers (`EPERM`); rerun with required subprocess permission passed |
+| `npm run test:browser` | Full run: **123 passed, 1 fixture timing failure, 2 static-only skips**. Backup fixture reloaded before lazy Settings committed |
+| `npm run test:browser -- tests/browser/backups.spec.ts tests/browser/navigation.spec.ts` | After fixing fixture readiness and page-initiated unload check: **26/26** |
+| `npm run test:browser:preview` | Full production suite: **124 passed / 2 static-only skips** |
+| `npm run test:browser:static` | Full plain-static root/project desktop/phone suite: **252/252** |
+| `npm run test:browser:static -- tests/browser/navigation.spec.ts tests/browser/journey.spec.ts tests/browser/hosting.spec.ts` | Final-build follow-up after cleanup/error wording: **44/44**, including direct startup, dynamic chunks, all screens, refresh, full journeys and real static 404s |
+| `node node_modules/playwright/cli.js test --config playwright.engines.config.ts --project=firefox-desktop --project=firefox-phone --workers=2` | **116 passed / 2 driver navigation timeouts / 2 static-only skips**; CDP-only timezone tests excluded and covered in Edge |
+| Same Firefox command with `--grep 'browser Back leaves'` | Corrected page-initiated exit/cancel checks: **2/2**; input retained. No failing applicable Firefox check remains after targeted correction |
+| Initial full Firefox/WebKit engine command | **185 passed / 47 failed / 4 static-only skips**. Failures separated into native Blob limitation, corrected focus/spacing defects and corrected test readiness/navigation assumptions; not labeled a full passing WebKit run |
+| WebKit desktop/phone `--grep 'set growth\|complete workout\|failed autosave and completion\|plan name conflicts\|four-day schedule\|Settings returns'` | After shared focus fixes: **12/12** |
+| Engine config, `tests/browser/navigation.spec.ts`, both WebKit projects | Final-build full navigation suite: **18/18**, including canceled unload and chunk failure |
+| `node node_modules/playwright/cli.js test --config playwright.capacity.config.ts` | **1/1**, repeated after adding photo-read instrumentation and bounded-month assertions; final dataset metrics below |
+| Engine config, `tests/browser/storage-engine.spec.ts`, both WebKit projects | **2 failures**, both native `UnknownError: Error preparing Blob/File data to be stored in object store`; deliberate unskipped reproduction, independent of Boros/Dexie |
+| `git diff --check` | Pass; Git emits local LF/CRLF conversion notices, not whitespace errors |
+
+- Performance: Windows/Edge 154.0.4258.37, Ryzen 5 3600, 16 GiB, desktop 1440×1000, one worker. Disposable profile: **100 exercises, 1 tag, 20 four-day plans, 5 schedules, 500 completed sessions + 500 finalized drafts, 730 measurements, 12 synthetic photographic-size 1280×960 JPEGs**. Each image is 866,319–867,278 bytes; exact sizes and both runs are in [docs/phase10-verification.md](docs/phase10-verification.md). Final ZIP **10,835,108 bytes**, expanded inventoried payload **15,957,150 bytes**, below import limits. Final milliseconds: Settings reload **452**, Train **923**, Create **493**, filter **82**, Progress **1281**, calendar week **991**, month **92**, export **1269**, upload validation **3024**, preview **490**, restore commit **331**. Progress read zero photo records; month at most 42 days. Synthetic oversized-file rejection and existing parser-limit tests pass without partial writes. This is not real quota testing, a statistical benchmark or unlimited-capacity support.
+- Bundle: entry **274.59 kB / 88.01 kB gzip**, largest shared chunk **165.01 kB**, route chunks **11.59–43.26 kB**, export/import workers **197.72/200.83 kB**, CSS **18.97 kB**. Compare pre-change entry **579.11/174.39 kB**. Shared/route downloads are additional; the entry reduction is not the total startup-transfer reduction. No warning threshold was raised.
+- Remaining blocker: complete photo/avatar/progress/restore round trips in a Blob-capable WebKit/Safari environment before marking Phase 10 complete. The Windows engine returns an explicit failed-save error and keeps input; no silent success was observed. Do not change the database format merely to bypass this native test-engine failure.
+- Documented limitations: full history metadata still renders in memory; full-resolution images load on request, with no resizing/thumbnails; export/restore snapshots/payloads consume memory; an export can exceed importer limits; transaction photo hashing may hold the write lock until completion/timeout. No offline cold-start/background alarm or maximum-capacity guarantee. Native WebKit automation is not physical Safari. Live Ko-fi and published-origin behavior remain unverified.
+
+Historical Phase 10 owner checks (superseded as the current checklist by docs/release-preparation.md; retained with this handoff):
+
+1. **Phase 10 blocker — Blob-capable WebKit/Safari:** save an avatar and a dated progress photo, reload, then follow the manual/AI journey in docs/phase10-verification.md. Export a completed session plus an unfinished draft; import under a new name, reload, resume the draft and verify photos, prescriptions, notes, units, measurements and calendar completion. Re-export and compare; confirm another profile is unchanged. Run the native Blob/journey/restore tests in that environment where possible. Record browser/OS and results.
+2. **Physical phone:** repeat in dark/light with the real keyboard open, narrow/rotated viewport and enlarged text. Reach the last input, Save/Clear and fixed navigation; check note/photo dialogs, Escape/back gestures, focus return, file selection and the actual ZIP save/share sheet. Confirm refresh recovers saved drafts but does not promise unsaved forms. Check lock/background/resume timer behavior without assuming an alarm will fire while suspended.
+3. **Assistive technology:** use NVDA or VoiceOver and voice control to navigate, create/edit, announce field/save errors and completion states, open/close note/photo/confirmation dialogs and restore focus. Verify status is understandable without color. Keyboard automation alone does not establish these results.
+4. **Disposable storage and backup:** test actual quota/storage denial and recovery without deleting a real workspace; ensure failed saves retain input and no success appears. Open exported CSVs in the intended spreadsheet app, checking Unicode, multiline/quoted text and formula-like strings; CSVs are not the restore source.
+5. **Phase 11 owner checks, separately authorized:** supply/configure the real Ko-fi URL and verify only an explicit click opens that destination. On the published origin, verify profile/plan/session/photo persistence, export/restore and phone navigation; browser data does not migrate automatically between localhost and boros-app.com. This phase did not publish or redeploy.
+
+- Next action: resolve the WebKit/Safari photo/restore verification blocker, record the exact result, then reassess Phase 10 completion. Do not mark Phase 11 complete from the existence of a deployment.
+
+### 2026-10-03 — Phase 10 closeout and Phase 11 release preparation
+
+- Status: Phase 10 **Verification pending**; Phase 11 **In progress — preparation only**. Required Blob-capable WebKit/Safari photo verification remains unavailable. No unchanged Windows Blob probes were rerun. No new application defect was found in this preparation; prior focus/visibility fixes remain covered.
+- Changed in this task: `scripts/release-audit.mjs`, `docs/release-preparation.md`, README, TODO, Phase 10 verification and backup-format documentation. Added deterministic output fingerprints, read-only HTTPS resource comparison, actual deployment details, cross-origin record-transfer procedure, one current owner checklist and published-origin smoke steps. Existing application/schema/routing/dependencies/deployment scripts and unrelated favicon/logo/snake work were preserved.
+- Deployment inspection: public `jsaldana92/boros`, main source branch, CLI default `origin`/`gh-pages`, `dist`, exact gh-pages 6.1.1, existing predeploy build and `--cname boros-app.com --nojekyll`. Raw public CNAME/nojekyll verified; no duplicate local CNAME required. GitHub Pages settings/enforced HTTPS could not be verified by unauthenticated API (404).
+- **New release blocker:** isolated Edge returns `ERR_CERT_COMMON_NAME_INVALID`; Node returns `ERR_TLS_CERT_ALTNAME_INVALID` for `https://boros-app.com/`. Observed certificate is for `*.github.io` and not expired at inspection. No TLS bypass, DNS or settings edits. Deployment branch `01edf4154ef05ca6bc7d94361dfe155137694416` has different entry/HTML than the candidate; it cannot establish candidate acceptance. Public startup/live smoke is pending.
+- Ko-fi: production configuration inspected without exposing environment values; no URL supplied. Disabled/unavailable state remains correct. Owner must supply and verify the actual destination to satisfy existing Phase 11 acceptance.
+
+Fresh verification against the final build (isolated contexts/test databases):
+
+| Command / check | Actual result |
+| --- | --- |
+| `npm run build` | Pass; no bundle-size warning; entry 274.59 kB / 88.01 kB gzip, shared 165.01 kB, five screens 11.59–43.26 kB, CSS 18.97 kB, export/import workers 197.72/200.83 kB |
+| `npm run typecheck`; `npm run lint` | Pass; lint also rerun after final audit argument validation |
+| `npm run test:data` | **90/90**, no skips or failures |
+| `npm run test:browser:static` | **252/252**, no skips/failures, 3.3m; root/project × desktop/phone, no SPA rewrite |
+| `$env:PLAYWRIGHT_BROWSERS_PATH = "$PWD/node_modules/.cache/playwright"`; `node node_modules/playwright/cli.js test --config playwright.engines.config.ts --project=firefox-desktop --project=firefox-phone --workers=2` | **118 passed / 2 expected static-host-only skips**, 3.6m; three CDP-only scenarios excluded by existing config and covered in Edge |
+| `node scripts/release-audit.mjs` | Pass: **22 files / 2,045,178 bytes**, no bounded marker/output findings. Initial sandboxed Git subprocess failed `EPERM`; authorized read-only rerun passed |
+| `node scripts/release-audit.mjs --url http://127.0.0.1:4174/` and same with `/project-check/` | **22/22 HTTP 200 + exact SHA-256 matches per mount**, including favicon/images/lazy chunks/workers |
+| Audit deliberately pointed at `http://127.0.0.1:4173/not-the-release/` | Expected nonzero **exit 1**, `matchesCandidate: false`; incorrect resources are rejected even if the preview host returns fallback HTML |
+| `git diff --check` | Pass; only existing LF/CRLF notices |
+| Existing live HTTPS | Failed certificate hostname validation in isolated Edge and independent Node; no live candidate UI check claimed |
+
+- Candidate inventory SHA-256: `f907033f818dbc35bb6178877601468aba34e535296e5758ba01734750c18415`. Local base HEAD `d062772de62be76c9755d5de6fa717a5401738a9` plus dirty working tree; package `0.0.0` is not a unique release identifier. Receipt is ignored `test-results/release-candidate.json`. Final app/public output remained unchanged through verification/documentation. Rebuild/retest/re-fingerprint if owner changes Support, code or assets.
+- Reused evidence: prior focused WebKit 12/12 and navigation 18/18, independent native Blob failures, and final capacity 1/1 remain historical evidence for unchanged application chunks; no new full WebKit, capacity or physical-device claim. Fresh full Firefox supersedes the earlier partial run/follow-up for current applicable Firefox coverage.
+- Limits retained: photo-bearing Safari round trip required; physical phone keyboards/save sheets, screen reader/voice control, real quota, spreadsheet apps, background timers and live Support unverified. No offline cold-start, unlimited-memory or oversized-export restore guarantee. Original backup schema 1/database v5 and destructive merge rules unchanged.
+- Next / single current owner checklist: [docs/release-preparation.md](docs/release-preparation.md#current-owner-checklist). Resolve Safari/HTTPS/Ko-fi gates, review changes and tested fingerprint, then owner-only commit/deploy and fresh published-origin smoke. No staging, commit, source push, tag, deployment, DNS/GitHub mutation or clearing user data performed. Phase 11 cannot be complete until the intended artifact is published and required live checks pass.
+
+### 2026-10-03 — Owner revisions Group 1: compatibility, Support and general UI
+
+- Status: **Verification pending** for production HTTPS/live Support acceptance; implementation and available local verification are complete. Phase 10 remains **Verification pending**, Phase 11 **In progress**. Groups 2–4 are recorded above as unchecked future work; none was implemented.
+- Startup: Guest initialization's direct missing `crypto.randomUUID` call was caught as a generic storage failure. New `src/lib/browser-crypto.ts` supplies native or secure getRandomValues UUID v4 for every application ID path. Existing IDs/records stay intact; initialization verifies randomness before database writes. Unsupported/throwing sources report compatibility errors, while transactions retain rollback and genuine storage errors. Workers do not generate IDs. Database v5 and backup schema 1 unchanged.
+- Security: backup UI and worker hashing require real Web Crypto SHA-256; missing APIs fail explicitly without skipped checksums or false success. Manual clipboard selection still works when clipboard APIs fail. UUID compatibility does not repair TLS or establish a trusted connection.
+- UI/configuration: `.env.production` supplies the owner's real Ko-fi URL. Protected Support opening stays inside Settings and requires a click. Header uses the original snake.png/logo.png, proportionally in both themes, exact text tagline and guarded Train navigation; Settings is avatar-only with name/tooltip. Height/weight units are paired with their inputs, Age remains separate at 320px, filters are compact with 44px controls. Ordinary dates display minutes without truncating stored precision, unchanged measurement edits or backup data. Favicon, dependency pins, deployment scripts, single-address navigation and unrelated pre-existing work were preserved.
+- Files: crypto/date helpers and their data tests; existing database ID call sites; WorkspaceProvider/AppShell; profile/Create/calendar/Train/Progress presentation and CSS; backup compatibility guards; affected browser fixtures plus new Group 1 tests and native/fallback journeys; public production environment configuration and documentation. No new dependency or schema migration.
+
+| Command/check | Actual result |
+| --- | --- |
+| `npm run build`; `npm run typecheck`; `npm run lint` | Passed; lint rerun after the final test-only correction; no large-chunk warning |
+| `npm run test:data` | **97/97**, no skips/failures; seven new secure-randomness, rollback, identity/isolation, strict checksum and precision tests |
+| `npm run test:browser:static` | Initially **268 passed / 12 failed**, no skips; obsolete Calendar ISO text and visible Guest-header expectations, plus brand assertion without scrolling back to the header |
+| `npm run test:browser:static -- --last-failed` | **12/12 passed** after fixture corrections; same production artifact |
+| `$env:PLAYWRIGHT_BROWSERS_PATH = "$PWD/node_modules/.cache/playwright"`; `node node_modules/playwright/cli.js test --config playwright.engines.config.ts --project=firefox-desktop --project=firefox-phone --workers=2` | Initially **130 passed / 2 failed / 2 expected static-only skips**; Firefox serialized a 44px target as 43.999996px |
+| Same Firefox command with `--last-failed` | **2/2 passed** after rounding only the touch-target assertion to hundredths of a pixel; 44px requirement unchanged |
+| `npm run test:browser -- tests/browser/group1.spec.ts tests/browser/profiles.spec.ts tests/browser/progress.spec.ts tests/browser/shell.spec.ts tests/browser/journey.spec.ts` | **44 passed / 2 expected production-Support skips**; development unconfigured Support state passes |
+| `node scripts/release-audit.mjs`; `node scripts/release-audit.mjs --url http://127.0.0.1:4174/` and same with `/project-check/` | **23/23 resources per static mount**, exact HTTP byte/hash matches and zero findings; no SPA rewrite |
+| `git diff --check` | Passed |
+
+- Browser evidence combines the initial full runs and their targeted passing reruns, not a newly claimed full 280/280 or 132/132 run. Native and unavailable-randomUUID UI journeys cover manual/AI creation, profiles/IDs/reload/isolation, scheduling, timers, drafts, photos and byte-preserving backup/restore. Focused checks cover unavailable secure randomness/no writes, unavailable hashing/no success, manual clipboard fallback, both guarded brand images, avatar names, both themes, paired units and precise measurement timestamps through edits. Dark/light 320px and light 1440px screenshots were inspected. All tests use isolated contexts/test databases; owner records were not cleared.
+- Current candidate inventory: **23 files / 2,047,113 bytes**, SHA-256 `33a2a1cc3b7ba3090f829c52bc0e1788f93bbb4c7e19951285a8ee33cfa73e68`. Entry **274.37 kB / 87.99 kB gzip**, shared **166.06 kB**, workers **198.09/201.20 kB**, CSS **19.44 kB**. Base HEAD `d062772de62be76c9755d5de6fa717a5401738a9` plus preserved dirty working tree. Ignored receipts are `test-results/release-candidate.json`, `group1-root-resources.json` and `group1-project-resources.json`. No application/configuration/asset change after this tested build; later changes require a new build and affected verification.
+- Live diagnosis: owner Chrome displays struck-through HTTPS and loads only after the owner bypasses its certificate warning. Independent default-validation Edge fails with `ERR_CERT_COMMON_NAME_INVALID`, Node with `ERR_TLS_CERT_ALTNAME_INVALID`; certificate is valid August 2–October 31, 2026 but SANs cover GitHub domains, not boros-app.com. The HTTPS document never loads here, so final successful redirects, secure-context APIs and mixed content are unverified. No warning was bypassed here. A separate deliberate HTTP probe stays HTTP, returns 200, lacks randomUUID/subtle, has getRandomValues and reproduces startup failure; it is not evidence that the owner used HTTP.
+- Hosting evidence: observed four apex A records match GitHub Pages, with no AAAA/CAA answer; authenticated Pages provisioning/settings remain unknown. Owner must verify the exact custom domain, DNS check and certificate issuance, then enforce HTTPS and check normal validated loading/redirects. No blind DNS replacement or hosting edit was performed. Public HTML at task start matched the then-local pre-edit build, superseding the earlier older-artifact observation; the new Group 1 candidate is not published. Exact evidence/API capture and owner actions: [docs/group1-verification.md](docs/group1-verification.md).
+- Live Support: local production test verifies the supplied account URL, explicit-only new tab, `noopener noreferrer` and null opener. Independent live request gets certificate-valid Ko-fi HTTP 403/Cloudflare “Just a moment…”; account content remains unverified. Owner should confirm the intended page in an ordinary browser. No challenge bypass.
+- Remaining manual/environment checks: photo-bearing Safari/WebKit round trip, physical phone keyboards/safe areas/download sheets, screen reader/voice control, real quota, spreadsheet applications and suspended-device timers. Known Windows WebKit Blob limitation was not repeatedly reprobed; earlier capacity results remain historical. Current exact owner checklist: [docs/release-preparation.md](docs/release-preparation.md#current-owner-checklist).
+- Next: resolve owner HTTPS/Support checks. The next implementation dependency group, only on request, is Group 2's superset occurrence identity and duration coordinated across schemas, snapshots/history, AI and backups. No staging, commit, push, publication, dependency installation, DNS/GitHub mutation or owner-data deletion was performed.

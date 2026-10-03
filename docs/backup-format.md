@@ -344,7 +344,49 @@ documented pruning of unreferenced photos. The representative round-trip fixture
 references every asset, so every original image byte is compared. Independent merge
 tests assert whole-family winners and unique losing logs; round-trip success alone
 does not establish merge correctness. See TODO.md for exact current checks and the
-still-unverified physical-device/browser-engine/accessibility/capacity checks.
+still-unverified physical-device/accessibility checks. Phase 10's measured dataset,
+complete UI-created round trip, network audit and native Windows WebKit Blob-storage
+blocker are recorded in [phase10-verification.md](phase10-verification.md). Edge and
+Firefox results must not be extrapolated to physical Safari or unlimited capacity.
+
+## Moving between website addresses
+
+Group 1 compatibility note: export/import and deterministic identity remapping still
+use SHA-256 with full-precision records. A secure-UUID fallback does not provide
+`crypto.subtle`, repair HTTPS or waive any checksum. Missing Web Crypto reports a
+compatibility/valid-HTTPS requirement before a download or import commit; workers
+retain the same guard. Do not clear an HTTP workspace when fixing the production
+certificate. HTTP and HTTPS are separate origins, so retained records may need
+recovery from their original origin in a supported secure environment. If hashing
+is unavailable there, do not promise that this importer/exporter can run insecurely.
+
+Localhost development, preview and `https://boros-app.com` have separate origin
+storage. Scheme, host and port determine that boundary; changing a path alone
+does not isolate data. Publishing static files does not upload or migrate records.
+Profiles have no passwords or server copy, and clearing browser/site data can
+remove them. Do not delete the source to test a move.
+
+1. At the source address, save pending work and select the intended profile.
+   Settings → Data → acknowledge saved-data scope → Download data. Confirm the
+   actual original ZIP is present/readable on disk; “Download started” cannot
+   confirm filesystem success. Repeat separately for each desired profile.
+2. At the verified target address, use Settings → Data → Backup ZIP. Select the
+   original schema 1/database v5 ZIP; do not unpack/repackage it or import CSVs.
+   Review validation and counts. Prefer **Import under a new name** with an unused
+   name if a name conflict exists; merge/replace have the destructive whole-family
+   semantics documented above. Review, acknowledge and Confirm and save.
+3. Reload the target. Check the profile, plans, saved sessions and unfinished draft,
+   dates/time zones, notes, units, current weight and original photos. Re-export and
+   compare records/photo bytes with the documented identity exceptions. Verify an
+   unrelated target profile is unchanged. Retain the source and original ZIP until
+   this is established. Theme/navigation/timers do not migrate.
+
+Use isolated disposable contexts for release testing; do not clear an owner's
+browser data. Photo-backed restore in Blob-capable WebKit/Safari remains a Phase 10
+gate, and physical save sheets/real quota behavior remain unverified. Limits above
+still apply: an oversized export may need a future compatible importer. This
+procedure promises neither automatic sync nor offline cold start. Current release
+readiness and the owner checklist are in [release-preparation.md](release-preparation.md).
 
 Implementation references: [Dexie transactions](https://dexie.org/docs/Dexie/Dexie.transaction()),
 [JSZip asynchronous generation](https://stuk.github.io/jszip/documentation/api_jszip/generate_async.html),
