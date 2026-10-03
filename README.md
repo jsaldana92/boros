@@ -1,8 +1,8 @@
 # Boros
 
-A React / TypeScript / Vite workout tracker. Phases 1-7 provide a themed shell with single-address navigation,
+A React / TypeScript / Vite workout tracker. Phases 1-8 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, and Progress weight history/charts/photos. Backup tools and profile Clear Data are not implemented yet. See TODO.md for
+Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress weight history/charts/photos, and complete profile ZIP export. Backup restore and profile Clear Data are not implemented yet. See TODO.md for
 the authoritative plan and verification record.
 
 ## Local development
@@ -551,5 +551,64 @@ bundle-size advisory: 547.10 kB minified / 163.88 kB gzip JavaScript.
 Exact verification commands and remaining manual checks are recorded in TODO.md.
 Physical phones, Safari/Firefox, screen readers/voice control, live Ko-fi,
 real storage exhaustion, background-device behavior, and large-data performance
-remain unverified. Backup export/import and profile Clear Data remain future work;
-the next requested implementation phase is Phase 8 export.
+remain unverified. Phase 7 results above are historical; current export behavior
+and Phase 8 results follow.
+
+## Download complete profile data (Phase 8)
+
+In Settings → Data, confirm the displayed profile and saved-data scope, then choose
+**Download data**. The ZIP contains personal records/photos and is not encrypted
+or password-protected. The app reports **Download started**; check your browser's
+downloads to confirm the file was saved. Filenames include a sanitized profile
+name and UTC export timestamp.
+
+Backup schema **1** is separate from AI interchange and database schema **5**.
+The archive contains `manifest.json`, authoritative `data.json`, 21 linked CSVs,
+and original photo files. App version comes from the actual package.json value,
+currently `0.0.0`. See [the backup contract](docs/backup-format.md) for the full
+layout, fields, units, joins, timestamp meanings, and Phase 9 compatibility rules.
+
+Export includes the selected profile's preferences, tags, active/archived library
+exercises and plans, ordered prescriptions and historical snapshots, schedules
+and all mapping revisions, saved unfinished/finalized drafts, completed full/partial
+sessions/results/notes, measurements, and photo references/assets. Stable IDs and
+canonical units are preserved. Shared photos are written once per asset ID.
+Browser-wide appearance/selection/notice preferences, active timers, navigation,
+object URLs, unsaved forms, unapplied notes and pending/failed autosaves are excluded.
+
+Before exporting, save edits/apply notes and wait for **Draft saved locally** in
+every training tab. Boros cannot flush another tab's pending input; the UI requires
+acknowledging that only committed records are included and blocks dirty Settings
+forms. One read-only transaction captures the chosen profile and all owned records.
+A worker then validates references, reads photo bytes, serializes CSV/JSON, hashes,
+compresses and reopens the ZIP for validation. Concurrent edits cannot mix record
+versions. Missing required references abort export without changing source data.
+
+Each payload file has a SHA-256 checksum and byte size in the manifest; the manifest
+itself is excluded to avoid a self-referential checksum. CSVs use UTF-8 and proper
+quoting, with formula-like string cells protected even after leading whitespace.
+JSON text stays exact; genuine numeric zero stays numeric. Blank CSV cells represent
+missing/null/empty text, so CSVs are not a restore format. Photo bytes are unchanged.
+
+Preparation shows actual stages and compression progress; repeated clicks are
+locked. **Cancel export**, leaving Settings, or switching profiles cancels preparation.
+The captured owner cannot change mid-export. Download object URLs are revoked
+after 60 seconds. Export makes no database writes. Packaging runs in a worker,
+but the snapshot/archive still require memory; no large-data capacity is promised.
+
+Phase 8 verification passed: build, typecheck, lint, diff checks, data tests **73/73**,
+focused export browser tests **8/8**, and full development and production preview
+each **104 passed / 2 expected static-only skips**. Plain-static root/project hosting
+passed **212/212**, including worker loading and actual ZIP downloads. Main
+JavaScript is **552.25 kB minified / 165.76 kB gzip**, plus a **197.72 kB** export worker;
+Vite's existing >500 kB advisory remains. No dependency/configuration/schema changes.
+
+Still unverified: physical phone download/save sheets, Safari/Firefox, screen-reader
+announcements and voice control, real spreadsheet rendering/formula handling,
+large-data/memory capacity, actual storage exhaustion, background-device behavior,
+and the live Ko-fi destination. Exact manual checks are in TODO.md.
+
+**Restore is not implemented or round-trip verified.** Upload Data, merge/replace/
+rename import and profile Clear Data remain disabled. Phase 9 is the next phase,
+only when requested; it must validate untrusted archives and complete an
+export → import → export semantic comparison before making a recovery guarantee.

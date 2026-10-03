@@ -8,6 +8,7 @@ import { StorageExplanation } from './StorageNotice'
 import { useScreenNavigation } from '../../app/navigation-context'
 import { ScreenButton } from '../../app/ScreenButton'
 import { pages } from '../../app/pages'
+import { DownloadData } from '../backups/DownloadData'
 
 export function SettingsPage() {
   const workspace = useWorkspace()
@@ -38,7 +39,7 @@ export function SettingsPage() {
         try { await profiles.setTheme(theme) } catch { setError('Appearance could not be saved. Your previous setting is unchanged.') } finally { setBusy(false) }
       }}>{theme === 'dark' ? 'Dark' : 'Light'}</button>)}</div>
     </section>
-    <section className="settings-section" aria-labelledby="data-heading"><h2 id="data-heading">Data</h2><StorageExplanation /><div className="actions"><button disabled>Download data</button><button disabled>Upload data</button><button disabled className="destructive">Clear data</button></div><p className="muted">Backup and clear-data tools are not available yet.</p></section>
+    <section className="settings-section" aria-labelledby="data-heading"><h2 id="data-heading">Data</h2><StorageExplanation /><DownloadData key={workspace.snapshot.profile.id} /><div className="actions"><button disabled>Upload data</button><button disabled className="destructive">Clear data</button></div><p className="muted">Restore and profile clear-data tools are not available yet.</p></section>
     <section className="settings-section" aria-labelledby="support-heading"><h2 id="support-heading">Support</h2>
       {supportUrl ? <a className="support-link" href={supportUrl} target="_blank" rel="noopener noreferrer"><Heart aria-hidden="true" size={20} /><span>Support Boros<small>Ko-fi</small></span><ExternalLink aria-hidden="true" size={18} /><span className="sr-only"> (opens in a new tab)</span></a> : <><button className="support-link" disabled aria-describedby="support-note"><Heart aria-hidden="true" size={20} /><span>Support Boros<small>Ko-fi</small></span><ExternalLink aria-hidden="true" size={18} /></button><p id="support-note" className="muted">Support link coming soon.</p></>}
     </section>

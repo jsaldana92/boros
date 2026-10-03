@@ -1,0 +1,107 @@
+import { z } from 'zod'
+import { exerciseInputSchema, setSchema } from './exercise.ts'
+import { daySchema as originalDaySchema, occurrenceSchema, sourceSchema, planInputSchema } from './plan.ts'
+import { heightUnitSchema, measurementSchema, weightUnitSchema, type Measurement, type PhotoAsset, type Profile } from './profile.ts'
+import type { Exercise, Tag } from './exercise.ts'
+import type { Plan } from './plan.ts'
+import { dateSchema, mappingSchema, occurrenceKey, validateMapping, type Schedule } from './schedule.ts'
+import { assessSession, sessionInputSchema, validateDraftInput, type CompletedSession, type SessionDraft } from './session.ts'
+import { monday, validZone } from '../lib/calendar-dates.ts'
+import { validateTimeContext } from '../lib/measurement-dates.ts'
+
+export const BACKUP_VERSION = 1
+export const SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Wait for Draft saved locally in every training tab before exporting.'
+export interface ProfileSnapshot {
+  databaseVersion: number; capturedAt: string; profile: Profile; tags: Tag[]; exercises: Exercise[]; plans: Plan[]
+  schedules: Schedule[]; drafts: SessionDraft[]; sessions: CompletedSession[]; measurements: Measurement[]; photos: PhotoAsset[]
+}
+const id = z.string().uuid(), time = z.string().datetime(), revision = z.number().int().positive()
+const owned = { id, profileId: id }, timestamps = { createdAt: time, updatedAt: time }
+const prescription = exerciseInputSchema.extend({ sets: z.array(setSchema.strict()).min(1).max(100) }).strict()
+const source = z.discriminatedUnion('kind', [sourceSchema.options[0].strict(), sourceSchema.options[1].strict()])
+const daySchema = originalDaySchema.extend({ exercises: z.array(occurrenceSchema.extend({ prescription, source: source.optional() }).strict()).min(1).max(100) }).strict()
+const archived = { ...owned, ...timestamps, archivedAt: time.optional(), nameKey: z.string(), activeNameKey: z.string().optional(), revision }
+const occurrence = z.object({ key: z.string(), scheduleId: id, dayId: id, scheduledDate: dateSchema, scheduledWeek: dateSchema, timeZone: z.string().refine(validZone), scheduleRevisionId: id }).strict()
+const sessionBase = { ...owned, revision, sourcePlanId: id, sourceDayId: id, planName: z.string(), day: daySchema, startedAt: time, occurrence: occurrence.optional(), occurrenceKey: z.string().optional() }
+const number = z.number().finite().nonnegative(), integer = number.int().max(Number.MAX_SAFE_INTEGER)
+const recorded = z.discriminatedUnion('skipped', [z.object({ skipped: z.literal(true) }).strict(), z.object({ skipped: z.literal(false), weightKg: number, load: number, unit: weightUnitSchema, reps: integer, rir: integer.optional() }).strict()])
+export const assetSchema = z.object({ ...owned, createdAt: time, role: z.enum(['avatar', 'progress']), width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), bytes: z.number().int().positive().max(5 * 1024 * 1024), path: z.string().regex(/^photos\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/i) }).strict()
+export type BackupAsset = z.infer<typeof assetSchema>
+export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1; assets: BackupAsset[] }
+// Validation never replaces the original records with Zod's parsed/transformed output.
+// The JSON payload retains saved text, optional-field presence, array order and snapshots.
+export const backupDataSchema = z.object({
+  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.literal(BACKUP_VERSION),
+  profile: z.object({ id, kind: z.enum(['guest', 'named']), name: z.string(), nameKey: z.string(), age: z.number().int().min(0).max(130).nullable().optional(), heightCm: z.number().positive().max(300).nullable().optional(), weightUnit: weightUnitSchema, heightUnit: heightUnitSchema, photoId: id.nullable().optional(), revision, ...timestamps }).strict(),
+  tags: z.array(z.object({ ...owned, ...timestamps, name: z.string(), nameKey: z.string(), archivedAt: time.optional() }).strict()),
+  exercises: z.array(prescription.omit({ tagNames: true }).extend({ ...archived, tagIds: z.array(id) }).strict()),
+  plans: z.array(z.object({ ...archived, name: z.string(), days: z.array(daySchema).min(1).max(7) }).strict()),
+  schedules: z.array(z.object({ ...owned, ...timestamps, planId: id, revision, timeZone: z.string().refine(validZone), startWeek: dateSchema, stoppedFrom: dateSchema.optional(), revisions: z.array(z.object({ id, effectiveFrom: dateSchema, effectiveUntil: dateSchema.optional(), createdAt: time, planRevision: revision, planName: z.string(), days: z.array(daySchema).min(1).max(7), mapping: mappingSchema, needsRepair: z.boolean().optional() }).strict()).min(1) }).strict()),
+  drafts: z.array(z.object({ ...sessionBase, activeSourceKey: z.string().optional(), input: sessionInputSchema, updatedAt: time, finalizedAt: time.optional() }).strict()),
+  sessions: z.array(z.object({ ...sessionBase, draftId: id, notes: z.string(), exercises: z.array(z.object({ id, notes: z.string(), sets: z.array(recorded).min(1) }).strict()), partial: z.boolean(), completedAt: time, loggedAt: time }).strict()),
+  measurements: z.array(measurementSchema.extend({ ...owned, loggedAt: time, updatedAt: time.optional(), revision: revision.optional(), photoId: id.optional(), lastMutationId: id.optional() }).strict()),
+  assets: z.array(assetSchema),
+}).strict()
+export const inventorySchema = z.object({ path: z.string(), bytes: z.number().int().nonnegative(), sha256: z.string().regex(/^[0-9a-f]{64}$/), mediaType: z.string() }).strict()
+export const manifestSchema = z.object({
+  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.literal(BACKUP_VERSION), databaseSchemaVersion: z.literal(5),
+  app: z.object({ name: z.literal('boros'), version: z.string().min(1) }).strict(), exportedAt: time, snapshotAt: time,
+  profile: z.object({ id, name: z.string(), kind: z.enum(['guest', 'named']) }).strict(), snapshotPolicy: z.literal(SNAPSHOT_POLICY),
+  counts: z.record(z.number().int().nonnegative()), csvRows: z.record(z.number().int().nonnegative()),
+  authoritative: z.tuple([z.literal('data.json'), z.literal('manifest.json'), z.literal('photos/')]),
+  checksum: z.literal('SHA-256 of every payload file as uncompressed bytes; manifest.json is excluded. Integrity only, not authenticity.'),
+  exclusions: z.array(z.string()), inventory: z.array(inventorySchema), assets: z.array(assetSchema.extend({ sha256: z.string().regex(/^[0-9a-f]{64}$/) })),
+}).strict()
+export type BackupManifest = z.infer<typeof manifestSchema>
+export function recordCounts(data: BackupData) {
+  return { profiles: 1, tags: data.tags.length, exercises: data.exercises.length, plans: data.plans.length, schedules: data.schedules.length, drafts: data.drafts.length, sessions: data.sessions.length, measurements: data.measurements.length, assets: data.assets.length }
+}
+function equalRecord(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, index) => equalRecord(value, b[index]))
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false
+  const left = a as Record<string, unknown>, right = b as Record<string, unknown>
+  const keys = Object.keys(left).filter((key) => left[key] !== undefined).sort(), other = Object.keys(right).filter((key) => right[key] !== undefined).sort()
+  return keys.length === other.length && keys.every((key, index) => key === other[index] && equalRecord(left[key], right[key]))
+}
+export function validateBackupData(data: BackupData) {
+  const fail = (message: string): never => { throw new Error(`Backup cannot be completed: ${message}. Reopen the affected record and repair it before retrying; source data was not changed.`) }
+  const validation = backupDataSchema.safeParse(data)
+  if (!validation.success) { const issue = validation.error.issues[0]; fail(`invalid saved ${issue.path.join('.')}: ${issue.message}`) }
+  const index = <T extends { id: string; profileId: string }>(records: T[], label: string) => {
+    const map = new Map<string, T>()
+    for (const item of records) { if (item.profileId !== data.profile.id) fail(`wrong profile in ${label}`); if (map.has(item.id)) fail(`duplicate ${label} ID ${item.id}`); map.set(item.id, item) }
+    return map
+  }
+  const tags = index(data.tags, 'tag'), plans = index(data.plans, 'plan'), schedules = index(data.schedules, 'schedule'), drafts = index(data.drafts, 'draft'), sessions = index(data.sessions, 'session'), assets = index(data.assets, 'photo')
+  index(data.exercises, 'exercise'); index(data.measurements, 'measurement')
+  for (const exercise of data.exercises) for (const tag of exercise.tagIds) if (!tags.has(tag)) fail(`exercise ${exercise.id} requires missing tag ${tag}`)
+  for (const plan of data.plans) planInputSchema.parse(plan)
+  for (const schedule of data.schedules) {
+    if (!plans.has(schedule.planId)) fail(`schedule ${schedule.id} requires missing plan ${schedule.planId}`)
+    if (monday(schedule.startWeek) !== schedule.startWeek) fail(`schedule ${schedule.id} has invalid start week`)
+    const ids = new Set<string>()
+    for (const item of schedule.revisions) { if (ids.has(item.id)) fail(`schedule ${schedule.id} has duplicate revision ${item.id}`); ids.add(item.id); validateMapping(item.mapping, item.days); planInputSchema.parse({ name: item.planName, days: item.days }); if (item.effectiveUntil && item.effectiveUntil < item.effectiveFrom) fail(`schedule ${schedule.id} has reversed revision dates`) }
+  }
+  for (const item of [...data.drafts, ...data.sessions]) {
+    if (!plans.has(item.sourcePlanId)) fail(`session/draft ${item.id} requires missing plan ${item.sourcePlanId}`)
+    if (item.sourceDayId !== item.day.id) fail(`session/draft ${item.id} has mismatched day identity`)
+    planInputSchema.parse({ name: item.planName, days: [item.day] })
+    if (!!item.occurrence !== !!item.occurrenceKey) fail(`session/draft ${item.id} has incomplete occurrence metadata`)
+    if (item.occurrence) {
+      const ref = item.occurrence, schedule = schedules.get(ref.scheduleId), revision = schedule?.revisions.find((r) => r.id === ref.scheduleRevisionId)
+      if (!schedule || schedule.planId !== item.sourcePlanId || !revision || !revision.days.some((day) => day.id === ref.dayId) || ref.dayId !== item.sourceDayId || ref.timeZone !== schedule.timeZone || ref.scheduledWeek !== monday(ref.scheduledDate) || ref.key !== occurrenceKey(ref.scheduleId, ref.dayId, ref.scheduledDate) || item.occurrenceKey !== ref.key) fail(`session/draft ${item.id} has inconsistent schedule references`)
+    }
+  }
+  for (const draft of data.drafts) { validateDraftInput(draft.input, draft.day); if (draft.finalizedAt && !sessions.has(draft.id)) fail(`finalized draft ${draft.id} requires a completed session`) }
+  for (const session of data.sessions) {
+    const draft = drafts.get(session.draftId)
+    if (!draft || draft.id !== session.id || draft.finalizedAt !== session.completedAt || draft.sourcePlanId !== session.sourcePlanId || draft.occurrenceKey !== session.occurrenceKey || !equalRecord(draft.day, session.day)) fail(`session ${session.id} has an inconsistent finalized draft`)
+    if (session.exercises.length !== session.day.exercises.length || session.exercises.some((e, i) => e.id !== session.day.exercises[i].id || e.sets.length !== session.day.exercises[i].prescription.sets.length)) fail(`session ${session.id} results do not match its snapshot`)
+    const assessed = assessSession(draft!.input)
+    if (Object.keys(assessed.errors).length || !assessed.recorded || session.partial !== (assessed.skipped > 0) || session.notes !== draft!.input.notes || !equalRecord(assessed.exercises, session.exercises) || session.completedAt < session.startedAt) fail(`session ${session.id} results disagree with its finalized draft`)
+  }
+  for (const record of [data.profile, ...data.measurements]) if (record.photoId && !assets.has(record.photoId)) fail(`record ${record.id} requires missing photo ${record.photoId}`)
+  for (const item of data.measurements) validateTimeContext(item)
+  for (const asset of data.assets) if (asset.path !== `photos/${asset.id}.${asset.mediaType === 'image/jpeg' ? 'jpg' : asset.mediaType.split('/')[1]}`) fail(`photo ${asset.id} has an invalid path`)
+}
