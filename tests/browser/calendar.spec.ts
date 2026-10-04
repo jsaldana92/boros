@@ -50,7 +50,7 @@ test('four-day schedule: partial completion, next/prior week, all views, reload,
   if (testInfo.project.name.includes('phone')) await page.setViewportSize({ width: 320, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await button(page, 'Stop Scheduling').focus(); await button(page, 'Stop Scheduling').scrollIntoViewIfNeeded()
-  const actionBox = await button(page, 'Stop Scheduling').boundingBox(), navBox = await page.getByRole('navigation').boundingBox()
+  const actionBox = await button(page, 'Stop Scheduling').boundingBox(), navBox = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox()
   expect(actionBox!.y + actionBox!.height).toBeLessThanOrEqual(navBox!.y)
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: testInfo.outputPath('calendar-light.png'), fullPage: true })

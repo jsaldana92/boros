@@ -1,4 +1,5 @@
 import { exerciseInputSchema, type ExerciseInput } from '../../schemas/exercise.ts'
+import { restFields, parseRest } from '../../lib/rest-duration.ts'
 
 export interface SetFields { repMin: string; repMax: string; rirMin: string; rirMax: string }
 export const blankSet = (): SetFields => ({ repMin: '', repMax: '', rirMin: '', rirMax: '' })
@@ -7,7 +8,7 @@ export function toForm(input?: ExerciseInput) {
   return {
     name: input?.name ?? '', count: String(input?.sets.length ?? 1),
     sets: input?.sets.map((set) => ({ repMin: text(set.reps.min), repMax: set.reps.max === set.reps.min ? '' : text(set.reps.max), rirMin: text(set.rir?.min), rirMax: set.rir?.max === set.rir?.min ? '' : text(set.rir?.max) })) ?? [blankSet()],
-    restBetweenSeconds: text(input?.restBetweenSeconds), restAfterSeconds: text(input?.restAfterSeconds), instructions: input?.instructions ?? '', notes: input?.notes ?? '', tutorialUrl: input?.tutorialUrl ?? '', tagNames: input?.tagNames ?? [],
+    restBetweenSeconds: restFields(input?.restBetweenSeconds), restAfterSeconds: restFields(input?.restAfterSeconds), instructions: input?.instructions ?? '', notes: input?.notes ?? '', tutorialUrl: input?.tutorialUrl ?? '', tagNames: input?.tagNames ?? [],
   }
 }
 export type ExerciseForm = ReturnType<typeof toForm>
@@ -36,7 +37,9 @@ export function parseForm(form: ExerciseForm): { value?: ExerciseInput; errors: 
     }
     return { reps: { min: min!, max: max! }, ...(rir === undefined ? {} : { rir }) }
   })
-  const data = { name: form.name, sets, tagNames: form.tagNames, restBetweenSeconds: number(form.restBetweenSeconds, 'restBetweenSeconds', 0, true), restAfterSeconds: number(form.restAfterSeconds, 'restAfterSeconds', 0, true), instructions: form.instructions || undefined, notes: form.notes || undefined, tutorialUrl: form.tutorialUrl.trim() || undefined }
+  const between = parseRest(form.restBetweenSeconds), after = parseRest(form.restAfterSeconds)
+  for (const [key, result] of [['restBetweenSeconds', between], ['restAfterSeconds', after]] as const) for (const [field, message] of Object.entries(result.errors)) errors[`${key}.${field}`] = message
+  const data = { name: form.name, sets, tagNames: form.tagNames, restBetweenSeconds: between.value, restAfterSeconds: after.value, instructions: form.instructions || undefined, notes: form.notes || undefined, tutorialUrl: form.tutorialUrl.trim() || undefined }
   const parsed = exerciseInputSchema.safeParse(data)
   if (!parsed.success) for (const issue of parsed.error.issues) {
     const key = issue.path.join('.').replace('reps.min', 'repMin').replace('reps.max', 'repMax').replace('rir.min', 'rirMin').replace('rir.max', 'rirMax')

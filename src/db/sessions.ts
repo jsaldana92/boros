@@ -109,7 +109,6 @@ export function sessionService(database: BorosDatabase) {
         const blocks = trainingBlocks(value.day), index = blocks.findIndex((block) => block.group?.id === groupId), block = blocks[index]
         if (!block?.group || !Number.isInteger(round) || round < 0 || round >= roundCount(block.members)) throw new Error('This superset rest position is unavailable.')
         const after = round === roundCount(block.members) - 1
-        if (after && index === blocks.length - 1) throw new Error('There is no next training block for this rest.')
         const seconds = (after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds) ?? manualSeconds
         if (seconds === undefined) throw new Error('Enter a rest duration in seconds.')
         const endAt = timerEnd(seconds)

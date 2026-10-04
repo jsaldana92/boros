@@ -1,3 +1,4 @@
+import { cardAction } from './create-actions'
 import 'fake-indexeddb/auto'
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
@@ -76,10 +77,10 @@ test('live archive/restore retains history; backup replacement retires an open P
   await selection(page, 'Renamed press').click(); await expect(page.locator('.exercise-statistics')).toContainText('14 recorded sets')
   const beta = other.getByRole('article', { name: 'Plan Beta', exact: true })
   // Beta starts archived; the plan manager's archive control is independent of the exercise library.
-  await other.getByRole('checkbox', { name: 'Show archived plans', exact: true }).check(); await beta.getByRole('button', { name: 'Restore plan', exact: true }).click()
+  await other.getByRole('checkbox', { name: 'Show archived plans', exact: true }).check(); await cardAction(other, beta, 'Restore')
   await expect(page.locator('.exercise-statistics')).toContainText('14 recorded sets')
   await b(page, 'Back to Progress').click(); await expect(page.locator('.progress-carousel button').filter({ hasText: 'Beta' })).not.toContainText('Archived')
-  await other.getByRole('checkbox', { name: 'Show archived plans', exact: true }).uncheck(); await beta.getByRole('button', { name: 'Archive plan', exact: true }).click(); await other.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
+  await other.getByRole('checkbox', { name: 'Show archived plans', exact: true }).uncheck(); await cardAction(other, beta, 'Archive'); await other.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
   await expect(page.locator('.progress-carousel button').filter({ hasText: 'Beta' })).toContainText('Archived')
   await selection(page, 'Renamed press').click(); await b(other, 'Settings').click(); await other.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
   const ready = other.waitForEvent('download'); await b(other, 'Download data').click(); const buffer = await readFile((await (await ready).path())!)
@@ -97,7 +98,7 @@ test('export/restore preserves analytics, Clear invalidates an open view, large 
   await b(page, 'Preview import').click(); await page.getByRole('checkbox', { name: /^I confirm/ }).check(); await b(page, 'Confirm and save').click(); await expect(page.getByText(/Changes are saved locally\./)).toBeVisible(); await page.reload()
   await b(page, 'Progress').click(); await expect(weights(page).locator('option')).toHaveCount(3); await selection(page, 'Renamed press').click(); await expect(page.locator('.exercise-statistics')).toContainText('14 recorded sets')
   await expect(page.getByRole('region', { name: 'Maximum recorded weight' })).toContainText('61 kg')
-  await b(page, 'Review selected session').focus(); const action = await b(page, 'Review selected session').boundingBox(), nav = await page.getByRole('navigation').boundingBox(); expect(action!.y + action!.height).toBeLessThanOrEqual(nav!.y)
+  await b(page, 'Review selected session').focus(); const action = await b(page, 'Review selected session').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(action!.y + action!.height).toBeLessThanOrEqual(nav!.y)
   await page.evaluate(() => { document.documentElement.style.fontSize = '24px' }); await page.setViewportSize({ width: 320, height: 844 }); await b(page, 'Back to Progress').click()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath('group4-large-text.png'), fullPage: true }); await selection(page, 'Renamed press').click()

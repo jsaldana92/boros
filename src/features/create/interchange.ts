@@ -15,7 +15,9 @@ export function parseInterchange(text: string): { value?: Interchange; issues: I
     json = fenced[1]
   }
   let raw: unknown
-  try { raw = JSON.parse(json) } catch { return { issues: [{ path: '$', message: 'Invalid JSON. Paste one complete JSON object, with no prose or additional code blocks. Check quotes, commas, and brackets.' }] } }
+  try { raw = JSON.parse(json) } catch { return { issues: [{ path: '$', message: /[“”]/.test(json)
+    ? 'Invalid JSON. Curly quotes cannot delimit JSON property names or strings. Ask for the complete result in one json code block with straight ASCII double quotes (U+0022), then copy the code directly. Legitimate punctuation inside valid strings is preserved; no automatic quote replacement is performed.'
+    : 'Invalid JSON. Paste one complete JSON object, with no prose or additional code blocks. Check straight double quotes, commas, and brackets.' }] } }
   const version = raw && typeof raw === 'object' && 'schemaVersion' in raw ? raw.schemaVersion : undefined
   if (version !== 1 && version !== 2) return { issues: [{ path: 'schemaVersion', message: 'Supported AI schema versions are 1 and 2.' }] }
   const parsed = (version === 1 ? legacyInterchangeSchema : currentInterchangeSchema).safeParse(raw)
@@ -43,16 +45,26 @@ export function toImportDraft(value: Interchange): ImportDraft {
 }
 export function formattingInstructions(kind: ImportKind) {
   const example = interchangeExample(kind)
-  return `Format my request as a Boros ${kind}. Return ONLY one raw JSON object: no explanation, Markdown, or code fences. Preserve my requested exercises, order, sets, reps, RIR, and rest targets. Do not invent missing targets; if a required target is unknown, ask me to specify it before producing the final JSON.
-
-Exact public contract (schemaVersion 2):
-Envelope: { "schemaVersion": 2, "kind": "${kind}", "${kind}": ${kind === 'plan' ? 'Plan' : 'Exercise'} }. Include exactly that matching payload.
-Plan: { "name": string, "durationWeeks": positive integer, "trainingDaysPerWeek": integer 1-7, "days": Day[] }. Ask for duration when unknown; never infer it from the name.
+  const planContract = kind === 'plan' ? `Plan: { "name": string, "durationWeeks": positive integer, "trainingDaysPerWeek": integer 1-7, "days": Day[] }. Ask for duration when unknown; never infer it from the name.
 Day: { "name": string, "exercises": PlanExercise[], "supersets": Superset[] }.
 PlanExercise: all Exercise fields plus "superset": positive integer|null. Null means standalone. Repeated exercise names are separate occurrences; repeat the complete prescription for each.
 Superset: { "number": positive integer, "restBetweenRoundsSeconds": nonnegative integer|null, "restAfterGroupSeconds": nonnegative integer|null }.
-Every non-null membership must reference one declared superset number in that day; each group needs at least two members. Numbers are unique within a day and never join different days. Keep each group's members contiguous in execution order. Rounds run up to the largest member set count; shorter members simply stop. Never fabricate sets to match counts. Group rest replaces member rest during the group; preserve original member prescriptions. Use null for unspecified group rest and 0 for explicit zero. Omitted superset defaults to null, omitted supersets to [], omitted group rest to null. No superset field on a standalone workout envelope.
-Exercise: { "name": string, "sets": Set[], "restBetweenSetsSeconds": integer|null, "restAfterExerciseSeconds": integer|null, "instructions": string, "youtubeUrl": string|null, "tags": string[] }.
+Every non-null membership must reference one declared superset number in that day; each group needs at least two members. Numbers are unique within a day and never join different days. Keep each group's members contiguous in execution order.
+Superset execution example: A has 2 sets of 20 reps; B has 2 sets of 8 reps.
+Round 1: A × 20 → B × 8 → rest between rounds.
+Round 2: A × 20 → B × 8 → rest after the group.
+There is no timed rest between members within a round. Group restBetweenRoundsSeconds applies only between rounds; restAfterGroupSeconds applies only after the final round, including when the group ends the session. Never add both rests after the final round. Member standalone rest settings do not create breaks between superset members; preserve those original prescriptions.
+Rounds run up to the largest member set count; shorter members simply stop and are omitted from later rounds. Never fabricate sets to match counts. Missing rest remains unspecified (null); zero explicitly means no timed rest. Do not invent rest durations unless I authorize choosing them. Omitted superset defaults to null, omitted supersets to [], omitted group rest to null.
+` : 'This is a standalone Workout payload. Do not include plan, day, duration, group or superset fields.\n'
+  return `Format my request as a Boros ${kind}.
+Return the complete result inside exactly one \`\`\`json code block.
+Use valid JSON with straight ASCII double quotes (U+0022) around property names and string values. Do not use curly quotation marks as JSON delimiters, comments, or trailing commas.
+Preserve the requested exercises and targets. Include the complete object without truncation, placeholders, or text outside the code block.
+Preserve my requested order, sets, reps, RIR, and rest targets. Do not invent missing targets or rest durations unless I authorize choosing them; if a required target is unknown, ask me to specify it before producing the final JSON.
+
+Exact public contract (schemaVersion 2):
+Envelope: { "schemaVersion": 2, "kind": "${kind}", "${kind}": ${kind === 'plan' ? 'Plan' : 'Exercise'} }. Include exactly that matching payload.
+${planContract}Exercise: { "name": string, "sets": Set[], "restBetweenSetsSeconds": integer|null, "restAfterExerciseSeconds": integer|null, "instructions": string, "youtubeUrl": string|null, "tags": string[] }.
 Set: { "reps": { "min": integer, "max": integer }, "rir": { "min": integer, "max": integer }|null }.
 
 No extra fields at ANY object level. Never include IDs, profile/ownership fields, revisions, timestamps, or internal database fields. Notes are not a field in this public format; the user may add notes in the preview. Older schemaVersion 1 payloads remain accepted; old plans require the owner to enter duration in the preview before saving.

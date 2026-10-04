@@ -21,7 +21,7 @@ export function csvTables(data: BackupData) {
   const tagLinks = table('exercise_tags', 'profileId,libraryExerciseId,tagId,tagOrder')
   table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : ''), data.plans as unknown as Row[])
   const days = table('days', `${scope},name`)
-  const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}`)
+  const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}${data.backupSchemaVersion >= 4 ? ',templateId' : ''}`)
   const groups = current ? table('supersets', `${scope},groupId,number,blockOrder,restBetweenRoundsSeconds,restAfterGroupSeconds`) : []
   const prescriptionSets = table('prescription_sets', `${scope},exerciseOccurrenceId,exerciseOrder,setOrder,repsMin,repsMax,rirMin,rirMax`)
   const prescriptionTags = table('prescription_tags', `${scope},exerciseOccurrenceId,exerciseOrder,tagOrder,tagName`)
@@ -46,7 +46,7 @@ export function csvTables(data: BackupData) {
     for (const group of day.groups ?? []) groups.push({ ...parent, ...group, groupId: group.id, blockOrder: blocks.indexOf(group.id) + 1 })
     day.exercises.forEach((exercise, e) => {
       const link = { ...parent, exerciseOccurrenceId: exercise.id, exerciseOrder: e + 1 }, p = exercise.prescription, source = exercise.source
-      prescriptions.push({ ...link, ...p, groupId: exercise.groupId, sourceLibraryId: source?.kind === 'exercise' ? source.id : source?.libraryId, sourceKind: source?.kind, sourceId: source?.id, sourceDayId: source?.kind === 'plan' ? source.dayId : undefined, sourceOccurrenceId: source?.kind === 'plan' ? source.occurrenceId : undefined })
+      prescriptions.push({ ...link, ...p, templateId: exercise.templateId, groupId: exercise.groupId, sourceLibraryId: source?.kind === 'exercise' ? source.id : source?.libraryId, sourceKind: source?.kind, sourceId: source?.id, sourceDayId: source?.kind === 'plan' ? source.dayId : undefined, sourceOccurrenceId: source?.kind === 'plan' ? source.occurrenceId : undefined })
       writeSets(prescriptionSets, link, p.sets)
       p.tagNames.forEach((tagName, t) => prescriptionTags.push({ ...link, tagOrder: t + 1, tagName }))
       if (p.notes !== undefined) notes.push({ ...link, noteKind: 'prescription', text: p.notes })

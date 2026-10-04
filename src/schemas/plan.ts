@@ -10,7 +10,7 @@ export const sourceSchema = z.discriminatedUnion('kind', [
 ])
 export const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 export const groupSchema = z.object({ id: z.string().uuid(), number: positiveInteger, restBetweenRoundsSeconds: exerciseInputSchema.shape.restBetweenSeconds, restAfterGroupSeconds: exerciseInputSchema.shape.restAfterSeconds }).strict()
-export const occurrenceSchema = z.object({ id: z.string().uuid(), prescription: exerciseInputSchema, source: sourceSchema.optional(), groupId: z.string().uuid().optional() })
+export const occurrenceSchema = z.object({ id: z.string().uuid(), prescription: exerciseInputSchema, source: sourceSchema.optional(), templateId: z.string().uuid().optional(), groupId: z.string().uuid().optional() })
 // Optional fields intentionally remain absent in legacy records; no rewrite/default duration.
 export const daySchema = z.object({ id: z.string().uuid(), name, groups: z.array(groupSchema).max(50).optional(), exercises: z.array(occurrenceSchema).min(1, 'Add at least one exercise to this day.').max(100, 'Use at most 100 exercises per day.') })
 export function validateGroups(day: z.infer<typeof daySchema>, context: z.RefinementCtx, prefix: (string | number)[] = []) {
@@ -89,5 +89,5 @@ export function moveOccurrence(day: TrainingDay, id: string, offset: number): Tr
 }
 export function duplicateDay(day: TrainingDay): TrainingDay {
   const ids = new Map((day.groups ?? []).map((group) => [group.id, createId()]))
-  return { ...structuredClone(day), id: createId(), groups: day.groups?.map((group) => ({ ...group, id: ids.get(group.id)! })), exercises: day.exercises.map((exercise) => ({ ...copyExercise(exercise.prescription, exercise.source), ...(exercise.groupId ? { groupId: ids.get(exercise.groupId)! } : {}) })) }
+  return { ...structuredClone(day), id: createId(), groups: day.groups?.map((group) => ({ ...group, id: ids.get(group.id)! })), exercises: day.exercises.map((exercise) => ({ ...copyExercise(exercise.prescription, exercise.source), ...(exercise.templateId ? { templateId: exercise.templateId } : {}), ...(exercise.groupId ? { groupId: ids.get(exercise.groupId)! } : {}) })) }
 }

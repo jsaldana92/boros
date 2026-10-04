@@ -1,18 +1,43 @@
-# Boros profile backup, schema 3 (schemas 1 and 2 supported)
+# Boros profile backup, schema 4 (schemas 1–3 supported)
 
 Export was implemented in Phase 8; reviewed restore and profile Clear Data are
 implemented in Phase 9. This remains separate from the external AI interchange
-format. Group 3 writes backup schema 3; database version 5 stays unchanged. Strict
-schema 1 and 2/database v5 backups remain supported through the compatibility path below. An isolated
+format. Template ownership now writes backup schema 4; database version 5 stays unchanged. Strict
+schema 1–3/database v5 backups remain supported through the compatibility path below. An isolated
 export → import under a new name → export comparison verifies canonical records,
 relationships and original image bytes, with the identity exceptions below.
 
 Group 4 Progress statistics are derived from the existing canonical sessions,
 prescription snapshots, source references and measurements. Graph selection,
 computed counts/extrema, colors and drill-down state are not persisted or added
-to archives. The format and supported v1/v2 imports are unchanged; Group 4 tests
+to archives. Group 4 itself did not change the format; its tests
 verify underlying records and derived results through new/replace/both-merge
 restoration. See [Group 4 verification](group4-verification.md) for analytics rules.
+
+Schema 4 adds optional `templateId` to prescription occurrences and to
+`csv/prescriptions.csv`. It records the reusable defaults reference for repaired
+legacy plans while keeping `source` provenance intact. Export retains the field in
+all saved snapshots. Current-plan template references must resolve; historical
+snapshots retain their original provenance and need not track the current library.
+The strict v1/v2/v3 field sets and CSV columns remain frozen; they reject this v4
+field. Original ZIP bytes, hashes, CSV tables, relationships and photos are checked
+before any compatibility transformation. SHA-256 verification is unchanged.
+
+After validation and merge/identity mapping, the restore preview materializes
+missing templates from current plans in its proposed result. The counts and warning
+show this transformation before confirmation; atomic commit saves that exact result.
+Repeated merges reuse valid IDs or active normalized names and do not multiply
+templates. Deterministic legacy template IDs reuse the first occurrence UUID in
+the separate template keyspace, or preserve a recorded missing explicit template
+UUID. Conflicting identities fail visibly instead of guessing. New template/tag
+timestamps use the repair instant; existing timestamps and prescriptions stay exact.
+Changed plan links increment the plan revision. History is never joined by name or
+rewritten by this repair; ordinary restore ownership/merge mappings still apply.
+Original AI defaults may no longer be recoverable after edits. Defaults come from
+the earliest retained active plan snapshot (created time, ID, day/occurrence order),
+then archived plans; archived-only templates stay archived. A valid existing
+template is reused without overwriting defaults. This supersedes the old catalog
+projection and does not require a database reset, new database version or reimport.
 
 ## Archive layout and authority
 
@@ -56,7 +81,7 @@ fields rather than write null. Record timestamps/revisions are not regenerated.
 
 `src/schemas/backup.ts` defines the executable payload/manifest schema and required
 reference checks. Database version stays 5: exporting adds no tables, migrations,
-or writes. The manifest separately records backup schema `3`, database schema `5`,
+or writes. The manifest separately records backup schema `4`, database schema `5`,
 and the real `package.json` app name/version (`boros`, currently `0.0.0`). That
 package value is not an invented release number.
 
@@ -64,7 +89,7 @@ package value is not an invented release number.
 
 | Field | Meaning |
 | --- | --- |
-| `format`, `backupSchemaVersion` | `boros-profile-backup`, 3 for new exports; independent of AI/database versions |
+| `format`, `backupSchemaVersion` | `boros-profile-backup`, 4 for new exports; independent of AI/database versions |
 | `databaseSchemaVersion`, `app` | Actual supported source database version and package name/version |
 | `profile` | The captured profile's ID, name, and Guest/named kind; no active-profile selection reference |
 | `snapshotAt` | UTC timestamp at the end of the consistent read transaction |
@@ -148,11 +173,11 @@ validated in increasing Monday order and select the applicable boundary without
 rewriting earlier occurrences. Started/completed exceptions remain valid beyond
 a later end date. Plan edits do not alter the frozen schedule boundary.
 
-Upload accepts versions 1, 2 and 3 with matching manifest/data versions and database
+Upload accepts versions 1, 2, 3 and 4 with matching manifest/data versions and database
 v5. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
 before validating records against the version-specific strict field set, linked
 references, CSV inventory/counts and original assets. Only after all checks pass,
-v1/v2 canonical data is cloned with a v3 envelope; no group/duration/preference is inserted and
+v1/v2/v3 canonical data is cloned with a v4 envelope; no group/duration/preference is inserted and
 the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
 The returned manifest remains the original validated version for provenance.
 Checksums and photo decoding are never bypassed.

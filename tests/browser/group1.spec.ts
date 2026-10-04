@@ -72,7 +72,7 @@ test('UUID fallback does not conceal missing secure context, checksum APIs or cl
   await expect(page.locator('.backup-restore [role=alert]')).toContainText('Checksums cannot be skipped')
   expect(downloads).toEqual([]); expect(await records(page)).toEqual(before)
   await button(page, 'Create').click(); await button(page, 'Import AI Output').click()
-  await button(page, 'Copy Formatting Instructions').click()
+  await button(page, 'Copy').click()
   await expect(page.getByText('Clipboard unavailable.', { exact: false })).toBeVisible()
   await expect(page.getByLabel('Formatting instructions', { exact: true })).toBeFocused()
 })
@@ -95,7 +95,7 @@ test('owner branding, avatar-only Settings and both brand-image clicks preserve 
     }
   }
   for (const image of ['Ouroboros: a snake eating its tail', 'Boros']) {
-    await button(page, 'Create').click(); await button(page, 'Create Workout').click()
+    await button(page, 'Create').click(); await button(page, 'Create exercise').click()
     await page.getByLabel('Exercise name', { exact: true }).fill('Recoverable input')
     page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('img', { name: image, exact: true }).click()
     await expect(page.getByLabel('Exercise name', { exact: true })).toHaveValue('Recoverable input')

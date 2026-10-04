@@ -61,7 +61,7 @@ test('Settings downloads complete isolated archives with truthful feedback, unch
   const second = await download(page); expect(second.data.profile.id).toBe(fixture.otherId); expect(second.data.plans).toHaveLength(0); expect(JSON.stringify(second.data)).not.toContain(fixture.id)
   await page.setViewportSize({ width: 320, height: 720 }); await page.addStyleTag({ content: 'html { font-size: 24px; }' }); await button(page, 'Download data').focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  const box = await button(page, 'Download data').boundingBox(), nav = await page.getByRole('navigation').boundingBox(); expect(box!.y + box!.height).toBeLessThanOrEqual(nav!.y)
+  const box = await button(page, 'Download data').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(box!.y + box!.height).toBeLessThanOrEqual(nav!.y)
   await page.screenshot({ path: testInfo.outputPath('export-light-large-text.png'), fullPage: true }); expect(errors).toEqual([])
 })
 

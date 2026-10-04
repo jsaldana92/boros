@@ -1,3 +1,4 @@
+import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 
 test.setTimeout(90000)
@@ -44,11 +45,11 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('120 seconds configured')
   await page.clock.fastForward(130000); await expect(page.getByRole('timer')).toHaveText('Rest finished')
   await button(page, 'Reset timer').click(); await expect(page.getByRole('timer')).toContainText('seconds remaining'); await button(page, 'Stop timer').click()
-  await input(page, 'Rest seconds Row after set 1').fill('30'); await button(page, 'REST Row after set 1').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('30 seconds configured'); await button(page, 'Stop timer').click()
+  await input(page, 'Rest Row after set 1 seconds').fill('30'); await button(page, 'REST Row after set 1').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('30 seconds configured'); await button(page, 'Stop timer').click()
   await fillSet(page, 'Press', 2, '20'); await fillSet(page, 'Row', 1, '30'); await fillSet(page, 'Row', 2, '40')
   await page.setViewportSize({ width: 320, height: 720 }); await input(page, 'Row set 2 Actual RIR (optional)').focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  const box = await input(page, 'Row set 2 Actual RIR (optional)').boundingBox(), actions = await page.locator('.session-actions').boundingBox(), nav = await page.getByRole('navigation').boundingBox()
+  const box = await input(page, 'Row set 2 Actual RIR (optional)').boundingBox(), actions = await page.locator('.session-actions').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox()
   expect(box!.y + box!.height).toBeLessThanOrEqual(actions!.y); expect(actions!.y + actions!.height).toBeLessThanOrEqual(nav!.y)
   await page.screenshot({ path: testInfo.outputPath('train-dark-320.png'), fullPage: true })
   await button(page, 'Save').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Complete session')
@@ -56,9 +57,9 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Exercise note')
   expect(await recordCounts(page)).toEqual([1, 1]); await expect(page).toHaveURL(address)
   await button(page, 'Create').click(); const plan = page.getByRole('article', { name: 'Plan Training plan', exact: true })
-  await plan.getByRole('button', { name: 'Edit plan', exact: true }).click(); await page.locator('.plan-day').first().getByRole('button', { name: 'Edit prescription', exact: true }).first().click()
-  await input(page, 'Exercise name').fill('Changed source'); await button(page, 'Apply to plan').click(); await button(page, 'Save plan').click()
-  await plan.getByRole('button', { name: 'Archive plan', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
+  await cardAction(page, plan, 'Edit'); await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit')
+  await input(page, 'Exercise name').fill('Changed source'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
+  await cardAction(page, plan, 'Archive'); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
   await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await button(page, 'Review session').click(); await expect(page.getByRole('heading', { name: 'Press', exact: true })).toBeVisible(); await expect(page.getByText('Changed source', { exact: true })).toHaveCount(0)
 })
 
@@ -113,8 +114,8 @@ test('profile switching and unit changes recover canonical loads; light theme an
   await expect(page.getByRole('combobox')).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('train-light.png'), fullPage: true })
   await button(page, 'Create').click(); const card = page.getByRole('article', { name: 'Plan Training plan', exact: true })
-  await card.getByRole('button', { name: 'Edit plan', exact: true }).click(); await button(page, 'Edit prescription').first().click(); await input(page, 'Exercise name').fill('Changed source'); await button(page, 'Apply to plan').click(); await button(page, 'Save plan').click()
-  await card.getByRole('button', { name: 'Archive plan', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
+  await cardAction(page, card, 'Edit'); await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit'); await input(page, 'Exercise name').fill('Changed source'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
+  await cardAction(page, card, 'Archive'); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
   await button(page, 'Train').click(); await resume(page); await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100')
   await button(page, 'Save').click(); await button(page, 'Save partial session').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('45.359237 kg')
 })

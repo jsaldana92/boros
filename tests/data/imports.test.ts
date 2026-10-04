@@ -23,7 +23,7 @@ test('public fixtures, raw/fenced JSON and both prompt examples share the strict
   for (const fixture of [workoutFixture(), planFixture()]) {
     for (const text of [JSON.stringify(fixture), `\n\`\`\`json\n${JSON.stringify(fixture)}\n\`\`\`\n`]) assert.deepEqual(parseInterchange(text).value, fixture)
   }
-  for (const kind of ['plan', 'workout'] as const) {
+  for (const kind of ['workout', 'plan'] as const) {
     const instructions = formattingInstructions(kind)
     assert.equal(parseInterchange(instructions.slice(instructions.indexOf('\n{') + 1)).value?.kind, kind)
     assert.match(instructions, /Never invent a tutorial URL/)
@@ -85,25 +85,25 @@ test('parsing, validation, draft conversion and discarded sessions write nothing
   assert.deepEqual(await counts(db), before)
 })
 
-test('final imports resolve normalized profile tags atomically and plans do not create library exercises', async (t) => {
+test('final imports resolve normalized profile tags atomically and plans create standalone library defaults', async (t) => {
   const { db, id, profiles } = await setup(t)
   const plan = draft('plan'), workout = draft('workout'); if (plan.kind !== 'plan' || workout.kind !== 'workout') return
   const other = await profiles.create('Other'); await profiles.select(other.id)
   const session = importSession(id, db)
   await session.savePlan(plan.input)
-  assert.equal(await db.plans.count(), 1); assert.equal(await db.exercises.count(), 0); assert.equal(await db.tags.count(), 2)
-  workout.input.tagNames = [' STRENGTH ', '肩']
+  assert.equal(await db.plans.count(), 1); assert.equal(await db.exercises.count(), 1); assert.equal(await db.tags.count(), 2)
+  workout.input.name = 'Standalone'; workout.input.tagNames = [' STRENGTH ', '肩']
   await importSession(id, db).saveWorkout(workout.input)
   assert.equal(await db.tags.count(), 2)
   assert.equal((await planService(db).library(other.id)).plans.length, 0)
   assert.equal((await exerciseService(db).library(other.id)).exercises.length, 0)
   await importSession(other.id, db).saveWorkout(workout.input)
-  assert.equal(await db.tags.count(), 4); assert.equal(await db.exercises.count(), 2)
+  assert.equal(await db.tags.count(), 4); assert.equal(await db.exercises.count(), 3)
 })
 
 test('duplicate names need explicit renaming; edited invalid inputs cannot save', async (t) => {
   const { db, id } = await setup(t)
-  for (const kind of ['plan', 'workout'] as const) {
+  for (const kind of ['workout', 'plan'] as const) {
     const value = draft(kind), session = importSession(id, db)
     if (value.kind === 'plan') {
       await session.savePlan(value.input)
@@ -124,7 +124,7 @@ test('duplicate names need explicit renaming; edited invalid inputs cannot save'
 
 test('artifact failures roll back tags, retry succeeds once and concurrent/uncertain retries never duplicate or overwrite', async (t) => {
   const { db, id } = await setup(t)
-  for (const kind of ['plan', 'workout'] as const) {
+  for (const kind of ['workout', 'plan'] as const) {
     const value = draft(kind), session = importSession(id, db)
     const table = kind === 'plan' ? db.plans : db.exercises
     const save = () => value.kind === 'plan' ? session.savePlan(value.input) : session.saveWorkout(value.input)
@@ -135,7 +135,7 @@ test('artifact failures roll back tags, retry succeeds once and concurrent/uncer
     table.hook('creating').unsubscribe(fail)
     assert.deepEqual(await counts(db), before)
     const [first, second] = await Promise.all([save(), save()])
-    assert.equal(first.id, second.id); assert.equal(await table.count(), 1)
+    assert.equal(first.id, second.id); assert.equal(await table.count(), before[db.tables.findIndex((item) => item.name === table.name)] + 1)
     value.input.name = 'Changed after uncertain commit'
     assert.equal((await save()).name, first.name)
     assert.equal(await table.count(), 1)

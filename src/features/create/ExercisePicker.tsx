@@ -1,24 +1,36 @@
-import { displayDateTime } from '../../lib/display-dates'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { PrescriptionChoice } from '../../db/plans'
 import { LibraryFilters } from './LibraryFilters'
 import { filterExercises, type LibrarySort } from './library'
 import { nameKey } from '../../schemas/profile'
+import { EditorBreadcrumbs, type EditorAncestor } from './EditorBreadcrumbs'
 
-export function ExercisePicker({ choices, onChoose, onClose }: { choices: PrescriptionChoice[]; onChoose: (choice: PrescriptionChoice) => void; onClose: () => void }) {
+export function ExercisePicker({ choices, onChoose, onClose, remaining, ancestors }: { choices: PrescriptionChoice[]; onChoose: (choices: PrescriptionChoice[]) => void; onClose: () => void; remaining: number; ancestors: EditorAncestor[] }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<LibrarySort>('az')
   const [filterTags, setFilterTags] = useState<string[]>([])
-  const heading = useRef<HTMLHeadingElement>(null)
-  useEffect(() => { heading.current?.focus() }, [])
+  const [selected, setSelected] = useState<string[]>([])
+  const submitting = useRef(false)
   const tags = [...new Map(choices.flatMap((choice) => choice.prescription.tagNames).map((name) => [nameKey(name), { id: nameKey(name), name }])).values()]
   const visible = filterExercises(choices, search, sort, filterTags, false)
+  const selection = selected.filter((id) => visible.some((choice) => choice.id === id))
+  if (selection.length !== selected.length) setSelected(selection)
+  const all = visible.length > 0 && visible.every((choice) => selection.includes(choice.id))
+  const add = (items: PrescriptionChoice[]) => {
+    if (submitting.current || !items.length || items.length > remaining) return
+    submitting.current = true
+    onChoose(items)
+  }
   return <section aria-label="Choose exercise" className="exercise-picker">
-    <h2 tabIndex={-1} ref={heading}>Choose exercise</h2>
-    <p className="muted">Copy from your active library or saved plans. Each copy is independent.</p>
-    <LibraryFilters noun="sources" search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
-    {!visible.length && <p>No matching sources. Save a library workout or plan first.</p>}
-    <ul className="source-list">{visible.map((choice) => <li key={choice.id}><strong>{choice.prescription.name}</strong><p>{choice.label}</p><p className="muted">{choice.prescription.sets.length} sets; added {displayDateTime(choice.createdAt)}</p><button type="button" aria-label={`Copy ${choice.label}`} onClick={() => onChoose(choice)}>Copy to day</button></li>)}</ul>
+    <EditorBreadcrumbs ancestors={ancestors} current="Exercises" title="Add exercises" />
+    <LibraryFilters noun="exercises to add" search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
+    <div className="actions selection-actions"><label className="check-label"><input type="checkbox" disabled={!visible.length} checked={all} onChange={() => setSelected(all ? [] : visible.map((choice) => choice.id))} />Select All</label><button type="button" disabled={!selection.length || selection.length > remaining} onClick={() => add(visible.filter((choice) => selection.includes(choice.id)))}>Add selected</button></div>
+    {selection.length > remaining && <p role="alert">Select at most {remaining} more exercises for this day.</p>}
+    {!visible.length && <p>No matching exercises.</p>}
+    <div className="exercise-list" role="region" aria-label="Available exercises">{visible.map((choice) => <div className="exercise-selection-row" key={choice.id}>
+      <label className="check-label"><input type="checkbox" checked={selection.includes(choice.id)} onChange={(event) => setSelected(event.target.checked ? [...selection, choice.id] : selection.filter((id) => id !== choice.id))} />{choice.prescription.name}</label>
+      <button type="button" disabled={!remaining} aria-label={'Add ' + choice.prescription.name} onClick={() => add([choice])}>Add</button>
+    </div>)}</div>
     <button type="button" onClick={onClose}>Cancel selection</button>
   </section>
 }

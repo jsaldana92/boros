@@ -1,3 +1,4 @@
+import { materializeTemplates } from '../../lib/template-ownership.ts'
 import { validateBackupData, type ProfileSnapshot } from '../../schemas/backup.ts'
 import { nameKey, type PhotoAsset, type Profile } from '../../schemas/profile.ts'
 import type { TrainingDay } from '../../schemas/plan.ts'
@@ -94,7 +95,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     return ids
   }
   const scheduleIds = await allocate('schedule', importedSchedules, localSchedules), draftIds = await allocate('draft', importedDrafts, [...localDrafts, ...localSessions])
-  const remapDay = (day: TrainingDay) => { for (const exercise of day.exercises) if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } }
+  const remapDay = (day: TrainingDay) => { for (const exercise of day.exercises) { if (exercise.templateId) exercise.templateId = exerciseIds.get(exercise.templateId) ?? exercise.templateId; if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } } }
   for (const p of plans.imported) p.days.forEach(remapDay)
   for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const revision of schedule.revisions) revision.days.forEach(remapDay) }
   for (const item of [...importedDrafts, ...importedSessions]) {
@@ -135,6 +136,10 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   counts.photos.removed = (local?.photos ?? []).filter((p) => !result.photos.some((next) => next.id === p.id)).length
   if (local && !merging) for (const key of ownedStores) { counts[key].removed = local[key].length; counts[key].added = result[key].length }
   for (const key of ownedStores) result[key] = result[key].map((record) => ({ ...record, profileId: newId })) as never
+  const repaired = materializeTemplates(newId, result, at)
+  result.plans = repaired.plans; result.exercises = repaired.exercises; result.tags = repaired.tags
+  counts.exercises.added += repaired.addedExercises.length; counts.tags.added += repaired.addedTags.length
+  if (repaired.changedPlans.length || repaired.addedExercises.length) warnings.push(`Library compatibility repair: update links in ${repaired.changedPlans.length} plans and add ${repaired.addedExercises.length} independent templates using the earliest retained occurrence defaults. Existing templates and all historical snapshots stay unchanged. Original AI defaults may no longer be recoverable.`)
   validateBackupData(canonicalSnapshot(result)); validateRestoreRecords(canonicalSnapshot(result))
   if (counts.drafts.removed || counts.sessions.removed || counts.schedules.removed) warnings.push('Removed plan families include all their history, schedules and saved drafts. Histories are not combined inside a conflicting family.')
   return plan

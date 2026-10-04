@@ -7,7 +7,7 @@ import { PrescriptionEditor } from './PrescriptionEditor'
 export function ExerciseEditor({ profileId, initial, original, tags, onClose, onSaved }: { profileId: string; initial?: ExerciseInput; original?: Exercise; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void }) {
   const { setDirty } = useWorkspace()
   useEffect(() => () => setDirty(false), [setDirty])
-  return <PrescriptionEditor initial={initial} tags={tags} title={original ? 'Edit Workout' : 'Create Workout'} archived={!!original?.archivedAt} onDirty={() => setDirty(true)} onClose={onClose} onSubmit={async (input) => {
+  return <PrescriptionEditor initial={initial} tags={tags} title={original ? 'Edit exercise' : 'Create exercise'} archived={!!original?.archivedAt} onDirty={() => setDirty(true)} onClose={onClose} onSubmit={async (input) => {
     const saved = await exercises.save(profileId, input, original)
     setDirty(false); onSaved(saved.name)
   }} />

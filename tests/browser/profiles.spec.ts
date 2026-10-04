@@ -94,7 +94,7 @@ test('theme and approved shell persist across routes; settings navigation is ina
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('button', { name: 'Save profile', exact: true }).focus()
   const saveBox = await page.getByRole('button', { name: 'Save profile', exact: true }).boundingBox()
-  const navBox = await page.getByRole('navigation').boundingBox()
+  const navBox = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox()
   expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(navBox!.y)
   await page.screenshot({ path: testInfo.outputPath('settings-light-320.png'), fullPage: true })
 })

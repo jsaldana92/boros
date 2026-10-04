@@ -68,7 +68,7 @@ test('failed writes keep weight/photo; validation, photo removal and entry delet
   await page.evaluate(() => (window as unknown as { restore: () => void }).restore())
   if (testInfo.project.name.includes('phone')) await page.setViewportSize({ width: 320, height: 720 })
   await button(page, 'Save measurement').focus(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  const saveBox = await button(page, 'Save measurement').boundingBox(), navBox = await page.getByRole('navigation').boundingBox(); expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(navBox!.y)
+  const saveBox = await button(page, 'Save measurement').boundingBox(), navBox = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(navBox!.y)
   await page.locator('.measurement-editor form').evaluate((form) => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
   await expect(page.getByText('Measurement saved.', { exact: true })).toBeVisible(); expect((await records(page)).photos).toBe(0); expect((await records(page)).weights).toHaveLength(1)
   await button(page, 'Delete measurement').click(); await page.keyboard.press('Escape'); await expect(button(page, 'Delete measurement')).toBeFocused(); await expect(entries(page)).toHaveCount(1)

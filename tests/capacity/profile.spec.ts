@@ -68,7 +68,7 @@ test('documented larger profile loads, filters, exports and restores within arch
   await time('reloadSettingsMs', async () => { await page.reload(); await expect(page.getByRole('combobox', { name: 'Active profile', exact: true })).toHaveValue(owner) })
   await time('train500SessionsMs', async () => { await b('Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await expect(b('Review session')).toHaveCount(500) })
   await time('create100Exercises20PlansMs', async () => { await b('Create').click(); await expect(page.getByRole('article', { name: 'Exercise 099', exact: true })).toBeVisible() })
-  await time('filterExercisesMs', async () => { await page.getByLabel('Search exercises', { exact: true }).fill('099'); await expect(page.locator('.exercise-card').filter({ has: b('View / edit') })).toHaveCount(1) })
+  await time('filterExercisesMs', async () => { await page.getByLabel('Search exercises', { exact: true }).fill('099'); await expect(page.getByRole('region', { name: 'Exercise catalog', exact: true }).locator('.exercise-card')).toHaveCount(1) })
   await page.evaluate(() => {
     const w = window as unknown as { photoReads: number }; w.photoReads = 0
     for (const method of ['get', 'getAll', 'openCursor'] as const) {

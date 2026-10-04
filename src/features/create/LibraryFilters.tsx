@@ -1,11 +1,12 @@
 import type { LibrarySort } from './library'
-import type { Dispatch, SetStateAction } from 'react'
+import { useId, useState, type Dispatch, type SetStateAction } from 'react'
 
 export function LibraryFilters({ noun = 'exercises', search, setSearch, sort, setSort, filterTags, setFilterTags, tags }: { noun?: string; search: string; setSearch: (value: string) => void; sort: LibrarySort; setSort: (value: LibrarySort) => void; filterTags: string[]; setFilterTags: Dispatch<SetStateAction<string[]>>; tags: { id: string; name: string }[] }) {
+  const [expanded, setExpanded] = useState(false), id = useId()
   return <>
-        <div className="library-filters"><label>{`Search ${noun}`}<input type="search" value={search} onChange={(e) => setSearch(e.target.value)} /></label><label>{`Sort ${noun}`}<select value={sort} onChange={(e) => setSort(e.target.value as LibrarySort)}><option value="az">A–Z</option><option value="za">Z–A</option><option value="newest">Newest added</option><option value="oldest">Oldest added</option></select></label></div>
+        <div className="library-filters"><label>Search<input aria-label={`Search ${noun}`} type="search" value={search} onChange={(e) => setSearch(e.target.value)} /></label><label>Sort<select aria-label={`Sort ${noun}`} value={sort} onChange={(e) => setSort(e.target.value as LibrarySort)}><option value="az">A–Z</option><option value="za">Z–A</option><option value="newest">Newest added</option><option value="oldest">Oldest added</option></select></label></div>
 
-        <fieldset className="tag-filters"><legend>Filter tags — ANY selected tag matches</legend><div className="tag-list">{tags.map((tag) => <label className="check-label" key={tag.id}><input type="checkbox" checked={filterTags.includes(tag.id)} onChange={(e) => setFilterTags((current) => e.target.checked ? [...current, tag.id] : current.filter((id) => id !== tag.id))} />{tag.name}</label>)}</div>{!tags.length && <p className="muted">No tags yet.</p>}</fieldset>
-        {(search || filterTags.length > 0) && <button onClick={() => { setSearch(''); setFilterTags([]) }}>Clear filters</button>}
+        <div className="tag-filters"><button type="button" aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded((value) => !value)}>Tags{filterTags.length ? ` (${filterTags.length})` : ''}</button><div id={id} hidden={!expanded}><p className="muted">ANY selected tag matches.</p><div className="tag-scroll">{tags.map((tag) => <button type="button" className="tag-toggle" key={tag.id} aria-pressed={filterTags.includes(tag.id)} onClick={() => setFilterTags((current) => current.includes(tag.id) ? current.filter((id) => id !== tag.id) : [...current, tag.id])}>{tag.name}</button>)}</div>{!tags.length && <p className="muted">No tags yet.</p>}</div></div>
+        {(search || filterTags.length > 0 || sort !== 'az') && <button type="button" onClick={() => { setSearch(''); setSort('az'); setFilterTags([]) }}>Clear</button>}
   </>
 }

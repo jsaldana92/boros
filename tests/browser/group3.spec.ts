@@ -1,3 +1,4 @@
+import { cardAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 
 test.setTimeout(120000)
@@ -73,7 +74,7 @@ test('two plans → finite month schedule → exact unselected occurrence → re
   await button(page, 'Calendar').click(); if (info.project.name.includes('phone')) await page.setViewportSize({ width: 320, height: 780 })
   await adjacent.locator('.calendar-event').focus(); await expect(adjacent.locator('.calendar-event')).toBeFocused()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  const eventBox = await adjacent.locator('.calendar-event').boundingBox(), nav = await page.getByRole('navigation').boundingBox(); expect(eventBox!.y + eventBox!.height).toBeLessThanOrEqual(nav!.y)
+  const eventBox = await adjacent.locator('.calendar-event').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(eventBox!.y + eventBox!.height).toBeLessThanOrEqual(nav!.y)
   await page.screenshot({ path: info.outputPath('group3-month-light.png'), fullPage: true }); expect(page.url()).toBe(address)
 })
 
@@ -117,9 +118,9 @@ test('status refreshes across midnight and background resume; changing preferenc
 test('archived selections disappear without choosing another plan and return when explicitly restored', async ({ page }) => {
   await start(page); await importPlan(page, 'Alpha'); await importPlan(page, 'Beta'); await select(page, ['Alpha'])
   const before = (await records(page)).profiles[0].selectedPlanIds
-  await button(page, 'Create').click(); await page.getByRole('article', { name: 'Plan Alpha', exact: true }).getByRole('button', { name: 'Archive plan', exact: true }).click(); await button(page, 'Archive').click()
+  await button(page, 'Create').click(); await cardAction(page, page.getByRole('article', { name: 'Plan Alpha', exact: true }), 'Archive'); await button(page, 'Archive').click()
   await button(page, 'Train').click(); await expect(page.getByText('No active plan(s) selected.')).toBeVisible(); expect((await records(page)).profiles[0].selectedPlanIds).toEqual(before)
   await page.reload(); await expect(card(page, 'Beta')).toHaveCount(0); await button(page, 'Create').click(); await page.getByRole('checkbox', { name: 'Show archived plans', exact: true }).check()
-  await page.getByRole('article', { name: 'Plan Alpha', exact: true }).getByRole('button', { name: 'Restore plan', exact: true }).click()
+  await cardAction(page, page.getByRole('article', { name: 'Plan Alpha', exact: true }), 'Restore')
   await button(page, 'Train').click(); await expect(card(page, 'Alpha')).toBeVisible(); expect((await records(page)).drafts).toHaveLength(0)
 })

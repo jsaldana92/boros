@@ -20,7 +20,7 @@ test('shared identity survives rename/archive, isolates same-name and legacy exe
   assert.equal(data.plans.length, 2); assert.equal(data.plans.find((p) => p.id === beta.id)!.archived, true)
   assert.equal(data.items.find((i) => i.key === `library:${press.id}`)!.name, 'Renamed press')
   assert.equal(data.items.find((i) => i.key === `library:${unrelated.id}`)!.name, 'Press')
-  assert.equal(data.items.filter((i) => i.name === 'Legacy press').length, 4)
+  assert.equal(data.items.filter((i) => i.name === 'Legacy press' && !i.key.startsWith('library:')).length, 4)
   assert.equal(data.items.filter((i) => i.members).length, 2)
   assert.equal(data.plans.find((p) => p.id === alpha.id)!.items.filter((i) => i.members).length, 2)
   assert.equal(selectPerformances(data, `library:${press.id}`).length, 6)
@@ -88,5 +88,5 @@ test('export, new/replace/both-merge restoration preserve underlying results, me
     assert.equal(stableJSON(result.measurements.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.measurements.map(({ profileId: _owner, ...entry }) => entry)))
     assert.equal(stableJSON(result.sessions.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.sessions.map(({ profileId: _owner, ...entry }) => entry)))
   }
-  assert.equal(db.verno, 5); assert.equal(backup.manifest.backupSchemaVersion, 3)
+  assert.equal(db.verno, 5); assert.equal(backup.manifest.backupSchemaVersion, 4)
 })

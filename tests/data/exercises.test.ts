@@ -34,9 +34,9 @@ test('specific field errors for missing, fractional, negative and reversed targe
   form.sets[0] = { repMin: '0', repMax: '', rirMin: '', rirMax: '2' }
   form.sets[1] = { repMin: '8', repMax: '5', rirMin: '2', rirMax: '1' }
   form.sets[2].repMin = '2.5'
-  form.restAfterSeconds = '-1'
+  form.restAfterSeconds = { minutes: '', seconds: '-1' }
   const errors = parseForm(form).errors
-  for (const path of ['sets.0.repMin', 'sets.0.rirMin', 'sets.1.repMax', 'sets.1.rirMax', 'sets.2.repMin', 'restAfterSeconds']) assert.ok(errors[path], path)
+  for (const path of ['sets.0.repMin', 'sets.0.rirMin', 'sets.1.repMax', 'sets.1.rirMax', 'sets.2.repMin', 'restAfterSeconds.seconds']) assert.ok(errors[path], path)
   assert.equal(exerciseInputSchema.safeParse({ ...prescription(), sets: [] }).success, false)
   assert.equal(exerciseInputSchema.safeParse({ ...prescription(), sets: [{ reps: { min: 8, max: 3 } }] }).success, false)
   assert.equal(parseForm(toForm()).value, undefined)

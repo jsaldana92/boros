@@ -2,8 +2,16 @@
 
 A React / TypeScript / Vite workout tracker. Phases 1-9 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
-Create Workout, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
+Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
+
+The latest local revision replaces the plan-sourced catalog with standalone
+templates, atomic AI plan materialization and safe existing-plan repair. Build,
+typecheck, lint and 131 data tests pass. The 352-scenario static run passed 348;
+four obsolete test locators were corrected and all passed in the final 64/64
+training/backup/restore rerun. Focused Firefox: 12/12. See [exact verification and
+owner checks](docs/template-ownership-verification.md). This candidate is unpublished;
+physical-device, accessibility, Safari and live Support acceptance remain pending.
 
 ## Local development
 
@@ -130,11 +138,19 @@ are still separate manual checks.
 
 ## Exercise library
 
-Create Workout saves ordered per-set reps/RIR, optional rest in seconds,
+In Create, the compact **Workout**, **Plan** and **AI** cards open their builders.
+Create exercise saves ordered per-set reps/RIR, optional rest in seconds,
 instructions, notes, tutorial links, and profile-owned tags. Blank maxima mean
 fixed targets. Blank optional RIR/rest remains unspecified; zero is a real
 value. Increasing set count keeps existing values. Removing populated sets or
 replacing customized targets requires confirmation.
+
+Every rest editor (including plan/AI prescriptions, supersets and manual Train
+timers) uses **Minutes / Seconds**. Minutes are nonnegative whole numbers; seconds
+are whole numbers from 0–59. Both blank means unspecified; one blank component is
+zero only when the other is supplied. Explicit zero remains zero. Existing 75
+seconds displays as 1 minute / 15 seconds; 180 displays as 3 / 0. The total must
+remain a safe integer. Saved records and JSON still use integer seconds.
 
 The editor supports 1-100 sets, exercise names up to 120 characters, up to 50
 tags with names up to 80 characters, and up to 20,000 characters each for
@@ -146,13 +162,44 @@ multiple tag filters match ANY selected tag. Active exercise names are unique
 within a profile. Archived names may be reused, but restore is rejected if an
 active name conflicts: edit/rename the archived record before restoring it.
 Duplicates begin as editable, unsaved copies with a suggested unused name and
-receive a new UUID only on Save workout.
+receive a new UUID only on Save exercise.
+
+The library contains independent, profile-owned templates. This supersedes the
+earlier plan-sourced catalog projection. Open a card and choose Edit to save its
+instructions, notes and targets directly with **Save exercise**. Plan occurrences
+keep their own IDs and prescription snapshots. Changing library defaults affects
+future additions; editing an occurrence affects only its parent plan.
+
+Name-only cards use a bounded scrolling list. Search, sort and the
+collapsed-by-default **Tags** disclosure combine; multiple tags match ANY.
+Expanded pills occupy at most three rows with horizontal scrolling. Collapsing
+retains the filter; **Clear** resets search, sort and selected tags.
+
+AI plan imports save templates, tags and the plan atomically. Valid existing
+identities win; otherwise an active normalized name reuses a template without
+changing its defaults. A new repeated name uses its first occurrence as the
+default; every plan variation is retained. Groups and group rests stay plan-local.
+
+Existing plans are repaired during workspace initialization/profile selection,
+inside an owner-scoped transaction. Active plans precede archived plans; oldest
+creation time, stable plan ID and day/occurrence order choose missing defaults
+from retained snapshots. Archived-only plans create archived templates. Valid
+references stay intact; conflicting dangling identities surface an error. No
+render-time writes or reset. Repair is idempotent across reloads and concurrent tabs.
+
+An optional occurrence `templateId` identifies repaired defaults separately from
+historical `source` provenance. Progress keeps its existing identity rules;
+histories are never joined by name. Plans keep prescriptions, occurrence IDs,
+groups and timestamps; changed links increment revision to reject stale editors.
+Schedules, drafts and completed sessions are not rewritten. Original AI defaults
+cannot be reconstructed after unrecorded edits. See [backup compatibility](docs/backup-format.md)
+for validated restore repair and schema 4, with strict schemas 1–3 still readable.
 
 Exercise and inline-tag writes are one transaction. Tags reuse normalized names
 within the owner profile. Exercise edits/archive/restore use revision checks;
 errors retain input and do not claim success. For a stale exercise, cancel the
 editor (confirm discard only after reviewing/copying anything needed), then
-reopen View / edit to load the latest record. Plan copies and started/saved session prescriptions are independent snapshots.
+open its card and choose Edit to load the latest record. Plan copies and started/saved session prescriptions are independent snapshots.
 
 YouTube links support HTTPS watch?v=, youtu.be, shorts, live, and embed video URLs
 with an 11-character video ID on the explicitly supported YouTube hosts. They
@@ -175,22 +222,39 @@ remain in the editor; validation or a failed write preserves it. Plan/day names
 allow up to 120 characters, and each day supports up to 100 exercise occurrences.
 Prescription limits are the same as the library editor.
 
-Choose exercises from the active profile's active library and saved active plans.
-Source labels identify the plan, day position/name, and occurrence position when
-names repeat. Shared search, A-Z/Z-A, date sorting, and ANY-match tag filters work
-together. Date sorting uses the source exercise's or source plan's creation date.
-Each choice copies the full prescription, including tag names and optional fields,
-into a new occurrence. Optional provenance IDs record the source; they are never
-used to render or update a saved prescription. Repeated selections are independent.
-The same picker includes imported plans and standalone imported workouts.
+Choose from the active profile's active standalone library. Rows show a checkbox,
+name and **Add**. Add copies only that row and closes the picker, regardless of
+other checked rows. **Add selected** copies selected defaults once each in displayed
+sort order and closes. Each addition gets an independent occurrence ID; intentional
+repeats remain supported. These actions update the draft, which needs **Save plan**.
 
-Use day/exercise move buttons and the destination-day selector to change order.
+**Select All** includes all search/tag-filtered results, including offscreen rows.
+Partial selection appears unchecked; clicking selects all, and clicking when all
+are selected clears all. Zero results disable Select All; zero selections or more
+than the day's remaining 100-occurrence capacity disable Add selected. Changing
+filters drops excluded selections; sorting retains identities. Cancel/Back inserts
+nothing. Clear resets only the associated search, sort and tag controls.
+
+Guarded breadcrumbs show Create > Plan > Exercise, Create > Exercise, or the AI
+review context. Adjacent arrows and a popup expose **Edit, Duplicate, Move, Delete**
+in that order, with red Delete. Day sections are lighter than nested cards in both
+themes. Public addresses and existing dirty-form/unload protections are unchanged.
+
+Use the adjacent day/exercise arrows to change order. **Move** opens a dialog of
+other training days; choose a destination or use Cancel/Escape. Full days are
+disabled. Cancel restores focus to the occurrence action button; a successful move focuses the moved
+occurrence. Moving a member to another day makes it standalone.
 Renaming, editing, and moving retain IDs; added occurrences and duplicated plans
 receive new IDs for their contents. Removing days/exercises or reducing the day
 count requires confirmation. The shared prescription editor applies changes to the
 unsaved plan; Save plan commits the entire plan. Editing/archiving a source cannot
 change another saved plan. Plan-specific tag edits stay inside the snapshot and
 do not rename or create library tag records.
+
+Plan cards show a bold name and a smaller training-day/rest-day/duration summary.
+Legacy unbounded plans are labeled honestly. Open a card for Edit, Duplicate or
+Archive; archived cards retain Restore. Actions use keyboard-accessible dialogs
+with Escape and focus restoration.
 
 Plans have profile-scoped unique normalized active names, revisions, timestamps,
 and archive state. Duplicate plan starts an editable copy with an unused suggested
@@ -213,12 +277,18 @@ progress or backup workflow is provided by the manual plan builder. Training is 
 
 ## External AI formatting and paste import
 
-In Create, open **Import AI Output**, choose Plan or Single workout, and use
-**Copy Formatting Instructions** with your own request in an external chatbot.
+In Create, open **AI**, choose Plan or Single workout, and use **Copy** with your
+own request in an external chatbot.
 The instructions include a schema-validated illustrative example. They remain
 selectable if clipboard permission is unavailable. Boros has no AI connection
 and sends no prompt or pasted data to an external provider. Examples are never
 saved automatically; review generated targets yourself before saving.
+
+Both prompts request the complete result inside exactly one fenced `json` block,
+with straight ASCII double quotes (U+0022), no comments/trailing commas,
+truncation/placeholders or outside prose. Unknown required targets must be clarified,
+not invented. The Plan prompt explains superset execution; the standalone Workout
+prompt does not introduce group fields. See [AI formatting notes](docs/ai-formatting.md).
 
 Paste one raw JSON object or one JSON fenced block (up to 1,000,000 characters).
 Validation accepts the complete payload or reports field paths such as
@@ -227,9 +297,14 @@ wrong versions/types, unknown fields at every level, invalid ranges, and unsuppo
 tutorial links fail without writes or loss of pasted text. There is no fragment
 extraction or numeric type coercion. Pasted HTML/code is inert plain text; tutorial
 URLs are never automatically fetched or embedded.
+Malformed smart-quote delimiters produce copying/formatting guidance; Boros never
+globally replaces Unicode quotation marks. Valid Unicode punctuation inside
+strings is preserved. **Draft** is an unsaved preview bound to the profile that
+opened it. Applying a prescription only changes that preview; saving makes it
+appear in the real collections. Refresh does not recover unsaved editor input.
 
 The public v2 contract in `src/schemas/interchange.ts` is separate from database
-schema v5 and backup schema v3. Valid v1 payloads remain accepted; a v1 plan requires
+schema v5 and backup schema v4. Valid v1 payloads remain accepted; a v1 plan requires
 the owner to supply duration in the editable preview. Nothing is inferred from its
 name. The v2 shape is:
 
@@ -293,15 +368,16 @@ import asks before discarding pasted text. Navigation and browser-unload guards
 also apply; drafts are memory-only and do not recover after reload.
 
 Final saves revalidate edited values and bind to the preview's original profile.
-Active name conflicts require renaming or cancellation, never overwriting.
-Workouts become library exercises; plans retain independent nested snapshots
-without creating library exercises. Final import saves resolve/create normalized
-profile tags in the same transaction as the artifact. This registers imported
+Conflicting plan or standalone-exercise names require renaming or cancellation.
+Standalone imports create library exercises. Plan imports atomically create or
+reuse library templates and retain independent nested snapshots, following the
+default-selection rules above. Final saves resolve/create normalized profile tags
+in the same transaction as templates and the plan. This registers imported
 plan tags for reuse; subsequent manual plan-only tag edits retain the existing
 snapshot-only behavior. Local UUIDs identify all imported records. One artifact
 creation UUID is reused across retries: simultaneous saves or an uncertain prior
 commit return the existing artifact without duplicating or overwriting it. Failed
-writes roll back artifact/tags, retain edited input, and allow retry.
+writes roll back templates/plan/tags, retain edited input, and allow retry.
 
 No database migration, new dependency, backup merge, scheduling, training, or
 progress feature is introduced by the import workflow. Automated tests use only
@@ -399,6 +475,9 @@ success means the write committed, following [Dexie's transaction semantics](htt
 
 REST controls occur between consecutive sets and after an exercise's final set
 before the next exercise. Each uses its own prescribed duration in seconds.
+Supersets instead expose exactly one boundary after each round: inter-round rest
+before the next round, post-group rest after the final round even when it ends
+the session. There is no timed rest between members and no double final boundary.
 Missing rest offers manual duration entry; explicit zero is labeled no timed rest.
 One active timer exists per local database, with an owning profile/draft, unique
 token, configured duration, and UTC end timestamp. Starting another timer replaces
@@ -629,7 +708,7 @@ or password-protected. The app reports **Download started**; check your browser'
 downloads to confirm the file was saved. Filenames include a sanitized profile
 name and UTC export timestamp.
 
-Backup schema **3** (strict v1/v2 reading retained) is separate from AI interchange and database schema **5**.
+Backup schema **4** (strict v1/v2/v3 reading retained) is separate from AI interchange and database schema **5**.
 The archive contains `manifest.json`, authoritative `data.json`, 24 linked CSVs,
 and original photo files. App version comes from the actual package.json value,
 currently `0.0.0`. See [the backup contract](docs/backup-format.md) for the full
@@ -835,19 +914,23 @@ Create Plan accepts a duration in weeks and repeated copies of a library exercis
 Each occurrence has its own stable ID, prescription, notes and results. Enable
 **Superset** on members and give them the same positive group number within the
 day. Groups need at least two members to save. Joining shows the resulting order
-immediately. **Superset number (rename group)** changes the display number without
+immediately. **Superset name** changes the positive numeric display number without
 changing the internal group ID; changing an occurrence's membership number joins
 or creates a group. Inner member movement changes member order; moving a group's
 outer member past its boundary moves the block. Moving a member to another day
 makes it standalone. Remove/duplicate occurrences or dissolve a group without
 changing the remaining prescriptions. Plan duplication creates new day, group and
-occurrence IDs; source-library provenance is retained when known.
+occurrence IDs; source-library provenance is retained when known. Group controls
+sit immediately after their last member. Their red **Delete** action asks for
+confirmation, dissolves only the grouping, and keeps exercises, prescriptions
+and historical session snapshots. Blank-rest help reads “Leave blank to choose
+the rest time while training.”
 
 Train runs one group round at a time, in the displayed member order. Unequal set
 counts use the largest count; a member appears only when it has that prescribed
 set. There are no invented sets. Member Note and Information controls stay
 available, and weight-unit labels follow Settings. Optional group rest applies
-between rounds and after the group before another block. Blank permits manual
+between rounds and after the final round, including the last block. Blank permits manual
 duration; explicit zero means no timed rest. Original member rest prescriptions
 remain stored but are not applied between group members. The existing single
 persistent timer, autosave, Clear, partial/full Save, stale-write guards and frozen
@@ -869,7 +952,7 @@ The behavior above adds optional `timeZone` and `selectedPlanIds` profile fields
 IndexedDB remains **v5**, with no store migration. Both preference writes share
 the profile revision check, so a concurrent Settings/selection save is rejected
 and keeps recoverable input. Stored dates, timestamps and units remain intact.
-New exports use **backup v3**, retaining strict v1/v2 reading and checksum/asset
+Group 3 introduced **backup v3** (now superseded by v4 above), retaining strict v1/v2 reading and checksum/asset
 verification. Selected plan IDs follow independent ownership and plan-root merge
 remapping; the chosen whole-profile merge precedence also chooses preferences.
 Clear Data clears selections and retains the time zone and units. AI remains v2.
@@ -907,7 +990,8 @@ member identities and multiplicity, retaining historical compositions. Each
 member has its own graph and statistics. Graph point selectors preserve every
 set, even exact overlaps, and link to saved session details/notes. The optional
 additional weight/reps/date graph is deferred. Current statistics are derived
-locally; database v5, backups v3 with v1/v2 imports, and AI v2 are unchanged.
+locally; Group 4 did not change database v5, then-current backups v3 or AI v2.
+The later template-ownership revision writes backups v4 with v1/v2/v3 reading.
 
 See [Group 4 verification](docs/group4-verification.md) for exact identity rules,
 checks, performance observations and remaining owner checks. Next is integrated

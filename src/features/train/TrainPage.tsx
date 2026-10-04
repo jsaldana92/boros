@@ -1,3 +1,5 @@
+import { RestInput } from '../../components/ui/RestInput'
+import { parseRest, restFields } from '../../lib/rest-duration'
 import { SessionReview } from './SessionReview'
 import { displayDateTime } from '../../lib/display-dates'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -143,7 +145,7 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
         <h3>Superset {block.group.number}</h3><p>{block.members.map((member) => `${memberLabel(member)}: ${member.prescription.sets.length} sets`).join(' · ')}</p>
         {block.members.map(memberHeading)}
         {Array.from({ length: roundCount(block.members) }, (_, s) => <section className="superset-round" key={s} aria-label={`Superset ${block.group!.number} set ${s + 1}`}><h4>Set {s + 1}</h4>{block.members.map((member) => setFields(member, s))}
-          {(s < roundCount(block.members) - 1 || b < blocks.length - 1) && <RestControl label={`Superset ${block.group!.number} ${s < roundCount(block.members) - 1 ? `after round ${s + 1}` : 'after group'}`} seconds={s < roundCount(block.members) - 1 ? block.group!.restBetweenRoundsSeconds : block.group!.restAfterGroupSeconds} onStart={(seconds) => timerAction(() => controller.startGroupTimer(block.id, s, seconds))} />}
+          {<RestControl label={`Superset ${block.group!.number} ${s < roundCount(block.members) - 1 ? `after round ${s + 1}` : 'after group'}`} seconds={s < roundCount(block.members) - 1 ? block.group!.restBetweenRoundsSeconds : block.group!.restAfterGroupSeconds} onStart={(seconds) => timerAction(() => controller.startGroupTimer(block.id, s, seconds))} />}
         </section>)}
       </section> : <section className="training-exercise" key={block.id} aria-label={memberLabel(block.members[0])}>
         {memberHeading(block.members[0])}<p className="muted">{block.members[0].prescription.sets.length} sets · targets shown per set</p>
@@ -169,12 +171,13 @@ function NoteDialog({ value, title, onDirty, onApply, onClose }: { value: string
   return <ConfirmDialog title={title} confirmLabel="Apply note" onCancel={close} onConfirm={() => onApply(text)}><TextareaField label="Note" maxLength={20000} value={text} onChange={(event) => { setText(event.target.value); onDirty(event.target.value !== value) }} /></ConfirmDialog>
 }
 function RestControl({ label, seconds, onStart }: { label: string; seconds?: number; onStart: (seconds?: number) => Promise<void> }) {
-  const [manual, setManual] = useState(''), [error, setError] = useState('')
-  return <div className="rest-control">{seconds === undefined && <Field label={`Rest seconds ${label}`} inputMode="numeric" maxLength={16} value={manual} error={error} onChange={(event) => setManual(event.target.value)} />}<button disabled={seconds === 0} aria-label={`REST ${label}`} onClick={() => {
-    const value = seconds ?? numericResult(manual, true)
-    if (value === undefined) { setError('Enter nonnegative whole seconds.'); return }
+  const [manual, setManual] = useState(() => restFields()), [error, setError] = useState('')
+  const parsed = parseRest(manual)
+  return <div className="rest-control">{seconds === undefined && <RestInput label={`Rest ${label}`} value={manual} errors={parsed.errors} onChange={(value) => { setManual(value); setError('') }} />}<button disabled={seconds === 0} aria-label={`REST ${label}`} onClick={() => {
+    const value = seconds ?? parsed.value
+    if (value === undefined || Object.keys(parsed.errors).length) { setError('Enter a valid rest duration in minutes and seconds.'); return }
     setError(''); void onStart(value)
-  }}>REST · {seconds === undefined ? 'manual duration' : seconds === 0 ? '0 seconds — no timed rest' : `${seconds} seconds`}</button></div>
+  }}>REST · {seconds === undefined ? 'manual duration' : seconds === 0 ? '0 seconds — no timed rest' : `${seconds} seconds`}</button>{error && <p role="alert">{error}</p>}</div>
 }
 function TimerDisplay({ timer, disabled, onAction }: { timer: RestTimer; disabled: boolean; onAction: (action: 'stop' | 'reset') => void }) {
   const [, tick] = useState(0)

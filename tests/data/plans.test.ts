@@ -94,7 +94,7 @@ test('copies include full snapshots; source edits/archive and destination edits 
   const source = await exercises.save(id, prescription())
   const choice = (await service.library(id)).choices[0]
   const first = await service.save(id, { name: 'One', durationWeeks: 2, days: [{ ...newDay(1), exercises: [copyExercise(choice.prescription, choice.source), copyExercise(choice.prescription, choice.source)] }] })
-  const planChoice = (await service.library(id)).choices.find((item) => item.source.kind === 'plan')!
+  const planChoice = (await service.library(id)).choices[0]
   const second = await service.save(id, { name: 'Two', durationWeeks: 2, days: [{ ...newDay(1), exercises: [copyExercise(planChoice.prescription, planChoice.source)] }] })
   const changed = planToInput(first); changed.days[0].exercises[0].prescription.sets[0].reps.min = 6
   const edited = await service.save(id, changed, first)
@@ -104,7 +104,7 @@ test('copies include full snapshots; source edits/archive and destination edits 
   await exercises.setArchived(id, newSource.id, newSource.revision, true)
   await service.setArchived(id, edited.id, edited.revision, true)
   assert.deepEqual((await service.get(id, second.id)).days[0].exercises[0].prescription, choice.prescription)
-  assert.ok((await service.library(id)).choices.every((item) => item.source.kind === 'plan' && item.source.id === second.id))
+  assert.equal((await service.library(id)).choices.length, 0)
 })
 
 test('duplicate plans receive independent plan/day/occurrence IDs and editable distinct names', async (t) => {
@@ -141,9 +141,9 @@ test('stale saves and archive fail across connections; failed complete-plan writ
   assert.equal(await db.plans.count(), 1)
 })
 
-test('picker source labels distinguish repeat occurrences; shared name/date/ANY filters compose', async (t) => {
+test('picker excludes plan variations; shared name/date/ANY filters compose', async (t) => {
   const { service, exercises, id } = await setup(t)
-  await exercises.save(id, prescription())
+  for (let i = 0; i < 5; i++) await exercises.save(id, { ...prescription(), name: 'Squat ' + i })
   await service.save(id, input())
   const { choices } = await service.library(id)
   assert.equal(choices.length, 5)

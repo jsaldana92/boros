@@ -41,10 +41,7 @@ export function planService(database: BorosDatabase) {
           const prescription = exerciseToInput(exercise, tags)
           choices.push({ id: `exercise:${exercise.id}`, nameKey: exercise.nameKey, createdAt: exercise.createdAt, tagIds: prescription.tagNames.map(nameKey), label: `Library: ${exercise.name}`, prescription, source: { kind: 'exercise', id: exercise.id } })
         }
-        for (const plan of plans.filter((item) => !item.archivedAt)) for (const [dayIndex, day] of plan.days.entries()) for (const [index, occurrence] of day.exercises.entries()) {
-          choices.push({ id: `plan:${plan.id}:${occurrence.id}`, nameKey: nameKey(occurrence.prescription.name), createdAt: plan.createdAt, tagIds: occurrence.prescription.tagNames.map(nameKey), label: `Plan: ${plan.name} / Day ${dayIndex + 1}: ${day.name} / Exercise ${index + 1}: ${occurrence.prescription.name}`, prescription: structuredClone(occurrence.prescription), source: { kind: 'plan', id: plan.id, dayId: day.id, occurrenceId: occurrence.id, ...(occurrence.source ? { libraryId: occurrence.source.kind === 'exercise' ? occurrence.source.id : occurrence.source.libraryId } : {}) } })
-        }
-        return { plans, choices, tags }
+        return { plans, choices, tags, exercises: library }
       })
     },
     async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }, creationId?: string) {

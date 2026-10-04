@@ -72,7 +72,7 @@ test('new profile and rename restore recover photos, null fields, saved drafts/h
   await button(page, 'Settings').click(); await button(page, 'Light').click(); await upload(page, f.bytes)
   await page.getByLabel('Import choice').selectOption('new'); await page.getByLabel('Imported profile name').fill('Renamed copy'); await preview(page)
   await page.addStyleTag({ content: 'html { font-size: 24px; }' }); await button(page, 'Confirm and save').focus(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  const box = await button(page, 'Confirm and save').boundingBox(), nav = await page.getByRole('navigation').boundingBox(); expect(box!.y + box!.height).toBeLessThanOrEqual(nav!.y)
+  const box = await button(page, 'Confirm and save').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(box!.y + box!.height).toBeLessThanOrEqual(nav!.y)
   await page.screenshot({ path: testInfo.outputPath('restore-preview-light-large-text.png'), fullPage: true }); const renamed = await confirm(page)
   expect(renamed).not.toBe(id); const after = await records(page); expect(table(after, 'profiles')).toHaveLength(3); expect(table(after, 'sessions').filter((s) => s.profileId === renamed)).toHaveLength(3); expect(page.url()).toBe(url); expect(errors).toEqual([])
 })
@@ -114,7 +114,7 @@ test('invalid ZIP and failed image decoding remain recoverable; cancel/navigatio
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'bad.zip', mimeType: 'application/zip', buffer: Buffer.from('not zip') }); await expect(page.getByRole('alert')).toContainText('Invalid ZIP'); expect(await records(page)).toEqual(before)
   const zip = await JSZip.loadAsync(f.bytes), manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = 99; zip.file('manifest.json', JSON.stringify(manifest))
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'future.zip', mimeType: 'application/zip', buffer: await zip.generateAsync({ type: 'nodebuffer' }) }); await expect(page.getByRole('alert')).toContainText('Update Boros')
-  manifest.backupSchemaVersion = 3
+  manifest.backupSchemaVersion = 4
   const data = JSON.parse(await zip.file('data.json')!.async('string')); data.assets[0].width = 2; manifest.assets.find((a) => a.id === data.assets[0].id).width = 2
   const payload = new TextEncoder().encode(JSON.stringify(data)), entry = manifest.inventory.find((i) => i.path === 'data.json'); entry.bytes = payload.length; entry.sha256 = await sha256(payload)
   zip.file('data.json', payload); zip.file('manifest.json', JSON.stringify(manifest))

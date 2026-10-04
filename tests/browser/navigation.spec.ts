@@ -88,7 +88,7 @@ test('Settings returns internally, refresh loses return history and safely retur
 test('canceled dirty navigation preserves screen, input and preference; accepted navigation commits', async ({ page }) => {
   await start(page)
   await page.getByRole('button', { name: 'Create', exact: true }).click()
-  await page.getByRole('button', { name: 'Create Workout', exact: true }).click()
+  await page.getByRole('button', { name: 'Create exercise', exact: true }).click()
   await page.getByLabel('Exercise name', { exact: true }).fill('Unsaved exercise')
   const address = page.url()
   page.once('dialog', (dialog) => dialog.dismiss())
@@ -106,7 +106,7 @@ test('canceled dirty navigation preserves screen, input and preference; accepted
   await expect(page.locator('input[name="name"]')).toHaveValue('Unsaved profile')
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: 'Return to Create', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Create Workout', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create exercise', exact: true })).toBeVisible()
   await expect(page.getByLabel('Exercise name', { exact: true })).toHaveCount(0)
 })
 
@@ -151,7 +151,7 @@ test('browser Back leaves Boros; legacy cleanup replaces entry; dirty unload can
   await page.goForward()
   await expect(heading(page, 'Progress')).toBeVisible()
   await page.getByRole('button', { name: 'Create', exact: true }).click()
-  await page.getByRole('button', { name: 'Create Workout', exact: true }).click()
+  await page.getByRole('button', { name: 'Create exercise', exact: true }).click()
   await page.getByLabel('Exercise name', { exact: true }).fill('Keep this draft')
   const leaving = page.waitForEvent('dialog')
   await page.evaluate((url) => { setTimeout(() => location.assign(url), 0) }, outside)
