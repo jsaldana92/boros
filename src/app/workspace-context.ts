@@ -6,6 +6,7 @@ export interface Workspace {
   snapshot: ProfileSnapshot
   profileList: Profile[]
   theme: Theme
+  sound: boolean
   noticeAccepted: boolean
   dirty: boolean
   setDirty: (value: boolean) => void

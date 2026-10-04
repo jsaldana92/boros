@@ -1,13 +1,13 @@
 import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { db, type BorosDatabase } from './database.ts'
-import { appendRevision, dateSchema, mappingSchema, occurrences, scheduleEnd, scheduleInputSchema, validateMapping, type Mapping, type Occurrence, type Schedule, type ScheduleInput } from '../schemas/schedule.ts'
-import { localToday, nextMonday, weekday } from '../lib/calendar-dates.ts'
+import { appendRevision, dateSchema, mappingSchema, occurrences, scheduleEnd, programEnd, scheduleInputSchema, validateMapping, type Mapping, type Occurrence, type OccurrenceOutcome, type Schedule, type ScheduleInput } from '../schemas/schedule.ts'
+import { addDays, localToday, monday, nextMonday, weekday } from '../lib/calendar-dates.ts'
 import type { CompletedSession, SessionDraft } from '../schemas/session.ts'
 
 export interface ScheduleChange { scheduleId: string; revision: number; effectiveFrom: string; kind: 'remap' | 'stop' | 'duration'; mapping: Mapping }
 export interface ChangePreview { change: ScheduleChange; fingerprint: string; conflicts: { id: string; date: string; name: string }[]; planName: string; startWeek: string; durationWeeks?: number; endDate?: string }
-export interface CalendarEvent extends Occurrence { session?: CompletedSession; draft?: SessionDraft; retained?: boolean }
+export interface CalendarEvent extends Occurrence { session?: CompletedSession; draft?: SessionDraft; outcome?: OccurrenceOutcome; retained?: boolean; unscheduled?: boolean }
 export function scheduleService(database: BorosDatabase) {
   const tables = [database.profiles, database.plans, database.schedules, database.drafts, database.sessions]
   const owner = async (id: string) => { if (!await database.profiles.get(id)) throw new Error('This profile is unavailable.') }
@@ -29,7 +29,7 @@ export function scheduleService(database: BorosDatabase) {
       validateMapping(change.mapping, plan.days)
     }
     const drafts = (await database.drafts.where('profileId').equals(profileId).toArray()).filter((draft) => !draft.finalizedAt && draft.occurrence?.scheduleId === schedule.id && draft.occurrence.scheduledDate >= change.effectiveFrom).sort((a, b) => a.id.localeCompare(b.id))
-    const boundary = change.kind === 'duration' ? { durationWeeks: plan.durationWeeks, endDate: scheduleEnd(schedule.startWeek, plan.durationWeeks) } : schedule.durationChanges?.at(-1) ?? schedule
+    const boundary = change.kind === 'duration' ? { durationWeeks: plan.durationWeeks, endDate: programEnd(schedule.startWeek, plan.durationWeeks, schedule.excludedWeeks) } : schedule.durationChanges?.at(-1) ?? schedule
     return { change, planName: plan.name, startWeek: schedule.startWeek, durationWeeks: boundary.durationWeeks, endDate: boundary.endDate, fingerprint: JSON.stringify([schedule.revision, plan.revision, drafts.map((draft) => [draft.id, draft.revision])]), conflicts: drafts.map((draft) => ({ id: draft.id, date: draft.occurrence!.scheduledDate, name: draft.day.name })) }
   }
   return {
@@ -72,14 +72,24 @@ export function scheduleService(database: BorosDatabase) {
       return database.transaction('r', tables, async () => {
         await owner(profileId)
         const schedules = (await database.schedules.where('profileId').equals(profileId).toArray()).filter((item) => !zone || item.timeZone === zone)
-        const events = new Map<string, CalendarEvent>(schedules.flatMap((item) => occurrences(item, start, end)).map((item) => [item.ref.key, item]))
+        // Unassigned days belong to a whole week, even in Calendar's day view.
+        // Their internal occurrence date must not imply a weekday assignment.
+        const weekStart = monday(start), weekEnd = addDays(monday(end), 6)
+        const inRange = (date: string, unscheduled = false) => date >= (unscheduled ? weekStart : start) && date <= (unscheduled ? weekEnd : end)
+        const events = new Map<string, CalendarEvent>(schedules.flatMap((item) => occurrences(item, item.kind === 'unscheduled' ? weekStart : start, item.kind === 'unscheduled' ? weekEnd : end).map((event) => ({ ...event, unscheduled: item.kind === 'unscheduled' }))).map((item) => [item.ref.key, item]))
+        for (const schedule of schedules) for (const outcome of schedule.outcomes ?? []) {
+          if (!inRange(outcome.ref.scheduledDate, schedule.kind === 'unscheduled')) continue
+          const generated = events.get(outcome.ref.key)
+          if (outcome.status === 'pending' && !generated) continue
+          events.set(outcome.ref.key, { ...generated, ref: outcome.ref, day: outcome.day, planName: outcome.planName, planId: schedule.planId, outcome, unscheduled: schedule.kind === 'unscheduled', retained: !generated })
+        }
         const drafts = await database.drafts.where('profileId').equals(profileId).toArray(), logs = await database.sessions.where('profileId').equals(profileId).toArray()
         // Started/completed snapshots remain visible even after a future remap or stop.
         for (const record of [...drafts.filter((item) => !item.finalizedAt), ...logs]) {
           const ref = record.occurrence
-          if (!ref || (zone && ref.timeZone !== zone) || ref.scheduledDate < start || ref.scheduledDate > end) continue
+          if (!ref || (zone && ref.timeZone !== zone) || !inRange(ref.scheduledDate, ref.unscheduled)) continue
           const generated = events.get(ref.key)
-          events.set(ref.key, { ref, planId: record.sourcePlanId, planName: record.planName, day: record.day, retained: !generated || generated.ref.scheduleRevisionId !== ref.scheduleRevisionId, ...('completedAt' in record ? { session: record } : { draft: record }) })
+          events.set(ref.key, { ...generated, ref, planId: record.sourcePlanId, planName: record.planName, day: record.day, unscheduled: ref.unscheduled, retained: !generated || generated.ref.scheduleRevisionId !== ref.scheduleRevisionId, ...('completedAt' in record ? { session: record } : { draft: record }) })
         }
         return [...events.values()].sort((a, b) => a.ref.scheduledDate.localeCompare(b.ref.scheduledDate) || a.planName.localeCompare(b.planName))
       })

@@ -1,3 +1,5 @@
+import { TrainingDayActions } from '../train/TrainingDayActions'
+import { dayStatus } from '../../lib/weekly-status'
 import { createId } from '../../lib/browser-crypto.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -20,6 +22,7 @@ export function CalendarPage() {
 function CalendarWorkspace({ profileId }: { profileId: string }) {
   const { allowLeave, snapshot } = useWorkspace(), { openScreen } = useScreenNavigation()
   const instant = useCurrentInstant()
+  const [dayAction, setDayAction] = useState<{ event: CalendarEvent; run: Schedule }>()
   const [selection, setSelection] = useState<{ date?: string }>({}), [view, setView] = useState<CalendarView>('month')
   const [editor, setEditor] = useState<{ plans: Plan[]; schedule?: Schedule; kind: 'create' | 'remap' | 'stop' | 'duration' }>()
   const [error, setError] = useState(''), [attempt, setAttempt] = useState(0), [busy, setBusy] = useState(false)
@@ -36,6 +39,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   }, [profileId, range.start, range.end, attempt])
   const close = () => { if (allowLeave()) { setEditor(undefined); requestAnimationFrame(() => document.getElementById('calendar-heading')?.focus()) } }
   const openEvent = async (event: CalendarEvent) => {
+    if (event.outcome && event.outcome.status !== 'pending') { const run = data?.schedules.find((item) => item.id === event.ref.scheduleId); if (run) setDayAction({ event, run }); return }
     if (busy || !allowLeave()) return; setBusy(true); setError('')
     try {
       const opened = await sessions.openOccurrence(profileId, event.ref.scheduleId, event.ref.dayId, event.ref.scheduledDate)
@@ -54,16 +58,18 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
       <p>Today uses {zone}. Events keep their schedule’s local dates and time zone.</p>
       <h2 className="calendar-range" aria-live="polite">{view === 'month' ? new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)) : `${range.start}${range.end !== range.start ? ` – ${range.end}` : ''}`}</h2>
       {data && !data.schedules.length && <p>No schedules. Add an active plan to begin.</p>}
+      {!!result?.events?.some((event) => event.unscheduled) && <section aria-label="Unassigned weekly training"><h2>Weekly programs without assigned weekdays</h2>{result.events.filter((event) => event.unscheduled).map((event) => <button className="calendar-event" key={event.ref.key} onClick={() => { const run = data?.schedules.find((item) => item.id === event.ref.scheduleId); if (run) setDayAction({ event, run }) }}><span>{event.planName} / {event.day.name}</span><span>Week of {event.ref.scheduledWeek} / {dayStatus(event, instant)} / {event.ref.timeZone} / Run {event.ref.scheduleId.slice(0, 8)}</span></button>)}</section>}
       <div className={`calendar-grid calendar-view-${view}`} aria-label={`${view} calendar`}>
         {dateRange(range.start, range.end).map((day) => <section key={day} className={`calendar-day${view === 'month' && day.slice(0, 7) !== date.slice(0, 7) ? ' adjacent-month' : ''}`} aria-label={day} aria-current={day === today ? 'date' : undefined}>
           <h3><time dateTime={day}>{weekdays[weekday(day)]} {day.slice(5)}</time>{day === today && ' · Today'}</h3>
-          {result?.events?.filter((event) => event.ref.scheduledDate === day).map((event) => <button key={event.ref.key} className={`calendar-event${event.session ? ' completed' : ''}`} disabled={busy} onClick={() => void openEvent(event)}>
-            <span className="event-name">{event.planName} / {event.day.name}</span><span>{event.session ? `✓ Completed${event.session.partial ? ' · Partial' : ''}` : event.draft ? 'In progress' : day < localToday(event.ref.timeZone, instant) ? 'Missed / incomplete' : 'Incomplete'}</span>
+          {result?.events?.filter((event) => !event.unscheduled && event.ref.scheduledDate === day).map((event) => <button key={event.ref.key} className={`calendar-event${event.session || event.outcome?.status === 'completed' ? ' completed' : ''}`} disabled={busy} onClick={() => void openEvent(event)}>
+            <span className="event-name">{event.planName} / {event.day.name}</span><span>{event.session ? `✓ Completed${event.session.partial ? ' · Partial' : ''}` : event.draft ? 'In progress' : dayStatus(event, instant)}</span>
             <span>{event.ref.timeZone}</span>
             {(data?.schedules.length ?? 0) > 1 && <span>Schedule {event.ref.scheduleId.slice(0, 8)}</span>}
             {event.retained && <span>Kept original session</span>}
           </button>)}
-          {data?.schedules.filter((item) => scheduleActiveOn(item, day)).map((item) => {
+          {data?.schedules.filter((item) => weekday(day) === 0 && item.excludedWeeks?.includes(day)).map((item) => <p className="muted" key={item.id}>{item.revisions.at(-1)!.planName}: Excluded week / Run {item.id.slice(0, 8)}</p>)}
+          {data?.schedules.filter((item) => item.kind !== 'unscheduled' && scheduleActiveOn(item, day)).map((item) => {
             const revision = revisionAt(item, day)
             return revision?.needsRepair ? <p className="muted" key={item.id}>{revision.planName}: mapping needs repair</p> : revision && !revision.mapping.some((assignment) => assignment.weekday === weekday(day)) ? <p className="muted" key={item.id}>{revision.planName}: Rest</p> : null
           })}
@@ -79,6 +85,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
           </>}
         </article>)}
       </section>}
+      {dayAction && <TrainingDayActions profileId={profileId} {...dayAction} onClose={() => setDayAction(undefined)} onOpened={(value) => { setDayAction(undefined); openScreen('train', { profileId, draftId: value.draft?.id, sessionId: value.session?.id }) }} />}
       {error && <p role="alert">{error}</p>}
     </>}
   </>

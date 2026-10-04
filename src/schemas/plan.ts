@@ -25,7 +25,7 @@ export function validateGroups(day: z.infer<typeof daySchema>, context: z.Refine
   })
   day.exercises.forEach((item, i) => { if (item.groupId && !ids.has(item.groupId)) context.addIssue({ code: 'custom', path: [...prefix, 'exercises', i, 'groupId'], message: 'Superset membership must reference a group in this training day.' }) })
 }
-export const planInputSchema = z.object({ name, durationWeeks: positiveInteger.optional(), days: z.array(daySchema).min(1, 'Add at least one training day.').max(7, 'Use at most 7 training days.') }).superRefine((plan, context) => {
+export const planInputSchema = z.object({ name, notes: z.string().max(20000).optional(), durationWeeks: positiveInteger.optional(), days: z.array(daySchema).min(1, 'Add at least one training day.').max(7, 'Use at most 7 training days.') }).superRefine((plan, context) => {
   const ids = new Set<string>()
   plan.days.forEach((day, index) => {
     validateGroups(day, context, ['days', index])
@@ -45,7 +45,7 @@ export interface Plan extends PlanInput {
 }
 export const newDay = (number: number): TrainingDay => ({ id: createId(), name: `Day ${number}`, exercises: [] })
 export const copyExercise = (prescription: ExerciseInput, source?: ExerciseSource): PlanExercise => ({ id: createId(), prescription: structuredClone(prescription), ...(source ? { source: structuredClone(source) } : {}) })
-export const planToInput = (plan: Plan): PlanInput => ({ name: plan.name, ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks }), days: structuredClone(plan.days) })
+export const planToInput = (plan: Plan): PlanInput => ({ name: plan.name, ...(plan.notes === undefined ? {} : { notes: plan.notes }), ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks }), days: structuredClone(plan.days) })
 export type Superset = z.infer<typeof groupSchema>
 export function trainingBlocks(day: TrainingDay) {
   const seen = new Set<string>()

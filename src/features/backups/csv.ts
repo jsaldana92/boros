@@ -10,6 +10,7 @@ export function spreadsheetCell(value: unknown) {
 }
 export function csvTables(data: BackupData) {
   const current = data.backupSchemaVersion >= 2
+  const weekly = data.backupSchemaVersion >= 5
   const tables: Record<string, Table> = {}
   const table = (name: string, fields: string, rows: Row[] = []) => { tables[name] = { fields: fields.split(','), rows }; return tables[name].rows }
   const scope = 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,dayOrder'
@@ -19,7 +20,7 @@ export function csvTables(data: BackupData) {
   const libraries = table('library_exercises', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl,createdAt,updatedAt')
   const librarySets = table('library_sets', 'profileId,libraryExerciseId,setOrder,repsMin,repsMax,rirMin,rirMax')
   const tagLinks = table('exercise_tags', 'profileId,libraryExerciseId,tagId,tagOrder')
-  table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : ''), data.plans as unknown as Row[])
+  table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : '') + (weekly ? ',notes' : ''), data.plans as unknown as Row[])
   const days = table('days', `${scope},name`)
   const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}${data.backupSchemaVersion >= 4 ? ',templateId' : ''}`)
   const groups = current ? table('supersets', `${scope},groupId,number,blockOrder,restBetweenRoundsSeconds,restAfterGroupSeconds`) : []
@@ -27,6 +28,12 @@ export function csvTables(data: BackupData) {
   const prescriptionTags = table('prescription_tags', `${scope},exerciseOccurrenceId,exerciseOrder,tagOrder,tagName`)
   table('schedules', 'profileId,id,planId,revision,timeZone,startWeek,stoppedFrom,createdAt,updatedAt' + (current ? ',durationWeeks,endDate' : ''), data.schedules as unknown as Row[])
   if (current) table('schedule_duration_changes', 'profileId,scheduleId,id,effectiveFrom,durationWeeks,endDate', data.schedules.flatMap((schedule) => (schedule.durationChanges ?? []).map((change) => ({ ...change, profileId: data.profile.id, scheduleId: schedule.id }))))
+  if (weekly) {
+    table('program_runs', 'profileId,scheduleId,kind,identity', data.schedules.map((schedule) => ({ profileId: data.profile.id, scheduleId: schedule.id, kind: schedule.kind ?? 'scheduled', identity: schedule.identity ?? 'calendar-date' })))
+    table('excluded_weeks', 'profileId,scheduleId,week', data.schedules.flatMap((schedule) => (schedule.excludedWeeks ?? []).map((week) => ({ profileId: data.profile.id, scheduleId: schedule.id, week }))))
+    table('week_moves', 'profileId,scheduleId,id,fromWeek,direction,recordedAt', data.schedules.flatMap((schedule) => (schedule.weekMoves ?? []).map((move) => ({ ...move, profileId: data.profile.id, scheduleId: schedule.id }))))
+    table('occurrence_outcomes', 'profileId,scheduleId,id,occurrenceKey,dayId,scheduledWeek,scheduledDate,programWeek,timeZone,status,revision,recordedAt,updatedAt', data.schedules.flatMap((schedule) => (schedule.outcomes ?? []).map((outcome) => ({ ...outcome, ...outcome.ref, occurrenceKey: outcome.ref.key, profileId: data.profile.id }))))
+  }
   const revisions = table('schedule_revisions', 'profileId,scheduleId,id,revisionOrder,planId,planRevision,planName,effectiveFrom,effectiveUntil,needsRepair,createdAt')
   const assignments = table('schedule_assignments', 'profileId,scheduleId,scheduleRevisionId,assignmentOrder,dayId,weekday')
   const event = 'occurrenceKey,scheduleId,scheduleRevisionId,scheduledDate,scheduledWeek,timeZone'

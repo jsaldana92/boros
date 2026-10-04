@@ -192,7 +192,34 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .rest-timer p { margin: 0 0 6px; }
 .rest-timer .actions { margin-block: 8px; }
 .session-actions { position: fixed; z-index: 3; bottom: calc(80px + env(safe-area-inset-bottom)); left: 0; right: 0; display: flex; gap: 12px; justify-content: center; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 16px; }
-.session-actions button { flex: 1; max-width: 370px; }
+.session-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.session-actions > button, .session-secondary { width: min(100%, 740px); margin-inline: auto; }
+.session-actions button { flex: 1; max-width: none; }
+.session-secondary { display: flex; gap: 10px; }
+.training-session { padding-bottom: 160px; }
+.training-session input, .training-session textarea { scroll-margin-bottom: 230px; }
+.training-heading h3 { font-weight: 700; }
+.plan-note-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; max-width: 100%; font-size: 14px; font-weight: 400; }
+.train-plan-cards .catalog-card { min-height: 104px; text-align: left; width: 100%; }
+.add-plan-card { margin-bottom: 20px; min-height: 72px; }
+.week-navigation { display: flex; gap: 6px; align-items: center; justify-content: center; padding: 20px 0; margin: 20px 0; border-block: 1px solid var(--border); }
+.week-navigation > button { flex-shrink: 0; padding-inline: 8px; }
+.week-navigation .week-range { flex-shrink: 1; min-width: 0; border: 0; background: transparent; padding-inline: 2px; font-weight: 600; }
+.training-day-cards { display: grid; gap: 14px; }
+.training-day-card { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; text-align: left; padding: 22px 16px; }
+.training-day-card strong { flex: 1; min-width: 90px; overflow-wrap: anywhere; }
+.training-day-card small { width: 100%; }
+.outcome-card { background: var(--nav); color: var(--muted); }
+.day-status { border-radius: 20px; background: var(--nav); padding: 5px 10px; font-size: 13px; white-space: nowrap; }
+.day-status.completed { background: #225c39; color: #fff; }
+.day-status.skipped { background: #555; color: #fff; }
+.day-status.past-due { color: var(--danger); }
+.week-moves { display: grid; gap: 10px; margin: 22px 0; }
+.timer-circle { position: relative; width: min(240px, 100%); margin: 20px auto; aspect-ratio: 1; }
+.timer-circle svg { width: 100%; height: 100%; fill: none; stroke-width: 6; }
+.timer-track { stroke: var(--border); }
+.timer-progress { stroke: var(--text); }
+.timer-circle [role='timer'] { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 25px; font-weight: 700; text-align: center; }
 @media (max-width: 600px) { .training-fields { gap: 8px; } }
 
 .calendar-toolbar { margin: 20px 0; }

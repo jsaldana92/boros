@@ -4,7 +4,7 @@ import { csvTables } from './csv.ts'
 import { sha256 } from './integrity.ts'
 export { sha256 } from './integrity.ts'
 
-export const exclusions = ['Other profiles and their records/assets', 'Browser-wide appearance, storage-notice preference and active-profile selection', 'Navigation/sessionStorage, unsaved editor forms, unapplied notes and pending/failed autosaves', 'Active rest timers, interval/tick state and object URLs', 'Credentials, environment/configuration files and machine paths', 'Generated calendar occurrences (reconstruct from schedules and retained session identities)']
+export const exclusions = ['Other profiles and their records/assets', 'Browser-wide appearance, sound and storage-notice preference and active-profile selection', 'Navigation/sessionStorage, unsaved editor forms, unapplied notes and pending/failed autosaves', 'Active rest timers, interval/tick state and object URLs', 'Credentials, environment/configuration files and machine paths', 'Generated calendar occurrences (reconstruct from schedules and retained session identities)']
 const encode = (value: string) => new TextEncoder().encode(value)
 export function backupFilename(name: string, exportedAt: string) {
   const safe = name.normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'profile'
@@ -30,7 +30,7 @@ export async function validateGeneratedArchive(bytes: Uint8Array, expected: Back
 }
 export async function generateBackup(snapshot: ProfileSnapshot, appVersion: string, progress: (message: string) => void = () => {}) {
   progress('Validating saved records and references')
-  if (snapshot.databaseVersion !== 5) throw new Error('This database version is not supported by backup schema 3. Update Boros before exporting.')
+  if (snapshot.databaseVersion !== 5) throw new Error('This database version is not supported by backup schema 5. Update Boros before exporting.')
   const { databaseVersion: _databaseVersion, capturedAt: _capturedAt, photos, ...records } = snapshot
   const data: BackupData = { format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, ...records, assets: photos.map(({ blob, ...asset }) => ({ ...asset, mediaType: blob.type as 'image/jpeg' | 'image/png' | 'image/webp', bytes: blob.size, path: `photos/${asset.id}.${blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]}` })) }
   validateBackupData(data)

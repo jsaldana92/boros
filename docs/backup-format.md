@@ -1,9 +1,9 @@
-# Boros profile backup, schema 4 (schemas 1–3 supported)
+# Boros profile backup, schema 5 (schemas 1–4 supported)
 
 Export was implemented in Phase 8; reviewed restore and profile Clear Data are
 implemented in Phase 9. This remains separate from the external AI interchange
-format. Template ownership now writes backup schema 4; database version 5 stays unchanged. Strict
-schema 1–3/database v5 backups remain supported through the compatibility path below. An isolated
+format. Weekly training now writes backup schema 5; database version 5 stays unchanged. Strict
+schema 1–4/database v5 backups remain supported through the compatibility path below. An isolated
 export → import under a new name → export comparison verifies canonical records,
 relationships and original image bytes, with the identity exceptions below.
 
@@ -14,7 +14,7 @@ to archives. Group 4 itself did not change the format; its tests
 verify underlying records and derived results through new/replace/both-merge
 restoration. See [Group 4 verification](group4-verification.md) for analytics rules.
 
-Schema 4 adds optional `templateId` to prescription occurrences and to
+Schema 4 introduced optional `templateId` to prescription occurrences and to
 `csv/prescriptions.csv`. It records the reusable defaults reference for repaired
 legacy plans while keeping `source` provenance intact. Export retains the field in
 all saved snapshots. Current-plan template references must resolve; historical
@@ -22,6 +22,35 @@ snapshots retain their original provenance and need not track the current librar
 The strict v1/v2/v3 field sets and CSV columns remain frozen; they reject this v4
 field. Original ZIP bytes, hashes, CSV tables, relationships and photos are checked
 before any compatibility transformation. SHA-256 verification is unchanged.
+
+Schema 5 adds optional plan `notes` and program metadata inside existing schedule
+records: `kind: "unscheduled"`, `identity: "program-week"`, `excludedWeeks`,
+`weekMoves`, and `outcomes`. Keeping each run and its markers together makes status
+changes and movements atomic and preserves the existing family-based restore
+rules. No store/index change or eager database rewrite is required. Old schedules
+retain their date-based occurrence keys. New unassigned weekly runs use
+`scheduleId:dayId:week-N`; occurrence references retain `programWeek` and
+`unscheduled: true` as well as their week, zone and revision. Their internal date
+is a generation coordinate, not a claimed assigned weekday or performance date.
+
+An outcome has its own UUID, reference, frozen day/name, status (`skipped`,
+`completed`, or corrected `pending`), revision, `recordedAt` and `updatedAt`.
+These timestamps describe marking/correction, never performed exercises. Markers
+do not contain results. Pending corrections retain marker identity and remain
+protected from week movement. Active markers cannot overlap a draft/session.
+Validation checks ownership, reference keys, program week, zone, unique markers,
+and excluded-week consistency. Gaps are sorted unique Monday labels. Civil-date
+endings include gaps, including the duration-change history. Move records retain
+their UUID, original week, direction and recorded timestamp.
+
+The canonical JSON contains complete snapshots. New linked CSVs are
+`program_runs`, `occurrence_outcomes`, `excluded_weeks`, and `week_moves`; the plans
+CSV adds `notes`. Manifest counts additionally include outcomes and excluded weeks.
+Restore remaps run references and keys together if a schedule ID collides, retaining
+all markers, gaps, revisions, snapshots and actual completion timestamps. Merge
+priorities still apply to whole plan families; they never merge competing run
+histories by name. Strict older field sets and CSV inventories remain frozen;
+new weekly fields cannot be smuggled into an older envelope.
 
 After validation and merge/identity mapping, the restore preview materializes
 missing templates from current plans in its proposed result. The counts and warning
@@ -57,6 +86,10 @@ csv/prescription_sets.csv
 csv/prescription_tags.csv
 csv/supersets.csv
 csv/schedules.csv
+csv/program_runs.csv
+csv/occurrence_outcomes.csv
+csv/excluded_weeks.csv
+csv/week_moves.csv
 csv/schedule_duration_changes.csv
 csv/schedule_revisions.csv
 csv/schedule_assignments.csv
@@ -81,7 +114,7 @@ fields rather than write null. Record timestamps/revisions are not regenerated.
 
 `src/schemas/backup.ts` defines the executable payload/manifest schema and required
 reference checks. Database version stays 5: exporting adds no tables, migrations,
-or writes. The manifest separately records backup schema `4`, database schema `5`,
+or writes. The manifest separately records backup schema `5`, database schema `5`,
 and the real `package.json` app name/version (`boros`, currently `0.0.0`). That
 package value is not an invented release number.
 
@@ -89,13 +122,13 @@ package value is not an invented release number.
 
 | Field | Meaning |
 | --- | --- |
-| `format`, `backupSchemaVersion` | `boros-profile-backup`, 4 for new exports; independent of AI/database versions |
+| `format`, `backupSchemaVersion` | `boros-profile-backup`, 5 for new exports; independent of AI/database versions |
 | `databaseSchemaVersion`, `app` | Actual supported source database version and package name/version |
 | `profile` | The captured profile's ID, name, and Guest/named kind; no active-profile selection reference |
 | `snapshotAt` | UTC timestamp at the end of the consistent read transaction |
 | `exportedAt` | UTC timestamp when the manifest is built from that captured snapshot |
 | `snapshotPolicy`, `exclusions` | Saved-data scope and intentionally omitted browser/transient state |
-| `counts` | Root records: profiles (1), tags, exercises, plans, schedules, drafts, sessions, measurements, assets |
+| `counts` | Root records: profiles (1), tags, exercises, plans, schedules, drafts, sessions, measurements, assets; v5 also counts nested outcomes and excluded weeks |
 | `csvRows` | Data rows per CSV path, excluding headers; nested record totals are reflected here |
 | `inventory` | Every payload file's safe path, media type, uncompressed byte length and lowercase SHA-256 |
 | `assets` | Photo metadata from data.json, plus each file's SHA-256 |
@@ -177,7 +210,7 @@ Upload accepts versions 1, 2, 3 and 4 with matching manifest/data versions and d
 v5. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
 before validating records against the version-specific strict field set, linked
 references, CSV inventory/counts and original assets. Only after all checks pass,
-v1/v2/v3 canonical data is cloned with a v4 envelope; no group/duration/preference is inserted and
+v1/v2/v3/v4 canonical data is cloned with a v5 envelope; no group/duration/preference or historical week is inserted and
 the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
 The returned manifest remains the original validated version for provenance.
 Checksums and photo decoding are never bypassed.
@@ -278,12 +311,12 @@ a worker. The generated ZIP is reopened and its inventory, manifest, canonical
 payload, counts, CRC and SHA-256 checks are verified before download starts.
 
 Export includes only committed database state. The UI requires acknowledging
-this scope, tells users to save/apply notes and wait for **Draft saved locally**
+this scope, tells users to save/apply notes and wait until **Saving...** disappears without an error
 in every tab, and blocks when the current Settings form is dirty. It cannot flush
 another tab's pending/failed autosave. Commits before the snapshot are included;
 later commits are not. A captured snapshot stays bound to its original owner.
 
-Browser-wide theme, storage-notice acknowledgement and active-profile selection
+Browser-wide theme, Sound, storage-notice acknowledgement and active-profile selection
 are excluded, along with navigation/sessionStorage, object URLs, active rest
 timers, interval state, unsaved editor forms and unapplied notes. No application
 credentials, environment files or machine paths are read. User-authored text

@@ -19,13 +19,14 @@ export function sessionService(database: BorosDatabase) {
     async openOccurrence(profileId: string, scheduleId: string, dayId: string, date: string) {
       dateSchema.parse(date)
       return database.transaction('rw', [...tables, database.schedules], async () => {
-        const profile = await owner(profileId), key = occurrenceKey(scheduleId, dayId, date)
+        const profile = await owner(profileId), schedule = await database.schedules.get([profileId, scheduleId])
+        const event = schedule && occurrences(schedule, date, date).find((item) => item.ref.dayId === dayId)
+        const key = event?.ref.key ?? occurrenceKey(scheduleId, dayId, date)
+        if (schedule?.outcomes?.some((item) => item.ref.key === key && item.status !== 'pending')) throw new Error('This day has an explicit outcome. Correct its marker in Train before starting a session.')
         const session = await database.sessions.where('[profileId+occurrenceKey]').equals([profileId, key]).first()
         if (session) return { session }
         const existing = await database.drafts.where('[profileId+occurrenceKey]').equals([profileId, key]).first()
         if (existing) return { draft: existing }
-        const schedule = await database.schedules.get([profileId, scheduleId])
-        const event = schedule && occurrences(schedule, date, date).find((item) => item.ref.dayId === dayId)
         if (!event) throw new Error('This occurrence changed or needs mapping repair. Refresh Calendar.')
         const now = new Date().toISOString(), day = daySchema.parse(structuredClone(event.day))
         const value: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: event.planId, sourceDayId: dayId, occurrence: event.ref, occurrenceKey: key, activeSourceKey: `scheduled:${key}`, planName: event.planName, day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
@@ -117,13 +118,21 @@ export function sessionService(database: BorosDatabase) {
         await database.restTimers.put(timer); return timer
       })
     },
+    async claimTimer(profileId: string, draftId: string, token: string) {
+      return database.transaction('rw', tables, async () => {
+        await owner(profileId)
+        const timer = await database.restTimers.get('active')
+        if (!timer || timer.token !== token || timer.profileId !== profileId || timer.draftId !== draftId || timer.alertedAt || Date.parse(timer.endAt) > Date.now()) return false
+        await database.restTimers.put({ ...timer, alertedAt: new Date().toISOString() }); return true
+      })
+    },
     async changeTimer(profileId: string, draftId: string, token: string, action: 'stop' | 'reset') {
       return database.transaction('rw', tables, async () => {
         await owner(profileId); const value = await draft(profileId, draftId); editable(value, value.revision)
         const timer = await database.restTimers.get('active')
         if (!timer || timer.profileId !== profileId || timer.draftId !== draftId || timer.token !== token) throw new Error('This timer changed or is unavailable in this session.')
         if (action === 'stop') await database.restTimers.delete('active')
-        else await database.restTimers.put({ ...timer, token: createId(), endAt: timerEnd(timer.durationSeconds) })
+        else await database.restTimers.put({ ...timer, token: createId(), alertedAt: undefined, endAt: timerEnd(timer.durationSeconds) })
       })
     },
   }

@@ -12,6 +12,7 @@ export const workspaceSettingsSchema = z.object({
   activeProfileId: z.string().uuid(),
   theme: themeSchema,
   noticeAccepted: z.boolean(),
+  sound: z.boolean().optional(),
 })
 export type WeightUnit = z.infer<typeof weightUnitSchema>
 export type HeightUnit = z.infer<typeof heightUnitSchema>

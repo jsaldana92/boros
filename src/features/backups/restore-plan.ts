@@ -97,10 +97,10 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   const scheduleIds = await allocate('schedule', importedSchedules, localSchedules), draftIds = await allocate('draft', importedDrafts, [...localDrafts, ...localSessions])
   const remapDay = (day: TrainingDay) => { for (const exercise of day.exercises) { if (exercise.templateId) exercise.templateId = exerciseIds.get(exercise.templateId) ?? exercise.templateId; if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } } }
   for (const p of plans.imported) p.days.forEach(remapDay)
-  for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const revision of schedule.revisions) revision.days.forEach(remapDay) }
+  for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const revision of schedule.revisions) revision.days.forEach(remapDay); for (const outcome of schedule.outcomes ?? []) { outcome.ref.scheduleId = schedule.id; outcome.ref.key = occurrenceKey(schedule.id, outcome.ref.dayId, outcome.ref.scheduledDate, outcome.ref.programWeek); remapDay(outcome.day) } }
   for (const item of [...importedDrafts, ...importedSessions]) {
     item.id = draftIds.get(item.id)!; item.sourcePlanId = planIds.get(item.sourcePlanId)!; remapDay(item.day)
-    if (item.occurrence) { item.occurrence.scheduleId = scheduleIds.get(item.occurrence.scheduleId)!; item.occurrence.key = occurrenceKey(item.occurrence.scheduleId, item.occurrence.dayId, item.occurrence.scheduledDate); item.occurrenceKey = item.occurrence.key }
+    if (item.occurrence) { item.occurrence.scheduleId = scheduleIds.get(item.occurrence.scheduleId)!; item.occurrence.key = occurrenceKey(item.occurrence.scheduleId, item.occurrence.dayId, item.occurrence.scheduledDate, item.occurrence.programWeek); item.occurrenceKey = item.occurrence.key }
     if ('draftId' in item) item.draftId = item.id
     else item.activeSourceKey = item.finalizedAt ? undefined : item.occurrenceKey ? `scheduled:${item.occurrenceKey}` : `${item.sourcePlanId}:${item.sourceDayId}`
   }

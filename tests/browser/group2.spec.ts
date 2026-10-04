@@ -1,3 +1,4 @@
+import { waitForDraft, startWeekly } from './train-actions'
 import { cardAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { groupedAI } from '../fixtures/group2'
@@ -28,9 +29,9 @@ async function records(p: Page) {
   })
 }
 async function train(p: Page) {
-  await button(p, 'Train').click(); await button(p, 'Select Plans').click(); await p.getByRole('checkbox', { name: 'Two-week supersets', exact: true }).check(); await button(p, 'Save selection').click(); await expect(p.getByRole('dialog')).toHaveCount(0); await field(p, 'Training day').selectOption({ label: '1. Mixed day' }); await button(p, 'Start session').click()
+  await startWeekly(p, 'Two-week supersets', 'Mixed day')
 }
-async function saved(p: Page) { await expect(p.getByText('Draft saved locally.', { exact: true })).toBeVisible() }
+async function saved(p: Page) { await waitForDraft(p) }
 
 test('manual repeated library occurrences, group edits/duplication and duration retain identity in both themes at phone width', async ({ page }, info) => {
   await open(page); const address = page.url()
@@ -75,7 +76,7 @@ test('manual repeated library occurrences, group edits/duplication and duration 
 })
 
 test('unequal rounds isolate repeated results, recover timers/notes, retain immutable history and export/restore group snapshots', async ({ page }, info) => {
-  await importPlan(page); await train(page)
+  await importPlan(page); await cardAction(page, card(page), 'Edit'); await field(page, 'Duration (weeks)').fill('4'); await button(page, 'Save plan').click(); await train(page)
   const group = page.getByRole('region', { name: 'Superset 1', exact: true })
   await expect(group.locator('.superset-round')).toHaveCount(3)
   await expect(group.locator('.superset-round').nth(0).locator('.training-set')).toHaveCount(3)
@@ -86,11 +87,11 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await field(page, 'Squat occurrence 2 set 1 Weight (kg)').fill('40'); await field(page, 'Squat occurrence 2 set 1 Repetitions').fill('8')
   await button(page, 'Note for Squat occurrence 2').click(); await field(page, 'Note').fill('Only grouped squat'); await button(page, 'Apply note').click(); await saved(page)
   await field(page, 'Rest Superset 1 after group seconds').fill('30'); await button(page, 'REST Superset 1 after group').click()
-  await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('30 seconds configured')
-  await page.reload(); await button(page, 'Resume Two-week supersets / Mixed day').click()
+  await expect(page.getByRole('timer')).toContainText('0:30')
+  await page.reload(); await page.getByRole('button', { name: new RegExp("^Resume Two-week supersets / Mixed day") }).click()
   await expect(field(page, 'Squat occurrence 1 set 1 Weight (kg)')).toHaveValue('10'); await expect(field(page, 'Squat occurrence 2 set 1 Weight (kg)')).toHaveValue('40')
   await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
-  await button(page, 'Stop timer').click(); await button(page, 'Save').click(); await button(page, 'Save partial session').click()
+  await button(page, 'Stop').click(); await button(page, 'Save').click(); await button(page, 'Save partial session').click()
   const details = page.getByRole('region', { name: 'Saved session details' }); await expect(details).toContainText('Only grouped squat'); await expect(details.getByRole('region', { name: 'Saved superset 1' }).locator('.superset-round')).toHaveCount(3)
   const completed = (await records(page)).sessions[0]
   await button(page, 'Create').click(); await cardAction(page, card(page), 'Edit')
@@ -107,7 +108,7 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await button(page, 'Settings').click(); await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
   const pending = page.waitForEvent('download'); await button(page, 'Download data').click()
   const bytes = await readFile((await (await pending).path())!), zip = await JSZip.loadAsync(bytes)
-  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(4)
+  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(5)
   expect(zip.file('csv/supersets.csv')).toBeTruthy()
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'groups.zip', mimeType: 'application/zip', buffer: bytes })
   await expect(page.getByRole('region', { name: 'Backup selection' })).toBeVisible()
@@ -121,7 +122,7 @@ test('finite schedule preview freezes two-week boundary and explicit duration ch
   await page.clock.setFixedTime(new Date('2025-01-02T12:00:00Z')); await importPlan(page)
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await button(page, 'Add Plan').click(); await field(page, 'Starting week (Monday)').fill('2024-12-30')
   await button(page, 'Preview schedule').click(); await expect(page.getByRole('dialog')).toContainText('2025-01-12'); await button(page, 'Confirm schedule').click()
-  await expect(page.locator('.calendar-event')).toHaveCount(1); await expect(page.locator('.calendar-event')).toContainText('Missed / incomplete')
+  await expect(page.locator('.calendar-event')).toHaveCount(1); await expect(page.locator('.calendar-event')).toContainText('Past Due')
   await field(page, 'Calendar date').fill('2025-01-06'); await page.locator('.calendar-event').click(); await field(page, 'Squat occurrence 2 set 1 Weight (kg)').fill('55'); await saved(page)
   await button(page, 'Create').click(); await cardAction(page, card(page), 'Edit'); await field(page, 'Duration (weeks)').fill('1'); await button(page, 'Save plan').click()
   expect((await records(page)).schedules[0].endDate).toBe('2025-01-12')
@@ -129,7 +130,7 @@ test('finite schedule preview freezes two-week boundary and explicit duration ch
   await button(page, 'Review plan duration').click(); await field(page, 'Effective from').fill('2025-01-06'); await button(page, 'Preview schedule').click()
   await expect(page.getByRole('dialog')).toContainText('2025-01-05'); await button(page, 'Confirm schedule').click(); await expect(page.getByRole('dialog')).toContainText('Confirm keeping')
   await page.getByLabel('Keep these sessions on their original dates, with all entered data.').check(); await button(page, 'Confirm schedule').click()
-  await field(page, 'Calendar date').fill('2024-12-30'); await expect(page.locator('.calendar-event')).toContainText('Missed / incomplete')
+  await field(page, 'Calendar date').fill('2024-12-30'); await expect(page.locator('.calendar-event')).toContainText('Past Due')
   await field(page, 'Calendar date').fill('2025-01-06'); await expect(page.locator('.calendar-event')).toContainText('Kept original session'); await page.locator('.calendar-event').click()
   await expect(field(page, 'Squat occurrence 2 set 1 Weight (kg)')).toHaveValue('55')
 })

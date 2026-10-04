@@ -1,3 +1,4 @@
+import { waitForDraft } from './train-actions'
 import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
@@ -85,7 +86,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
     await field(page, `Journey squat set ${i} Actual RIR (optional)`).fill(String(i - 1))
   }
   await button(page, 'REST Journey squat after set 1').click()
-  await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('30 seconds configured'); await button(page, 'Stop timer').click()
+  await expect(page.getByRole('timer')).toContainText('0:30'); await button(page, 'Stop').click()
   await button(page, 'Save').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Complete session')
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-06')
   await expect(page.locator('.calendar-event.completed')).toHaveCount(1)
@@ -112,7 +113,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await page.locator('.calendar-event').filter({ hasText: 'Manual four / Day 3' }).click()
   await field(page, 'Journey squat set 1 Weight (lb)').fill('12.')
   await note(page, 'Session Note', 'Resume me after restore')
-  await expect(page.getByText('Draft saved locally.', { exact: true })).toBeVisible()
+  await waitForDraft(page)
   await button(page, 'Progress').click(); await button(page, 'Add measurement').click()
   await field(page, 'Weight (lb)').fill('150'); await field(page, 'Measurement date/time').fill('2025-01-08T10:00')
   const photo = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 640; c.height = 480; c.getContext('2d')!.fillRect(0, 0, 640, 480); return c.toDataURL('image/jpeg').split(',')[1] })

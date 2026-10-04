@@ -13,3 +13,4 @@ export function parseRest(fields: RestFields): { value?: number; errors: RestErr
   if (total > BigInt(Number.MAX_SAFE_INTEGER)) return { errors: { minutes: 'Rest must be at most 9007199254740991 seconds in total.' } }
   return { value: Number(total), errors }
 }
+export const restLabel = (seconds: number) => seconds < 60 ? `${seconds} seconds` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`

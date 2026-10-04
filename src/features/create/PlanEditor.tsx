@@ -4,7 +4,7 @@ import { useWorkspace } from '../../app/workspace-context'
 import { plans, type PrescriptionChoice } from '../../db/plans'
 import { compactGroups, copyExercise, dissolveGroup, joinGroup, moveOccurrence, newDay, planInputSchema, positiveInteger, trainingBlocks, type Plan, type PlanExercise, type PlanInput, type TrainingDay } from '../../schemas/plan'
 import type { Tag } from '../../schemas/exercise'
-import { Field } from '../../components/ui/Field'
+import { Field, TextareaField } from '../../components/ui/Field'
 import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { PrescriptionEditor } from './PrescriptionEditor'
 import { ExercisePicker } from './ExercisePicker'
@@ -70,6 +70,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       <Field label="Duration (weeks)" required={!original || original.durationWeeks !== undefined} inputMode="numeric" value={duration} error={errors.durationWeeks} onChange={(e) => { setDuration(e.target.value); setDirty(true); setErrors({}) }} />
       {original?.durationWeeks === undefined && original && <p className="muted">Legacy plan: blank keeps its unbounded duration. Enter weeks to set a duration for new schedules. Existing schedules change only through their duration preview.</p>}
       <label>Training days per week<select value={form.days.length} onChange={(e) => count(Number(e.target.value))}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+      <TextareaField label="Plan note (optional)" maxLength={20000} value={form.notes ?? ''} onChange={(e) => change((current) => ({ ...current, notes: e.target.value }))} />
       <p role="status">{form.days.length} training days; {7 - form.days.length} rest days per week.</p>
       {form.days.map((day, index) => <section className="plan-day" key={day.id} aria-label={`Day ${index + 1}: ${day.name}`} data-day-id={day.id}>
         <h3>Training day {index + 1}</h3>

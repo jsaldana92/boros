@@ -20,7 +20,7 @@ export interface CompletedSession {
   planName: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
   partial: boolean; startedAt: string; completedAt: string; loggedAt: string
 }
-export interface RestTimer { id: 'active'; token: string; profileId: string; draftId: string; label: string; durationSeconds: number; endAt: string }
+export interface RestTimer { id: 'active'; token: string; profileId: string; draftId: string; label: string; durationSeconds: number; endAt: string; alertedAt?: string }
 export const blankSession = (day: TrainingDay, unit: WeightUnit): SessionInput => ({ notes: '', exercises: day.exercises.map((exercise) => ({ id: exercise.id, notes: '', sets: exercise.prescription.sets.map(() => ({ load: '', reps: '', rir: '', unit, skipped: false })) })) })
 export function validateDraftInput(raw: SessionInput, day: TrainingDay) {
   const input = sessionInputSchema.parse(raw)

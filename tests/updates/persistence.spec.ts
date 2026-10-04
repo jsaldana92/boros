@@ -186,6 +186,26 @@ for (const legacyPlan of [false, true]) test(`same-context published releases an
       expect(await page.locator('header .avatar img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true)
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
       await expect(field(page, 'Weight (kg, optional)')).toHaveValue('72.5')
+      if (stage.label === 'build-1') {
+        // Add this release's weekly records before the second rebuild, without
+        // replacing the context or touching the old fixture's history/assets.
+        await button(page, 'Create').click(); await button(page, 'Import AI Output').click()
+        await field(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 2, kind: 'plan', plan: { name: 'Weekly update program', durationWeeks: 4, trainingDaysPerWeek: 1, days: [{ name: 'Weekly day', exercises: [{ name: 'Update press', sets: [{ reps: { min: 5, max: 5 } }] }] }] } }))
+        await button(page, 'Validate and preview').click(); await button(page, 'Save plan').click()
+        await expect(page.getByRole('article', { name: 'Plan Weekly update program', exact: true })).toBeVisible()
+        await button(page, 'Train').click(); await button(page, 'Add Plan').click()
+        await page.getByRole('dialog').getByRole('article', { name: 'Plan Weekly update program', exact: true }).getByRole('button').click()
+        await expect(page.getByRole('dialog')).toHaveCount(0)
+        await page.getByRole('article', { name: 'Plan Weekly update program', exact: true }).getByRole('button').click()
+        await page.locator('.training-day-card').click(); await button(page, 'Skip').click()
+        await expect(page.locator('.training-day-card')).toContainText('Skipped')
+        await button(page, 'Next week').click(); await expect(page.locator('.training-day-card')).toContainText('Pending')
+        await button(page, 'Move Training to Next Week').click(); await button(page, 'Confirm move').click()
+        await expect(page.getByText('Program week 2', { exact: true })).toBeVisible()
+        await button(page, 'Settings').click(); await page.getByRole('group', { name: 'Sound', exact: true }).getByRole('button', { name: 'On', exact: true }).click()
+        await expect(page.getByRole('group', { name: 'Sound', exact: true }).getByRole('button', { name: 'On', exact: true })).toHaveAttribute('aria-pressed', 'true')
+        expected = await records(page)
+      }
       // Close/reopen the page, deliberately KEEPING this same browser context.
       await page.close(); page = await context.newPage(); track(page)
       expect((await page.goto(address))!.headers()['x-update-test-build']).toBe(stage.label)
@@ -194,7 +214,7 @@ for (const legacyPlan of [false, true]) test(`same-context published releases an
       expect(page.url()).toBe(address)
       receipts.push({ ...stage, address, profileId: fixture.ownerId, counts: Object.fromEntries(Object.entries(expected.tables).map(([name, rows]) => [name, rows.length])) })
     }
-    await button(page, 'Train').click(); await button(page, `Resume ${planName} / Day 1`).click()
+    await button(page, 'Train').click(); await page.getByRole('button', { name: new RegExp('^Resume ' + planName + ' / Day 1') }).click()
     await expect(field(page, `${fixture.exercise} set 1 Weight (kg)`)).toHaveValue('12.')
     await button(page, 'Session Note').click(); await expect(field(page, 'Note')).toHaveValue('Committed draft before deployment'); await page.keyboard.press('Escape')
     await button(page, 'Settings').click(); await field(page, 'Active profile').selectOption(fixture.guestId)

@@ -1,3 +1,4 @@
+import { closeTimer } from './train-actions'
 import 'fake-indexeddb/auto'
 import { expect, test, type Page, type Download } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
@@ -50,7 +51,7 @@ test('Settings downloads complete isolated archives with truthful feedback, unch
   const fixture = await seed(page), before = await records(page), address = page.url()
   const { zip, data, manifest } = await download(page)
   await expect(page.getByText('Download started for', { exact: false })).toContainText('cannot confirm that the file was saved')
-  expect(data.profile.id).toBe(fixture.id); expect(manifest.counts).toEqual({ profiles: 1, tags: 2, exercises: 2, plans: 1, schedules: 1, drafts: 3, sessions: 2, measurements: 3, assets: 2 })
+  expect(data.profile.id).toBe(fixture.id); expect(manifest.counts).toEqual({ profiles: 1, tags: 2, exercises: 2, plans: 1, schedules: 1, drafts: 3, sessions: 2, measurements: 3, assets: 2, outcomes: 0, excludedWeeks: 0 })
   expect(data.exercises.find((e) => e.id === fixture.exercise.id).instructions).toBe(strangeText)
   for (const store of before.filter((s) => !['profiles', 'settings', 'photos', 'restTimers'].includes(s.name))) expect(data[store.name]).toEqual(store.records.filter((r) => r.profileId === fixture.id))
   for (const asset of data.assets) { const source = before.find((s) => s.name === 'photos')!.records.find((r) => r.id === asset.id)!; expect(Array.from(await zip.file(asset.path)!.async('uint8array'))).toEqual((source.blob as { bytes: number[] }).bytes) }
@@ -101,6 +102,7 @@ test('duplicate clicks, cancel, profile switching and navigation cannot retarget
 
 test('another tab with a failed training autosave is explicitly excluded while persisted draft input is exported', async ({ page, context }) => {
   const fixture = await seed(page), other = await context.newPage(); await other.goto('./'); await button(other, 'Train').click(); await other.getByRole('button', { name: /^Resume Plan 雪 \/ Day 3/ }).click()
+  await closeTimer(other)
   await other.evaluate(() => { const original = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (...args) { if (this.name === 'drafts') throw new DOMException('Pending data not saved', 'QuotaExceededError'); return original.apply(this, args) } })
   await other.getByLabel('=Range 雪 set 1 Weight (lb)', { exact: true }).fill('999'); await expect(other.getByRole('alert')).toContainText('Pending data not saved')
   await expect(page.getByText('Only committed records are included.', { exact: false })).toContainText('Pending or failed autosaves')

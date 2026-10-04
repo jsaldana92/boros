@@ -78,6 +78,10 @@ export function profileService(database: BorosDatabase) {
       themeSchema.parse(theme)
       if (!await database.settings.update('workspace', { theme })) throw new Error('Appearance could not be saved.')
     },
+    async setSound(sound: boolean) {
+      if (typeof sound !== 'boolean') throw new Error('Choose Sound On or Off.')
+      if (!await database.settings.update('workspace', { sound })) throw new Error('Sound preference could not be saved.')
+    },
     async acceptNotice() {
       if (!await database.settings.update('workspace', { noticeAccepted: true })) throw new Error('The storage notice could not be saved.')
     },

@@ -38,7 +38,7 @@ export function WorkoutProgress() {
       <p>{plan ? `Plan: ${plan.name}` : 'Across all plans'}</p>
       {item.members ? item.members.map((member, index) => <section className="superset-progress-member" key={`${member.key}:${index}`} aria-label={`Member ${index + 1}: ${member.name}`}><h3>Member {index + 1}: {member.name}</h3><ExerciseStatistics key={`${item.key}:${index}`} name={member.name} color={colorFor(member.key)} performances={selectPerformances(data, item.key, plan?.id, index)} unit={unit} zone={zone} onReview={(sessionId) => navigate({ ...view, sessionId })} /></section>) : <ExerciseStatistics key={item.key} name={item.name} color={colorFor(item.key)} performances={selectPerformances(data, item.key, plan?.id)} unit={unit} zone={zone} onReview={(sessionId) => navigate({ ...view, sessionId })} />}
     </> : plan && <>
-      <div className="progress-counts"><p><strong>{plan.daysCompleted}</strong> Training days completed</p><p><strong>{plan.exercisesCompleted}</strong> Exercise completions</p></div>
+      <div className="progress-counts"><p><strong>{plan.daysCompleted}</strong> Training days completed</p><p><strong>{plan.daysSkipped}</strong> Training days skipped</p><p><strong>{plan.manualCompletions}</strong> Manual completions (no results)</p><p><strong>{plan.exercisesCompleted}</strong> Exercise completions</p></div>
       <p className="muted">A saved training day counts once, including partial sessions. Each exercise performed with a recorded set counts once; superset members count separately.</p>
       <ItemGrid items={plan.items} onSelect={(itemKey) => navigate({ planId: plan.id, itemKey })} />
       <SessionList sessions={plan.sessions} zone={zone} onReview={(sessionId) => navigate({ planId: plan.id, sessionId })} />

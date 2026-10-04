@@ -1,3 +1,4 @@
+import { PlanCard } from './PlanCard'
 import { displayDateTime } from '../../lib/display-dates'
 import { createId } from '../../lib/browser-crypto.ts'
 import { useEffect, useRef, useState } from 'react'
@@ -47,7 +48,7 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
       {data && <><div className="field-grid"><label>Search<input aria-label="Search plans" type="search" value={search} onChange={(e) => setSearch(e.target.value)} /></label><label>Sort<select aria-label="Sort plans" value={sort} onChange={(e) => setSort(e.target.value as LibrarySort)}><option value="az">A-Z</option><option value="za">Z-A</option><option value="newest">Newest added</option><option value="oldest">Oldest added</option></select></label></div>
         <label className="check-label"><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />Show archived plans</label>
         {!visible.length && <p>{search ? 'No plans match this search.' : archived ? 'No archived plans.' : 'No plans yet. Choose Create Plan to add one.'}</p>}
-        {visible.map((plan) => <article className="plan-card" key={plan.id} aria-label={`Plan ${plan.name}`}><button className="catalog-card" onClick={() => { setError(''); setSelected(plan) }}><strong>{plan.name}</strong><span className="muted">{plan.days.length} training {plan.days.length === 1 ? 'day' : 'days'} · {7 - plan.days.length} rest {7 - plan.days.length === 1 ? 'day' : 'days'} · {plan.durationWeeks === undefined ? 'Legacy unbounded duration' : `${plan.durationWeeks} ${plan.durationWeeks === 1 ? 'week' : 'weeks'}`}</span></button></article>)}
+        {visible.map((plan) => <PlanCard key={plan.id} plan={plan} onClick={() => { setError(''); setSelected(plan) }} />)}
       </>}
       <p role="status">{status}</p>{error && !selected && <p role="alert">{error}</p>}
     </div>

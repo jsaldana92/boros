@@ -1,3 +1,4 @@
+import { waitForDraft } from './train-actions'
 import { expect, test, type Page } from '@playwright/test'
 
 test.setTimeout(90000)
@@ -63,7 +64,7 @@ test('future mapping and stop explicitly keep started input; stale previews reje
   page.once('dialog', (dialog) => dialog.dismiss()); await button(page, 'Train').click(); await expect(page.getByRole('heading', { name: 'Edit schedule' })).toBeVisible()
   page.once('dialog', (dialog) => dialog.accept()); await button(page, 'Cancel').click()
   await page.getByLabel('Calendar date', { exact: true }).fill(cutoff); await upper(page).click()
-  await page.getByLabel('Upper exercise set 1 Weight (kg)', { exact: true }).fill('55'); await expect(page.getByText('Draft saved locally.', { exact: true })).toBeVisible()
+  await page.getByLabel('Upper exercise set 1 Weight (kg)', { exact: true }).fill('55'); await waitForDraft(page)
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await button(page, 'Edit mapping / refresh plan').click(); await page.getByLabel('Upper weekday', { exact: true }).selectOption('4')
   await button(page, 'Preview schedule').click(); await expect(page.getByRole('dialog')).toContainText('These started sessions are affected')
   await button(page, 'Confirm schedule').click(); await expect(page.getByRole('alert')).toContainText('Confirm keeping')

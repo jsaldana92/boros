@@ -1,3 +1,4 @@
+import { waitForDraft, startWeekly, closeTimer } from './train-actions'
 import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -14,10 +15,10 @@ async function open(page: Page) {
   await button(page, 'Import AI Output').click(); await input(page, 'AI output JSON').fill(JSON.stringify(fixture()))
   await button(page, 'Validate and preview').click(); await input(page, 'Duration (weeks)').fill('2'); await button(page, 'Save plan').click()
   await expect(page.getByRole('article', { name: 'Plan Training plan', exact: true })).toBeVisible()
-  await button(page, 'Train').click(); await button(page, 'Select Plans').click(); await page.getByRole('checkbox', { name: 'Training plan', exact: true }).check(); await button(page, 'Save selection').click(); await input(page, 'Training day').selectOption({ label: '1. Upper' }); await button(page, 'Start session').click()
+  await startWeekly(page, 'Training plan', 'Upper')
 }
-async function saved(page: Page) { await expect(page.getByText('Draft saved locally.', { exact: true })).toBeVisible() }
-async function resume(page: Page) { await button(page, 'Resume Training plan / Upper').click() }
+async function saved(page: Page) { await waitForDraft(page) }
+async function resume(page: Page) { await page.getByRole('button', { name: new RegExp("^Resume Training plan / Upper") }).click() }
 async function fillSet(page: Page, exercise = 'Press', set = 1, load = '0') {
   await input(page, `${exercise} set ${set} Weight (kg)`).fill(load); await input(page, `${exercise} set ${set} Repetitions`).fill('5')
 }
@@ -39,13 +40,24 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   await note(page, 'Session Note', 'Session\nplain <b>note</b>'); await note(page, 'Note for Press', 'Exercise note')
   await fillSet(page); await input(page, 'Press set 1 Actual RIR (optional)').fill('0'); await saved(page)
   await page.clock.install()
-  await button(page, 'REST Press after set 1').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('60 seconds configured')
-  await button(page, 'REST Press between exercises').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('120 seconds configured')
+  await button(page, 'REST Press after set 1').click(); await expect(page.getByRole('timer')).toContainText('1:00')
+  await closeTimer(page); await button(page, 'REST Press between exercises').click(); await expect(page.getByRole('timer')).toContainText('2:00')
+  const readTimer = () => page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('boros'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error) })
+    try { return await new Promise<{ token: string; endAt: string }>((resolve, reject) => { const request = db.transaction('restTimers').objectStore('restTimers').get('active'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error) }) } finally { db.close() }
+  })
+  const beforeReload = await readTimer()
   await page.reload(); await resume(page); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0'); await expect(input(page, 'Press set 1 Actual RIR (optional)')).toHaveValue('0')
-  await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('120 seconds configured')
+  expect(await readTimer()).toEqual(beforeReload)
+  await expect(page.getByRole('timer')).toHaveText(/^(?:2:00|1:[0-5]\d)$/)
+  const remaining = await page.getByRole('timer').evaluate((element, endAt) => {
+    const [minutes, seconds] = element.textContent!.split(':').map(Number)
+    return { displayed: minutes * 60 + seconds, expected: Math.max(0, Math.ceil((Date.parse(endAt) - Date.now()) / 1000)) }
+  }, beforeReload.endAt)
+  expect(Math.abs(remaining.displayed - remaining.expected)).toBeLessThanOrEqual(1)
   await page.clock.fastForward(130000); await expect(page.getByRole('timer')).toHaveText('Rest finished')
-  await button(page, 'Reset timer').click(); await expect(page.getByRole('timer')).toContainText('seconds remaining'); await button(page, 'Stop timer').click()
-  await input(page, 'Rest Row after set 1 seconds').fill('30'); await button(page, 'REST Row after set 1').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('30 seconds configured'); await button(page, 'Stop timer').click()
+  await button(page, 'Reset').click(); await expect(page.getByRole('timer')).toContainText('2:00'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
+  await input(page, 'Rest Row after set 1 seconds').fill('30'); await button(page, 'REST Row after set 1').click(); await expect(page.getByRole('timer')).toContainText('0:30'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
   await fillSet(page, 'Press', 2, '20'); await fillSet(page, 'Row', 1, '30'); await fillSet(page, 'Row', 2, '40')
   await page.setViewportSize({ width: 320, height: 720 }); await input(page, 'Row set 2 Actual RIR (optional)').focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -70,8 +82,8 @@ test('cancel Clear and partial Save preserve input; explicit skips and Clear aff
   await input(page, 'Row set 1 Weight (kg)').fill('-1'); await button(page, 'Save').click(); await expect(page.getByRole('alert')).toContainText('Correct invalid')
   await input(page, 'Skip Row set 1').check(); await button(page, 'Save').click(); await button(page, 'Save partial session').click()
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Partial session'); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Skipped')
-  await button(page, 'Back to training days').click(); await button(page, 'Start session').click(); await fillSet(page); await note(page, 'Note for Press', 'Remove me'); await saved(page)
-  await button(page, 'REST Press after set 1').click(); await input(page, 'Press set 2 Repetitions').fill('9')
+  await button(page, 'Back to training days').click(); await button(page, 'Next week').click(); await expect(page.locator('.training-day-card')).toContainText('Pending'); await page.locator('.training-day-card').click(); await button(page, 'Start').click(); await fillSet(page); await note(page, 'Note for Press', 'Remove me'); await saved(page)
+  await button(page, 'REST Press after set 1').click(); await closeTimer(page); await input(page, 'Press set 2 Repetitions').fill('9')
   await button(page, 'Clear').click(); await button(page, 'Clear draft').click(); await saved(page)
   await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue(''); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
   await button(page, 'Note for Press').click(); await expect(input(page, 'Note')).toHaveValue(''); await button(page, 'Apply note').click(); await saved(page)
@@ -105,19 +117,19 @@ test('failed autosave and completion preserve input; pending Save commits once; 
 
 test('profile switching and unit changes recover canonical loads; light theme and archived-source draft resume', async ({ page }, testInfo) => {
   await open(page); await fillSet(page, 'Press', 1, '45.359237'); await saved(page); await button(page, 'REST Press after set 1').click()
-  await button(page, 'Settings').click(); await button(page, 'Light').click()
+  await closeTimer(page); await saved(page); await button(page, 'Settings').click(); await button(page, 'Light').click()
   await page.getByRole('combobox', { name: 'Weight unit', exact: true }).selectOption('lb'); await button(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
   await input(page, 'New profile name').fill('Other'); await button(page, 'Create profile').click(); await expect(page.locator('input[name="name"]')).toHaveValue('Other'); await button(page, 'Train').click()
-  await expect(page.getByText('No active plan(s) selected.')).toBeVisible(); await expect(button(page, 'Resume Training plan / Upper')).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
+  await expect(page.getByText('No active plan(s) selected.')).toBeVisible(); await expect(page.getByRole('button', { name: new RegExp("^Resume Training plan / Upper") })).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
   await button(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await button(page, 'Train').click(); await resume(page)
   await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100'); await expect(page.getByRole('region', { name: 'Rest timer' })).toBeVisible()
   await expect(page.getByRole('combobox')).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('train-light.png'), fullPage: true })
-  await button(page, 'Create').click(); const card = page.getByRole('article', { name: 'Plan Training plan', exact: true })
+  await closeTimer(page); await button(page, 'Create').click(); const card = page.getByRole('article', { name: 'Plan Training plan', exact: true })
   await cardAction(page, card, 'Edit'); await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit'); await input(page, 'Exercise name').fill('Changed source'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
   await cardAction(page, card, 'Archive'); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
   await button(page, 'Train').click(); await resume(page); await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100')
-  await button(page, 'Save').click(); await button(page, 'Save partial session').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('45.359237 kg')
+  await closeTimer(page); await button(page, 'Save').click(); await button(page, 'Save partial session').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('45.359237 kg')
 })
 
 test('stale tabs cannot overwrite drafts; reload conflict recovery and completion use one log', async ({ page, context }) => {

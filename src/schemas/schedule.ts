@@ -11,7 +11,9 @@ export type Mapping = z.infer<typeof mappingSchema>
 export type ScheduleInput = z.infer<typeof scheduleInputSchema>
 export interface ScheduleRevision { id: string; effectiveFrom: string; effectiveUntil?: string; createdAt: string; planRevision: number; planName: string; days: TrainingDay[]; mapping: Mapping; needsRepair?: boolean }
 export interface DurationChange { id: string; effectiveFrom: string; durationWeeks?: number; endDate?: string }
-export interface Schedule { id: string; profileId: string; planId: string; revision: number; timeZone: string; startWeek: string; createdAt: string; updatedAt: string; stoppedFrom?: string; durationWeeks?: number; endDate?: string; durationChanges?: DurationChange[]; revisions: ScheduleRevision[] }
+export interface OccurrenceOutcome { id: string; ref: OccurrenceRef; day: TrainingDay; planName: string; status: 'skipped' | 'completed' | 'pending'; recordedAt: string; updatedAt: string; revision: number }
+export interface WeekMove { id: string; fromWeek: string; direction: 1 | -1; recordedAt: string }
+export interface Schedule { id: string; profileId: string; planId: string; revision: number; timeZone: string; startWeek: string; createdAt: string; updatedAt: string; stoppedFrom?: string; durationWeeks?: number; endDate?: string; durationChanges?: DurationChange[]; revisions: ScheduleRevision[]; kind?: 'unscheduled'; identity?: 'program-week'; excludedWeeks?: string[]; outcomes?: OccurrenceOutcome[]; weekMoves?: WeekMove[] }
 export function scheduleEnd(startWeek: string, durationWeeks?: number) {
   if (durationWeeks === undefined) return undefined
   positiveInteger.parse(durationWeeks)
@@ -21,11 +23,20 @@ export function scheduleEnd(startWeek: string, durationWeeks?: number) {
 }
 export function scheduleActiveOn(schedule: Schedule, date: string) {
   const boundary = schedule.durationChanges?.findLast((item) => item.effectiveFrom <= date) ?? schedule
-  return date >= schedule.startWeek && (!schedule.stoppedFrom || date < schedule.stoppedFrom) && (!boundary.endDate || date <= boundary.endDate)
+  return date >= schedule.startWeek && !schedule.excludedWeeks?.includes(monday(date)) && (!schedule.stoppedFrom || date < schedule.stoppedFrom) && (!boundary.endDate || date <= boundary.endDate)
 }
-export interface OccurrenceRef { key: string; scheduleId: string; dayId: string; scheduledDate: string; scheduledWeek: string; timeZone: string; scheduleRevisionId: string }
+export interface OccurrenceRef { key: string; scheduleId: string; dayId: string; scheduledDate: string; scheduledWeek: string; timeZone: string; scheduleRevisionId: string; programWeek?: number; unscheduled?: true }
 export interface Occurrence { ref: OccurrenceRef; planId: string; planName: string; day: TrainingDay }
-export const occurrenceKey = (scheduleId: string, dayId: string, date: string) => `${scheduleId}:${dayId}:${date}`
+export const occurrenceKey = (scheduleId: string, dayId: string, date: string, programWeek?: number) => `${scheduleId}:${dayId}:${programWeek === undefined ? date : `week-${programWeek}`}`
+export function programWeek(schedule: Schedule, week: string) {
+  // Both operands are civil Monday labels carried in UTC, never local instants.
+  return Math.round((Date.parse(`${week}T00:00:00Z`) - Date.parse(`${schedule.startWeek}T00:00:00Z`)) / 604800000) + 1 - (schedule.excludedWeeks ?? []).filter((gap) => gap < week).length
+}
+export function programEnd(start: string, duration?: number, gaps: string[] = []) {
+  let end = scheduleEnd(start, duration)
+  if (end) for (const gap of [...gaps].sort()) if (gap >= start && gap <= end) end = addDays(end, 7)
+  return end
+}
 export function validateMapping(mapping: Mapping, days: TrainingDay[]) {
   mappingSchema.parse(mapping)
   if (mapping.length !== days.length || days.some((day) => !mapping.some((item) => item.dayId === day.id))) throw new Error('Map every current training day to one distinct weekday.')
@@ -37,7 +48,8 @@ export function occurrences(schedule: Schedule, start: string, end: string): Occ
     const revision = revisionAt(schedule, date)
     if (!revision || revision.needsRepair) return []
     const assignment = revision.mapping.find((item) => item.weekday === weekday(date)), day = revision.days.find((item) => item.id === assignment?.dayId)
-    return day ? [{ planId: schedule.planId, planName: revision.planName, day, ref: { key: occurrenceKey(schedule.id, day.id, date), scheduleId: schedule.id, dayId: day.id, scheduledDate: date, scheduledWeek: monday(date), timeZone: schedule.timeZone, scheduleRevisionId: revision.id } }] : []
+    const week = schedule.identity ? programWeek(schedule, monday(date)) : undefined
+    return day ? [{ planId: schedule.planId, planName: revision.planName, day, ref: { key: occurrenceKey(schedule.id, day.id, date, week), scheduleId: schedule.id, dayId: day.id, scheduledDate: date, scheduledWeek: monday(date), timeZone: schedule.timeZone, scheduleRevisionId: revision.id, ...(week === undefined ? {} : { programWeek: week }), ...(schedule.kind === 'unscheduled' ? { unscheduled: true as const } : {}) } }] : []
   })
 }
 // Close superseded segments without deleting their metadata, including pending revisions.

@@ -1,3 +1,4 @@
+import { startWeekly, closeTimer } from './train-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { copyExercise } from '../../src/schemas/plan'
 import { cardAction, occurrenceAction } from './create-actions'
@@ -136,14 +137,13 @@ test('both themes: compact scrollable cards, keyboard dialogs, footer placement,
 })
 
 test('A20 B8 rounds expose one correct rest each, including final block and timer recovery', async ({ page }) => {
-  await seed(page, true); await b(page, 'Train').click(); await b(page, 'Select Plans').click(); await page.getByRole('checkbox', { name: 'Existing AI', exact: true }).check(); await b(page, 'Save selection').click(); await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.getByRole('combobox', { name: 'Training day', exact: true }).selectOption({ label: '1. First' }); await b(page, 'Start session').click()
+  await seed(page, true); await startWeekly(page, 'Existing AI', 'First')
   const rounds = page.locator('.superset-round'); await expect(rounds).toHaveCount(2)
   for (let i = 0; i < 2; i++) { await expect(rounds.nth(i).locator('.training-set')).toHaveCount(2); await expect(rounds.nth(i).locator('.rest-control')).toHaveCount(1) }
   await expect(rounds.first()).toContainText('20'); await expect(rounds.first()).toContainText('8')
-  await b(page, 'REST Superset 1 after round 1').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('75 seconds configured')
-  await b(page, 'REST Superset 1 after group').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('180 seconds configured')
-  await page.reload(); await b(page, 'Resume Existing AI / First').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
+  await b(page, 'REST Superset 1 after round 1').click(); await expect(page.getByRole('timer')).toContainText('1:15')
+  await closeTimer(page); await b(page, 'REST Superset 1 after group').click(); await expect(page.getByRole('timer')).toContainText('3:00')
+  await page.reload(); await page.getByRole('button', { name: new RegExp("^Resume Existing AI / First") }).click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
 })
 
 test('picker selection obeys filtered identities, sort order, Select All, single Add, cancel and repeated-click rules', async ({ page }) => {
