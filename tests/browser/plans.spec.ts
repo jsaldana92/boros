@@ -2,6 +2,7 @@ import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 
 test.setTimeout(90000)
+test.beforeEach(async ({ page }) => { await page.route('https://www.youtube.com/embed/**', (route) => route.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' })) })
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 const card = (page: Page, name: string) => page.getByRole('article', { name: `Plan ${name}`, exact: true })
 const days = (page: Page) => page.locator('.plan-day')

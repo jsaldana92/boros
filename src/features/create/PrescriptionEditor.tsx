@@ -1,4 +1,4 @@
-import { EditorBreadcrumbs, type EditorAncestor } from './EditorBreadcrumbs'
+import { EditorTitle } from './EditorTitle'
 import { TagDropdown } from './TagDropdown'
 import { RestInput } from '../../components/ui/RestInput'
 import { useRef, useState } from 'react'
@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { blankSet, parseForm, toForm, type SetFields } from './form'
 
-export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save exercise', initialDirty = false, onDirty, onSubmit, onClose, ancestors }: { ancestors?: EditorAncestor[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: () => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void }) {
+export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save exercise', initialDirty = false, onDirty, onSubmit, onClose, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: () => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void }) {
   const [dirty, markDirty] = useState(initialDirty)
   const setDirty = (value: boolean) => { markDirty(value); if (value) onDirty() }
   const [form, setForm] = useState(() => toForm(initial))
@@ -35,8 +35,8 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
     if (!form.tagNames.some((existing) => nameKey(existing) === nameKey(name))) { setForm((current) => ({ ...current, tagNames: [...current.tagNames, parsed.data] })); setDirty(true) }
     setTag(''); setErrors((current) => ({ ...current, tag: '' }))
   }
-  return <section className="exercise-editor">
-    <EditorBreadcrumbs current="Exercise" title={title} ancestors={(ancestors ?? [{ label: 'Create', onSelect: onClose }]).map((item, index, items) => index === items.length - 1 ? { ...item, check: () => !dirty || window.confirm('Discard your unsaved exercise changes?') } : item)} />
+  return <section className="exercise-editor" aria-label={title}>
+    <EditorTitle path={path} />
     {archived && <p className="muted">Archived exercise. Editing keeps it archived; restore it from the archived library.</p>}
     <form ref={formRef} noValidate onSubmit={async (event) => {
       event.preventDefault(); if (submitting.current) return; setError('')

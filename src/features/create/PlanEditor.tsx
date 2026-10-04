@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { EditorBreadcrumbs, type EditorAncestor } from './EditorBreadcrumbs'
+import { EditorTitle } from './EditorTitle'
 import { useWorkspace } from '../../app/workspace-context'
 import { plans, type PrescriptionChoice } from '../../db/plans'
 import { compactGroups, copyExercise, dissolveGroup, joinGroup, moveOccurrence, newDay, planInputSchema, positiveInteger, trainingBlocks, type Plan, type PlanExercise, type PlanInput, type TrainingDay } from '../../schemas/plan'
@@ -16,7 +16,7 @@ function reorder<T>(items: T[], index: number, offset: number) {
   const [item] = result.splice(index, 1); result.splice(index + offset, 0, item)
   return result
 }
-export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false, title, ancestors }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput) => Promise<{ name: string }>; initialDirty?: boolean; title?: string; ancestors?: EditorAncestor[] }) {
+export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput) => Promise<{ name: string }>; initialDirty?: boolean }) {
   const { setDirty, dirty } = useWorkspace()
   const [form, setForm] = useState<PlanInput>(() => initial ? structuredClone(initial) : { name: '', days: [newDay(1)] })
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -45,13 +45,11 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
     const apply = () => days((items) => Array.from({ length: value }, (_, index) => items[index] ?? newDay(index + 1)))
     if (value < form.days.length) setConfirm({ title: `Reduce to ${value} training days?`, action: apply }); else apply()
   }
-  const baseAncestors = ancestors ?? [{ label: 'Create', onSelect: onClose }]
-  const childAncestors = [...baseAncestors, { label: 'Plan', onSelect: closeSubeditor, check: () => true }]
   return <section className="plan-editor" aria-label="Plan editor">
-    {!picker && !editing && <EditorBreadcrumbs current="Plan" title={title ?? (original ? 'Edit Plan' : 'Create Plan')} ancestors={baseAncestors} headingRef={heading} />}
+    {!picker && !editing && <EditorTitle path={['Create', 'Plan']} headingRef={heading} />}
     {!picker && !editing && original?.archivedAt && <p className="muted">Archived plan. Rename here to resolve a conflict, then restore from the plan list.</p>}
-    {picker && <ExercisePicker choices={choices} ancestors={childAncestors} remaining={100 - (form.days.find((day) => day.id === picker)?.exercises.length ?? 0)} onClose={closeSubeditor} onChoose={(selected) => { exerciseList(picker, (items) => items.length + selected.length <= 100 ? [...items, ...selected.map((choice) => copyExercise(choice.prescription, choice.source))] : items); closeSubeditor() }} />}
-    {editing && <PrescriptionEditor ancestors={childAncestors} initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply" onDirty={() => setDirty(true)} onClose={closeSubeditor} onSubmit={async (prescription) => { exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription } : item)); closeSubeditor() }} />}
+    {picker && <ExercisePicker choices={choices} remaining={100 - (form.days.find((day) => day.id === picker)?.exercises.length ?? 0)} onClose={closeSubeditor} onChoose={(selected) => { exerciseList(picker, (items) => items.length + selected.length <= 100 ? [...items, ...selected.map((choice) => copyExercise(choice.prescription, choice.source))] : items); closeSubeditor() }} />}
+    {editing && <PrescriptionEditor path={['Create', 'Plan', 'Exercise']} initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply" onDirty={() => setDirty(true)} onClose={closeSubeditor} onSubmit={async (prescription) => { exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription } : item)); closeSubeditor() }} />}
     <form ref={formRef} hidden={!!picker || !!editing} noValidate onSubmit={async (event) => {
       event.preventDefault(); if (submitting.current) return; setError('')
       const durationWeeks = duration.trim() ? Number(duration) : undefined

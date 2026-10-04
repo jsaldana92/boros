@@ -1,4 +1,4 @@
-import { EditorBreadcrumbs } from './EditorBreadcrumbs'
+import { EditorTitle } from './EditorTitle'
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
@@ -30,7 +30,7 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
   const instructions = formattingInstructions(kind)
   const cancelPreview = () => { setPreview(undefined); requestAnimationFrame(() => document.getElementById('validate-import')?.focus()) }
   return <section className="import-panel" aria-label="Import AI Output">
-    {!preview && <EditorBreadcrumbs ancestors={[{ label: 'Create', onSelect: () => onClose() }]} current="AI" title="Import AI Output" />}
+    {!preview && <EditorTitle path={['Create', 'AI']} />}
     {!preview ? <>
       <p className="muted">Use these instructions with your own request in an external chatbot, then paste its JSON here. Boros does not connect to an AI service.</p>
       <label htmlFor="instruction-kind">Formatting instructions for</label><select id="instruction-kind" value={kind} onChange={(event) => { setKind(event.target.value as ImportKind); setClipboard('') }}><option value="plan">Plan</option><option value="workout">Exercise</option></select>
@@ -51,8 +51,8 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
       <p className="storage-notice">Draft. Nothing is stored until you save. Plans keep every imported prescription. An existing exercise name reuses its library template without changing its defaults. For a new repeated name, the first occurrence becomes the library default. Rename a conflicting plan or standalone exercise before saving.</p>
       {result?.error && <p role="alert">Existing sources could not be loaded. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry sources</button></p>}
       {preview.draft.kind === 'workout'
-        ? <PrescriptionEditor ancestors={[{ label: 'Create', onSelect: () => onClose() }, { label: 'AI', onSelect: cancelPreview }]} initial={preview.draft.input} title="Review exercise" tags={result?.data?.tags ?? []} initialDirty onDirty={() => setDirty(true)} onClose={cancelPreview} onSubmit={async (input) => { const saved = await preview.session.saveWorkout(input); setDirty(false); onClose(`Saved ${saved.name}.`) }} />
-        : <PlanEditor ancestors={[{ label: 'Create', onSelect: () => onClose() }, { label: 'AI', onSelect: cancelPreview }]} profileId={profileId} initial={preview.draft.input} title="Review plan" initialDirty choices={result?.data?.choices ?? []} tags={result?.data?.tags ?? []} onSave={preview.session.savePlan} onClose={cancelPreview} onSaved={(name) => { setDirty(false); onClose(`Saved ${name}.`) }} />}
+        ? <PrescriptionEditor initial={preview.draft.input} title="Review exercise" tags={result?.data?.tags ?? []} initialDirty onDirty={() => setDirty(true)} onClose={cancelPreview} onSubmit={async (input) => { const saved = await preview.session.saveWorkout(input); setDirty(false); onClose(`Saved ${saved.name}.`) }} />
+        : <PlanEditor profileId={profileId} initial={preview.draft.input} initialDirty choices={result?.data?.choices ?? []} tags={result?.data?.tags ?? []} onSave={preview.session.savePlan} onClose={cancelPreview} onSaved={(name) => { setDirty(false); onClose(`Saved ${name}.`) }} />}
     </>}
     {confirm && <ConfirmDialog title="Discard pasted input?" confirmLabel="Discard" onCancel={() => setConfirm(false)} onConfirm={() => onClose()}><p>Your pasted text will be lost. No imported records have been saved.</p></ConfirmDialog>}
   </section>

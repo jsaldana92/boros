@@ -3,9 +3,9 @@ import type { PrescriptionChoice } from '../../db/plans'
 import { LibraryFilters } from './LibraryFilters'
 import { filterExercises, type LibrarySort } from './library'
 import { nameKey } from '../../schemas/profile'
-import { EditorBreadcrumbs, type EditorAncestor } from './EditorBreadcrumbs'
+import { EditorTitle } from './EditorTitle'
 
-export function ExercisePicker({ choices, onChoose, onClose, remaining, ancestors }: { choices: PrescriptionChoice[]; onChoose: (choices: PrescriptionChoice[]) => void; onClose: () => void; remaining: number; ancestors: EditorAncestor[] }) {
+export function ExercisePicker({ choices, onChoose, onClose, remaining }: { choices: PrescriptionChoice[]; onChoose: (choices: PrescriptionChoice[]) => void; onClose: () => void; remaining: number }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<LibrarySort>('az')
   const [filterTags, setFilterTags] = useState<string[]>([])
@@ -22,7 +22,7 @@ export function ExercisePicker({ choices, onChoose, onClose, remaining, ancestor
     onChoose(items)
   }
   return <section aria-label="Choose exercise" className="exercise-picker">
-    <EditorBreadcrumbs ancestors={ancestors} current="Exercises" title="Add exercises" />
+    <EditorTitle path={['Create', 'Plan', 'Exercise']} />
     <LibraryFilters noun="exercises to add" search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
     <div className="actions selection-actions"><label className="check-label"><input type="checkbox" disabled={!visible.length} checked={all} onChange={() => setSelected(all ? [] : visible.map((choice) => choice.id))} />Select All</label><button type="button" disabled={!selection.length || selection.length > remaining} onClick={() => add(visible.filter((choice) => selection.includes(choice.id)))}>Add selected</button></div>
     {selection.length > remaining && <p role="alert">Select at most {remaining} more exercises for this day.</p>}

@@ -5,7 +5,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
 import { exercises, exerciseToInput } from '../../db/exercises'
 import type { Exercise, ExerciseInput } from '../../schemas/exercise'
-import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ExerciseDetails } from './ExerciseDetails'
 import { PlanLibrary } from './PlanLibrary'
 import { LibraryFilters } from './LibraryFilters'
 import { ExerciseEditor } from './ExerciseEditor'
@@ -43,7 +44,7 @@ function ExerciseLibrary({ profileId, planOpen, onPlan, onEditing, onImport }: {
   const trigger = useRef<HTMLElement | null>(null)
   const createButton = useRef<HTMLButtonElement>(null)
   const open = (draft?: ExerciseInput, original?: Exercise) => {
-    trigger.current = document.activeElement as HTMLElement
+    if (!selected) trigger.current = document.activeElement as HTMLElement
     setError(''); setStatus(''); setSelected(undefined); setEditor({ key: createId(), draft, original }); onEditing(true)
   }
   const close = () => { setEditor(undefined); onEditing(false); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : createButton.current)?.focus()) }
@@ -68,20 +69,13 @@ function ExerciseLibrary({ profileId, planOpen, onPlan, onEditing, onImport }: {
         <p role="status">{status}</p>{error && <p role="alert">{error}</p>}
         <p className="muted">{visible.length} {archived ? 'archived' : 'active'} exercise{visible.length === 1 ? '' : 's'}</p>
         {!visible.length && <p>{search || filterTags.length ? 'No exercises match these filters.' : archived ? 'No archived exercises.' : 'No exercises yet. Choose Create exercise to add one.'}</p>}
-        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><button className="catalog-card" aria-label={record.name} onClick={() => { setError(''); setSelected(record) }}>{record.name}</button></article>)}</div>
+        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><button className="catalog-card" aria-label={record.name} onClick={(event) => { trigger.current = event.currentTarget; setError(''); setSelected(record) }}>{record.name}</button></article>)}</div>
       </>}
     </div>
-    {selected && <ActionDialog title={selected.name} onClose={() => setSelected(undefined)}>
-      <ol>{selected.sets.map((set, index) => <li key={index}>Set {index + 1}: {set.reps.min === set.reps.max ? set.reps.min : `${set.reps.min}–${set.reps.max}`} reps; {set.rir ? `${set.rir.min === set.rir.max ? set.rir.min : `${set.rir.min}–${set.rir.max}`} RIR` : 'RIR unspecified'}</li>)}</ol>
-      <p>Rest between sets: {selected.restBetweenSeconds === undefined ? 'unspecified' : `${selected.restBetweenSeconds} seconds`}. Rest after exercise: {selected.restAfterSeconds === undefined ? 'unspecified' : `${selected.restAfterSeconds} seconds`}.</p>
-      <div className="tag-list">{(data ? exerciseToInput(selected, data.tags).tagNames : []).map((name) => <span className="tag-chip" key={name}>{name}</span>)}</div>
-      {selected.instructions && <p className="plain-text">{selected.instructions}</p>}{selected.notes && <p className="plain-text">Notes: {selected.notes}</p>}
-      {selected.tutorialUrl && <a className="tutorial-link" href={selected.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial (new tab)</a>}
-      <div className="actions"><button disabled={busy} onClick={() => data && open(exerciseToInput(selected, data.tags), selected)}>Edit</button>
-        <button disabled={busy} onClick={async () => { setBusy(true); setError(''); try { open(await exercises.duplicateDraft(profileId, selected.id)) } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }}>Duplicate</button>
-        <button disabled={busy} onClick={() => selected.archivedAt ? void toggleArchive(selected) : (setSelected(undefined), setArchiveTarget(selected))}>{selected.archivedAt ? 'Restore' : 'Archive'}</button>
-      </div>{error && <p role="alert">{error}</p>}
-    </ActionDialog>}
-    {archiveTarget && <ConfirmDialog title="Archive exercise?" confirmLabel="Archive" onCancel={() => setArchiveTarget(undefined)} onConfirm={() => { void toggleArchive(archiveTarget); setArchiveTarget(undefined) }}><p>{archiveTarget.name} will leave the active library. Its record is kept and can be restored.</p></ConfirmDialog>}
+    {selected && <ExerciseDetails exercise={selected} tags={data ? exerciseToInput(selected, data.tags).tagNames : []} busy={busy} error={error} onClose={() => setSelected(undefined)}
+      onEdit={() => data && open(exerciseToInput(selected, data.tags), selected)}
+      onDuplicate={() => { setBusy(true); setError(''); void exercises.duplicateDraft(profileId, selected.id).then((draft) => open(draft)).catch((e: Error) => setError(e.message)).finally(() => setBusy(false)) }}
+      onArchive={() => selected.archivedAt ? void toggleArchive(selected) : (setSelected(undefined), setArchiveTarget(selected))} />}
+    {archiveTarget && <ConfirmDialog title="Archive exercise?" confirmLabel="Archive" onCancel={() => { setArchiveTarget(undefined); requestAnimationFrame(() => trigger.current?.focus()) }} onConfirm={() => { void toggleArchive(archiveTarget); setArchiveTarget(undefined) }}><p>{archiveTarget.name} will leave the active library. Its record is kept and can be restored.</p></ConfirmDialog>}
   </>
 }

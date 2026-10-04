@@ -3,8 +3,12 @@ import { expect, type Locator, type Page } from '@playwright/test'
 // Card faces expose one action; details own edits and lifecycle controls.
 export async function cardAction(page: Page, card: Locator, action: string) {
   await card.getByRole('button').click()
-  const dialog = page.getByRole('dialog')
+  let dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
+  if (await dialog.getByRole('button', { name: 'Exercise actions', exact: true }).count()) {
+    await dialog.getByRole('button', { name: 'Exercise actions', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: 'Exercise actions', exact: true })
+  }
   await dialog.getByRole('button', { name: action, exact: true }).click()
 }
 

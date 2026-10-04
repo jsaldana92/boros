@@ -18,6 +18,7 @@ async function add(page: Page, name: string, tag?: string) {
 }
 test('three-set prescription, edit, duplicate, archive/restore and reload', async ({ page }, testInfo) => {
   const external: string[] = []
+  await page.route('https://www.youtube.com/embed/**', (route) => route.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' }))
   page.on('request', (request) => { if (/youtube|youtu\.be/.test(request.url())) external.push(request.url()) })
   await openCreate(page)
   await page.getByRole('button', { name: 'Create exercise', exact: true }).click()
@@ -45,6 +46,7 @@ test('three-set prescription, edit, duplicate, archive/restore and reload', asyn
   await page.screenshot({ path: testInfo.outputPath('exercise-editor.png'), fullPage: true })
   await page.getByRole('button', { name: 'Save exercise', exact: true }).click()
   const card = page.getByRole('article', { name: 'High Bar Squat', exact: true })
+  expect(external).toEqual([]) // No background editor/library video loading.
   await card.getByRole('button').click()
   await expect(page.getByRole('dialog')).toContainText('6 reps; 0 RIR')
   await expect(page.getByRole('dialog')).toContainText('10–12 reps; RIR unspecified')
@@ -69,7 +71,8 @@ test('three-set prescription, edit, duplicate, archive/restore and reload', asyn
   await expect(card).toBeVisible()
   await page.reload()
   await expect(page.getByRole('article')).toHaveCount(2)
-  expect(external).toEqual([])
+  expect(external.length).toBeGreaterThan(0)
+  expect(external.every((url) => url === 'https://www.youtube.com/embed/abcdefghijk?autoplay=0&controls=1&playsinline=1&fs=1')).toBe(true)
 })
 
 test('combined search, sorting, ANY-tag filters and profile isolation', async ({ page }) => {

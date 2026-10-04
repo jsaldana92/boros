@@ -5,13 +5,16 @@ local profiles/settings, photos, dated weights, and an exercise library with
 Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
-The latest local revision replaces the plan-sourced catalog with standalone
-templates, atomic AI plan materialization and safe existing-plan repair. Build,
-typecheck, lint and 131 data tests pass. The 352-scenario static run passed 348;
-four obsolete test locators were corrected and all passed in the final 64/64
-training/backup/restore rerun. Focused Firefox: 12/12. See [exact verification and
-owner checks](docs/template-ownership-verification.md). This candidate is unpublished;
-physical-device, accessibility, Safari and live Support acceptance remain pending.
+The latest local revision adds plain Create/editor title paths, modal exercise
+details with a separate actions popup, and a validated YouTube player loaded only
+while viewing exercise details. Standalone template ownership and plan snapshots
+are preserved. Build, typecheck, lint, 133 data tests, 188 affected static-browser
+checks, 20 focused Firefox checks and 6 same-context update cases pass. Actual
+desktop video playback was also verified. See [exact verification and manual
+checks](docs/create-details-verification.md); [earlier ownership results](docs/template-ownership-verification.md)
+remain historical. This candidate is unpublished; physical-device, accessibility,
+Safari and live Support acceptance remain pending. The reported deployment data
+loss remains under investigation.
 
 ## Local development
 
@@ -29,6 +32,7 @@ origin. An existing project dev server can be reused by local browser tests.
 - `npm run test:browser` — Playwright smoke tests against development.
 - `npm run test:browser:preview` — run after build; tests production preview.
 - `npm run test:browser:static` - run after build; full suite on plain static root and project-subpath mounts without SPA rewrites.
+- `npm run test:browser:updates` - after [release-fixture preparation](docs/deployment-persistence-verification.md#same-context-update-regression), retain the same browser context/data across old deployed files and two new builds.
 - `npm run preview` — serve `dist` at http://127.0.0.1:4173.
 
 Browser tests use an installed Microsoft Edge browser, desktop and phone
@@ -103,6 +107,13 @@ Browser storage remains origin-specific; changing host, protocol, or port does
 not transfer data between origins.
 
 ## Local persistence and migrations
+
+Normal deployments must retain browser records. The reported post-deployment
+loss is still under investigation: actual-release updates preserve data in the
+local same-context tests, but affected-device before/after evidence is pending.
+See [findings, repeatable tests and recovery checks](docs/deployment-persistence-verification.md).
+`scripts/storage-diagnostics.js` is a read-only DevTools diagnostic for that
+investigation; it is not loaded by the app and never resets a database.
 
 `src/db/database.ts` defines IndexedDB database `boros`, schema version 5 (additive schedules store and optional unique occurrence indexes on drafts/sessions; all v1-v4 records retained).
 Profiles use UUIDs and unique normalized names (NFKC, trimmed/collapsed
@@ -202,9 +213,16 @@ editor (confirm discard only after reviewing/copying anything needed), then
 open its card and choose Edit to load the latest record. Plan copies and started/saved session prescriptions are independent snapshots.
 
 YouTube links support HTTPS watch?v=, youtu.be, shorts, live, and embed video URLs
-with an 11-character video ID on the explicitly supported YouTube hosts. They
-are plain external links: no preview, fetch, or embed happens automatically.
-Instructions and notes render as plain text.
+with an 11-character video ID on the explicitly supported YouTube hosts. Opening
+a saved library exercise's details loads its YouTube player; library cards,
+editors and import previews do not load videos. The trusted iframe URL uses only
+the validated video ID and fixed options: no autoplay, standard controls, inline
+playback and fullscreen. The referrer policy sends the site's origin, not profile,
+note or workout data. Closing details or opening the editor disposes of the
+player. Opening the actions popup also disposes of it; returning to details
+loads a fresh, paused player. Train retains its explicit external tutorial link.
+Instructions and Note are separate plain-text sections with preserved line breaks.
+Physical-device playback/app-opening behavior remains a manual check.
 
 Database v2 adds only `exercises` and `tags`. Both use `[profileId, id]` keys;
 active exercise names and tag names have unique compound indexes. Archived
@@ -232,11 +250,18 @@ repeats remain supported. These actions update the draft, which needs **Save pla
 Partial selection appears unchecked; clicking selects all, and clicking when all
 are selected clears all. Zero results disable Select All; zero selections or more
 than the day's remaining 100-occurrence capacity disable Add selected. Changing
-filters drops excluded selections; sorting retains identities. Cancel/Back inserts
+filters drops excluded selections; sorting retains identities. Cancel inserts
 nothing. Clear resets only the associated search, sort and tag controls.
 
-Guarded breadcrumbs show Create > Plan > Exercise, Create > Exercise, or the AI
-review context. Adjacent arrows and a popup expose **Edit, Duplicate, Move, Delete**
+Each Create screen has one plain-text title: **Create**, **Create > Plan**,
+**Create > Plan > Exercise**, or **Create > Exercise** (the AI input screen uses
+**Create > AI**). Titles contain no navigation controls. Save/Apply/Cancel/Close
+retain their existing unsaved-change guards. Library details use the shared native
+modal, locking background interaction/scroll; **Exercise actions** opens a second
+modal with Edit, Duplicate and Archive (Restore for archived records). Escape
+closes the top popup, returning focus to its opener. Library actions affect only
+the standalone template; plans and history keep their snapshots.
+Adjacent arrows and an occurrence popup expose **Edit, Duplicate, Move, Delete**
 in that order, with red Delete. Day sections are lighter than nested cards in both
 themes. Public addresses and existing dirty-form/unload protections are unchanged.
 
@@ -295,8 +320,9 @@ Validation accepts the complete payload or reports field paths such as
 `plan.days[1].exercises[0].sets[2].reps.max`. Surrounding prose, multiple blocks,
 wrong versions/types, unknown fields at every level, invalid ranges, and unsupported
 tutorial links fail without writes or loss of pasted text. There is no fragment
-extraction or numeric type coercion. Pasted HTML/code is inert plain text; tutorial
-URLs are never automatically fetched or embedded.
+extraction or numeric type coercion. Pasted HTML/code is inert plain text; parsing
+and import previews never fetch or embed tutorials. After saving, explicitly
+opening library exercise details may load the authorized YouTube player.
 Malformed smart-quote delimiters produce copying/formatting guidance; Boros never
 globally replaces Unicode quotation marks. Valid Unicode punctuation inside
 strings is preserved. **Draft** is an unsaved preview bound to the profile that

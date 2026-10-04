@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-04
-Status: Standalone exercise ownership and owner Create/editor refinements are complete in available local checks. Earlier phase/group verification stays historical. Overall release acceptance remains pending. Owner reports HTTPS resolved; no new production verification or publication is claimed. Physical-device, assistive-technology, Safari and live Support checks remain pending.
-Current scope: Independent library templates, atomic AI plan import, safe legacy-plan/restore repair, guarded breadcrumbs, occurrence popup, multi-select picker, shared tag disclosure/dropdown and editor spacing. This supersedes the earlier plan-sourced catalog projection. Preserve existing records/configuration and owner favicon/manifest changes. No commit, push, deployment or hosting change is authorized.
+Status: Focused Create refinement complete in available local checks: 133 data, 188 affected static, 20 Firefox and 6 same-context update tests pass; actual desktop sample playback verified. Plain title paths, shared modal layering and explicitly opened library-detail embeds supersede older breadcrumb/no-embed rules. Physical-phone/Safari/AT acceptance and the owner's deployment-persistence report remain unresolved; earlier results stay historical. No publication performed.
+Current scope: One plain-text Create/editor title, modal exercise details with a stacked actions popup, separate instructions/note sections and validated YouTube playback. Preserve standalone ownership, snapshots, persistence investigation/tooling, single-address navigation and owner AppShell edits. No commit, push, deployment or hosting change.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -76,6 +76,7 @@ These defaults make implementation concrete. They are design choices, not additi
 - Each set may have an RIR range with nonnegative integer bounds. RIR 0 is valid. Missing RIR is unknown, not 0.
 - Rest between sets and rest after an exercise are optional nonnegative integer seconds. Missing rest is unspecified; 0 explicitly means no timed rest.
 - Instructions, notes, YouTube URL, and tags are optional. Support choosing existing tags and creating new ones.
+- Opening saved Create-library exercise details explicitly authorizes a validated YouTube iframe. No autoplay, background-card/editor/import-preview loading, arbitrary iframe HTML or transmission of profile/notes/results. Close/editor/action-menu transitions dispose of the player; older no-embed handoffs remain historical. Train's external tutorial link stays unchanged.
 - Store per-set targets, not a single string that must be reparsed during training. The form can apply a target to all sets and then override individual sets.
 - Copy an exercise prescription into a plan entry when adding it. Keep an optional source exercise ID, but editing the library exercise must not silently change existing plans.
 - Store a complete prescription snapshot in a started session and its completed log. Later plan edits or archiving must not rewrite historical exercise names, targets, tags, units, or instructions.
@@ -211,7 +212,7 @@ Goal: users can create reusable exercises with every supported prescription fiel
 - [x] Create/select tags and prevent confusing duplicate tag names within a profile.
 - [x] Add edit, duplicate, and archive operations with clear naming behavior.
 - [x] Add search, A–Z/Z–A sorting, newest/oldest sorting, and tag filters. Default multiple selected tags to ANY match and label that behavior.
-- [x] Validate tutorial links as supported HTTPS YouTube URLs; do not execute imported HTML or fetch tutorial content automatically.
+- [x] Validate tutorial links as supported HTTPS YouTube URLs; never execute imported HTML or fetch while editing/importing. The 2026-10-04 owner refinement authorizes embedding only after opening saved library details.
 - [x] Save creation/update timestamps and retain stable IDs when editing.
 
 Acceptance: create a three-set exercise with different rep/RIR targets, reopen it, and recover the same data. Missing optional values stay missing. All requested filters work together. Other profiles cannot see the exercise.
@@ -457,8 +458,8 @@ Goal: the complete workflow is usable and the data rules hold across features.
 - [x] Confirm AI imports and manual plans use the same editor, training UI, scheduling, history and persistence path.
 - [x] Check automated phone/desktop layouts, keyboard access, labels, focus, dialogs, readable errors and textual completion states in both themes; fix WebKit trigger focus and obscured training fields. Physical-device/accessibility-user checks remain below.
 - [x] Verify refresh, profile switching, simultaneous/stale tabs, failed/pending saves and restore/merge/clear ownership protection. This does not claim suspended-device recovery or real quota exhaustion.
-- [x] Check user text/filenames/imports remain inert and production network requests stay local; only the explicitly clicked tutorial link is requested externally (intercepted by the test).
-- [x] Preserve explicit-click tutorial/Support links with no automatic embeds; unavailable Support checked. Actual configured Ko-fi destination remains unverified.
+- [x] Check user text/filenames/imports remain inert; background loading stays local. Current owner-authorized library-detail embeds and explicit Train tutorial links are intercepted in automated tests; real desktop playback is checked separately.
+- [x] Preserve explicit-click Train tutorial/Support links; opening Create-library details now authorizes its validated player. Unavailable Support checked; actual Ko-fi content remains unverified.
 - [x] Verify existing image bounds, on-demand display, object URL cleanup and larger-archive progress. Original photo bytes remain uncompressed by Boros; no resizing is claimed.
 - [x] Exercise the documented 100-exercise/20-plan/500-session/730-measurement/12-JPEG dataset; record exact environment, sizes and timings in docs/phase10-verification.md.
 - [x] Confirm storage, saved-only backup, destructive previews and commit-only success wording. Replace obsolete unbenchmarked-capacity wording without promising a maximum.
@@ -576,6 +577,27 @@ with publication and overall release acceptance remaining separate owner actions
 - [x] Final handoff/README/import/backup documentation reviewed; owner assets and index hashes unchanged. Exact commands, coverage and limitations: [current verification](docs/template-ownership-verification.md).
 - [ ] Owner physical-device, assistive-technology, Safari/Blob, live Support and published-version gates remain unverified; local emulation does not close them.
 
+### Focused Create titles and library modal (2026-10-04)
+
+- [x] Replace clickable breadcrumbs with one plain-text title path per visible screen. Keep guarded Save/Apply/Cancel/Close and unrelated routing.
+- [x] Reuse shared native dialogs with body scroll lock, inert lower dialogs, Tab wrapping and focus recovery. Backdrop clicks cannot activate background controls.
+- [x] Add top-right Exercise actions button and a second modal with vertical Edit/Duplicate/Archive; retain Restore for archived templates and archive confirmation. Preserve owner IDs, stale-write protection and independent snapshots.
+- [x] Render saved Instructions then separated Note as plain text without empty-section filler. Embed a supported tutorial only while details are open and unobscured, using a validated ID, no autoplay and correct referrer/minimum dimensions. Dispose on close/editor/action transitions.
+- [x] Focused data **133/133**, affected root/project desktop/phone static suite **188/188**, build/typecheck/lint/diff passed. Real desktop sample playback advanced with paused=false; close disposed of iframe without opening another tab.
+- [x] Cross-engine **20/20** and retained-context updates **6/6** pass against this candidate. See docs/create-details-verification.md for exact commands, intermediate failures and actual-versus-simulated playback evidence.
+- [ ] Physical phone/Safari playback, fullscreen/app-opening and assistive-technology checks remain manual; earlier acceptance gates and affected-browser persistence evidence remain pending.
+
+### Deployment persistence investigation (2026-10-04; affected-browser verification pending)
+
+- [x] Inspect stable `boros` database/schema, initialization/Guest and active selection, error handling, explicit reset operations, deployment scripts, manifest and service-worker/cache behavior. No reset-on-deploy path or application defect was found in this audit.
+- [x] Test exact prior `gh-pages` artifact a87dc13 → current deployed aa9126e → two independent current-source production builds at one unchanged address, retaining the same browser context/storage across all transitions and page reopens.
+- [x] Create fixtures through the old UI with distinct active owner/Guest, exercise/tag, plan/schedule, selected Train plan, saved session, committed draft, measurement, photo Blob and theme. Compare all records/IDs/photo bytes; verify permitted legacy AI-link repair separately and preserve historical snapshots.
+- [x] Verify a simulated database-open failure displays an actionable error with all records intact and creates no replacement Guest; retry/reload restores the original owner.
+- [x] Final update matrix **6/6**: desktop Edge root, emulated-phone Edge project subpath, desktop Firefox root. Data **131/131**; build/typecheck/lint/diff checks pass. Add read-only diagnostic script and reproducible verification record.
+- [x] Read-only live audit: final `https://boros-app.com/`, valid secure context, no manifest link, no registered service worker, 19 observed screen/asset responses 200 without `Clear-Site-Data`. Current manifest/identity and hosting unchanged.
+- [ ] Establish the incident's cause using before/after evidence from an actually affected browser: origin/context, loaded entry, original/Guest IDs, counts, active selection and errors/response headers. Owner reports all mobile/desktop browsers affected, ordinary reloads safe, and a blank Guest/no other profiles after deploy; this was not reproduced locally.
+- [ ] Perform actual phone/Safari/update acceptance and conditional original-context ZIP recovery if records remain accessible. Do not mark loss fixed or attribute it to context isolation without evidence. See `docs/deployment-persistence-verification.md` for commands and exact manual checks.
+
 ## 6. Required test fixtures
 
 Build these fixtures as the relevant phase begins, using fictional people and tiny synthetic images.
@@ -686,15 +708,18 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-03 | AI generation requests one fenced JSON block; parser still accepts raw JSON | Preserve strict schema/unknown-field rejection and valid Unicode text. Explain malformed smart delimiters without global replacement |
 | 2026-10-04 | Standalone templates supersede plan-sourced catalog | Atomic AI plan materialization; first retained occurrence supplies missing defaults. Transactional initialization/selection and validated-restore repair preserve snapshots and Progress provenance. Optional templateId requires backup v4; database v5 and AI v2 stay unchanged |
 | 2026-10-04 | Guarded breadcrumbs and filtered multi-selection | Single Add ignores checks; bulk inserts displayed order once; filters drop excluded selections and sorting retains IDs. Name-only cards, shared Tags disclosure, four-action occurrence popup and accessible scrolling dropdown reuse existing controls |
+| 2026-10-04 | Test actual deployed artifacts in one retained context before changing persistence | Prior/current gh-pages files and two local rebuilds preserve all data in 6 update scenarios. Keep `boros`/schema/manifest identity unchanged; add read-only before/after diagnostics. Owner-reported loss remains unresolved, not dismissed as a context switch |
+| 2026-10-04 | Plain title paths replace breadcrumb navigation; shared native modal owns focus/scroll | Keep form actions and discard guards. Only the top modal is interactive; details/actions/confirm/editor transitions retain template identity and leave snapshots untouched |
+| 2026-10-04 | Explicit library-detail opening authorizes a trusted YouTube iframe | Reuse supported URL validation, discard supplied parameters, no autoplay; origin-only referrer and at least 200×200 player. Dispose while actions cover details and on close/edit; reopening starts paused. Train links and import previews remain unchanged |
 
 ## 9. Current checkpoint
 
-- Standalone-template ownership and Create/editor refinements are complete in available local checks. Earlier catalog behavior is superseded; earlier handoffs are retained as history. Phase 10 remains **Verification pending** and Phase 11 **In progress**.
-- Database **v5**, AI **v2** (strict v1 supported); new backups **v4**, strict v1/v2/v3 imports supported. Legacy current-plan repair adds defaults references while preserving historical provenance and snapshots; no database reset.
-- Data **131/131**, build/typecheck/lint/diff passed. Full static **348 passed / 4 obsolete test-locator failures**, all resolved in the final **64/64** training/backup/restore rerun. Focused Firefox **12/12**. Prior 126/344 results apply only to the earlier candidate; no single clean final 352-test run is claimed.
-- HEAD remains e65acd536e25718713b835bd3b401a060573db29. Existing uncommitted work and owner favicon/manifest files are preserved. No staging, commit, push, deployment, dependency installation or hosting edits.
-- Required physical phone/software-keyboard/safe-area/download, screen-reader/voice-control, Blob-capable Safari, live Ko-fi, quota, spreadsheet and suspended-timer checks remain pending. No fresh published-site check is claimed. Optional weight/reps/date graph stays deferred.
-- Next: the six-step owner workflow below, device/AT acceptance, then separately authorized publication/smoke. See docs/template-ownership-verification.md for this revision; earlier docs/create-refinements-verification.md remains historical.
+- Focused Create refinement is complete in available local checks: one plain-text title, guarded forms, shared modal scroll/focus/layer handling, vertical exercise actions and separate Instructions/Note with an explicitly opened trusted YouTube player. Earlier breadcrumb/no-embed behavior is superseded only for this scope. Phase 10 remains **Verification pending**, Phase 11 **In progress**.
+- Data **133/133**, affected static **188/188** (root/project × desktop/phone), focused Firefox **20/20**, retained-context updates **6/6** all pass; build/typecheck/lint/diff pass. Actual desktop YouTube sample playback advanced after Play, and Close disposed of the iframe. Simulated regression embeds are documented separately. See docs/create-details-verification.md.
+- Database **v5** `boros`, AI **v2**, backups **v4** with strict v1–3 imports, ownership/services, snapshots, navigation, manifest, assets and deployment configuration are unchanged. No owner data was accessed or cleared. Prior persistence tools and owner AppShell edits were preserved.
+- HEAD remains b672c6d1329e3e9abafa1dcbca926158623ffa4f; prior and current changes remain uncommitted. No commit, push, deployment, dependency installation or hosting edits.
+- Deployment-persistence incident remains **Verification pending**: owner reports blank Guest/no other profiles after deployments across mobile/desktop, despite safe ordinary reloads. It is not reproduced by the update tests, including this candidate. No root cause or persistence fix is claimed; prior live audit remains historical.
+- Next: physical phone/Safari playback/fullscreen/rotation, modal touch scrolling and real-player keyboard/AT checks in both themes. Earlier live Ko-fi, Blob restore, quota, spreadsheet and suspended-timer gates remain pending. For the persistence incident, export accessible records and capture read-only before/after diagnostics in an affected context at the next separately authorized deployment; see docs/deployment-persistence-verification.md.
 
 ## 10. Handoff entry template
 
@@ -1391,3 +1416,24 @@ Fresh verification against the final build (isolated contexts/test databases):
   5. Add several exercises using checkboxes and Select All.
   6. Reload and confirm saved data and relationships.
 - Next: perform that workflow and pending owner device/AT checks; publication and published-version smoke require separate authorization.
+
+### 2026-10-04 - Deployment persistence investigation and update regression
+
+- Status: local investigation/testing complete; **affected-browser verification pending**, incident not resolved. Owner reports https://boros-app.com/, blank Guest with no other profiles after deploy across mobile/desktop, and normal reloads retaining data. Do not substitute an assumed Home Screen explanation for that report.
+- Audit: stable database `boros`/Dexie v5, additive upgrades, persisted active ID, Guest only when every store is empty, explicit startup errors with no reset fallback. Whole-profile deletion requires reviewed Clear/restore confirmation. Deployment replaces static Git checkout files only; no service worker, versioned database key or cache-triggered reset exists. Manifest start_url/scope are `./`, display is `browser`, id absent; current source/live HTML do not link it. Identity and hosting left unchanged.
+- New regression: exact published a87dc13014fe54dad0b407572f7fdc1afe4dd132 and aa9126efd67244ddb9c7c8818896a32822a56b64, plus two independent local builds from source b672c6d1329e3e9abafa1dcbca926158623ffa4f, served successively at one fixed origin per case. Same browser context retained across all builds/reloads/page reopens. Old UI creates profiles, library exercise/tag, plan/schedule, selected plan, saved session, committed draft, weight and PNG photo. Native reads compare every store/ID and Blob byte; a separate legacy AI fixture permits only additive template/link repair. Simulated failed opening preserves all records and reports an error; recovery restores the same owner.
+- Verification: **6/6** update cases on desktop Edge root, emulated-phone Edge project subpath and desktop Firefox root; **131/131** data tests; build/typecheck/lint/diff pass. Initial harness locator/channel/tag-fixture failures and sandbox EPERM rerun are recorded in [the investigation record](docs/deployment-persistence-verification.md). No full 352-case suite rerun claimed for tooling/documentation-only changes.
+- Live read-only audit: all five screens at final HTTPS address, secure context true, randomUUID/subtle available, zero registered service workers, no manifest link, 19 observed 200 document/asset responses without Clear-Site-Data. This does not reproduce a live update or establish what happened in an affected owner browser.
+- Changed: dedicated release preparation/test/config and npm test alias, scripts/storage-diagnostics.js (read-only, identifiers/counts/context only), TODO/README and verification record. No application/schema/manifest/assets/Vite/deploy-script/lockfile changes; owner records untouched. Started clean at b672c6d; no commit, push, deployment, hosting edits or dependency installation.
+- Next: back up each accessible original profile; collect diagnostic JSON/OS/browser/launch context before and after an ordinary reload and the next separately authorized deployment, keeping the same tab/profile/app. If another original context retains records, export there and import under a new name in the intended destination, preserving checksum validation. Exact steps are in the record. Physical phone/Safari, screen-reader, live Ko-fi and earlier acceptance gates remain unverified; earlier phase/group handoffs remain historical.
+
+### 2026-10-04 - Focused Create titles, exercise details and tutorial player
+
+- Status: **Complete in available local verification environments**; physical-device and accessibility acceptance remain pending. Phase 10 remains Verification pending; Phase 11 remains In progress. Earlier handoffs retain their historical results.
+- Implemented: one plain-text Create/editor title path, guarded existing Save/Apply/Cancel actions, modal details with locked background and scrolling content, and a separate vertical Exercise actions popup. Top-only interaction, Escape order, keyboard containment and trigger-focus recovery are covered. Instructions and Note are separate conditional plain-text sections with a divider.
+- Tutorial: validated supported YouTube IDs produce a fixed HTTPS iframe URL with controls, fullscreen/inline support, no autoplay and strict-origin-when-cross-origin referrer policy. Player dimensions are at least 200 by 200. Only opened details load it; Close/Edit dispose it. Opening the actions popup also disposes it; returning remounts it paused, without preserving playback position. Invalid URLs never become embeds. Train's external tutorial action is unchanged.
+- Ownership: existing profile/template/revision-bound edit, duplicate, archive and restore services reused. Template IDs and independent plan/session snapshots are preserved. Database/schema, memory routing, manifest, assets, Vite, lockfile and hosting configuration were not changed. Existing persistence-investigation files and owner AppShell edits were preserved.
+- Verification: build/typecheck/lint/diff checks passed; data **133/133**, affected production static root/project-subpath x Edge desktop/phone **188/188**, focused Firefox desktop/phone **20/20**, same-context old-deployment-to-two-new-build update regression **6/6**. No full-suite or physical-phone pass is claimed. Exact commands, diagnostic failures and limits: [verification record](docs/create-details-verification.md).
+- Actual playback: separate disposable local Edge check at 13:03 EDT returned HTTP 200 and advanced the real sample video's time after a Play click (`currentTime: 0.366922`, `paused: false`, `readyState: 4`). Close removed the iframe without opening another tab. Automated regression iframe fixtures are explicitly simulated, not counted as real playback.
+- Remaining: actual iPhone/Safari and Android scrolling, inline/fullscreen/audio/rotation; keyboard and screen-reader traversal through the real cross-origin player and stacked dialogs; earlier Safari photo/restore, live Ko-fi and release gates. The owner's deployment data-loss report is still unresolved; passing local update tests does not establish its cause or constitute a persistence fix.
+- Next: follow the verification record's exact phone/playback/accessibility checks and continue collecting affected-browser persistence evidence. No dependency installation, commit, push, deploy, hosting change or owner-data clearing was performed.

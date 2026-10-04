@@ -27,6 +27,7 @@ async function note(p: Page, name: string, text: string) {
 }
 
 for (const withoutNativeUUID of [false, true]) test(`complete manual and AI journey, immutable history, saved draft, photos and semantic restore with network audit${withoutNativeUUID ? ' without native randomUUID' : ''}`, async ({ page, context }, info) => {
+  await context.route('https://www.youtube.com/embed/**', (route) => route.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' }))
   if (withoutNativeUUID) await context.addInitScript(() => Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true }))
   page.setDefaultTimeout(15000)
   const requests: string[] = [], errors: string[] = []
@@ -152,5 +153,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await field(page, 'Active profile').selectOption({ label: 'Untouched neighbour' })
   expect((await download(page)).data).toEqual(other.data)
   expect(page.url()).toBe(address); expect(errors).toEqual([])
-  expect(requests.filter((url) => new URL(url).origin !== new URL(address).origin)).toEqual(['https://youtu.be/abcdefghijk'])
+  const external = requests.filter((url) => new URL(url).origin !== new URL(address).origin)
+  expect(external.filter((url) => !url.startsWith('https://www.youtube.com/embed/'))).toEqual(['https://youtu.be/abcdefghijk'])
+  expect(external.filter((url) => url.startsWith('https://www.youtube.com/embed/')).every((url) => url === 'https://www.youtube.com/embed/abcdefghijk?autoplay=0&controls=1&playsinline=1&fs=1')).toBe(true)
 })

@@ -137,8 +137,17 @@ button.danger { color: var(--danger); }
 @media (min-width: 700px) { .exercise-list { max-height: 462px; } }
 .plain-text { white-space: pre-wrap; }
 .tutorial-link { display: inline-block; padding: 10px 0; min-height: 44px; text-decoration: underline; }
-dialog { color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 24px; width: min(480px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; margin: auto; }
+dialog { position: fixed; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 24px; width: min(480px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; margin: auto; }
 dialog::backdrop { background: rgb(0 0 0 / 65%); }
+.dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dialog-heading h2 { min-width: 0; overflow-wrap: anywhere; }
+.dialog-heading .icon-button { flex-shrink: 0; }
+.exercise-details { width: min(640px, calc(100% - 24px)); padding: 16px; }
+.exercise-information h3 { font-size: 14px; margin: 20px 0 8px; }
+.exercise-information p { margin-top: 0; overflow-wrap: anywhere; }
+.exercise-note { border-top: 1px solid var(--border); margin-top: 20px; }
+.exercise-action-list { display: flex; flex-direction: column; gap: 10px; }
+.youtube-player { display: block; width: 100%; min-width: 200px; min-height: 200px; aspect-ratio: 16 / 9; border: 0; margin-top: 20px; }
 @media (max-width: 600px) { .prescription-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Screen controls are actions, with no public route URLs. */
@@ -249,12 +258,8 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 @media (max-width: 340px) { .workout-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Shared Create navigation, filters and independent template selection. */
-.editor-breadcrumbs { margin-bottom: 24px; }
-.editor-breadcrumbs ol { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; margin: 0; }
-.editor-breadcrumbs li { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.editor-breadcrumbs h1 { margin: 0; font-size: 21px; overflow-wrap: anywhere; }
-.editor-breadcrumbs h1:focus { outline: none; }
-.editor-breadcrumbs button { background: transparent; }
+.editor-title { font-size: 21px; overflow-wrap: anywhere; }
+.editor-title:focus { outline: none; }
 .tag-scroll { display: grid; grid-auto-flow: column; grid-template-rows: repeat(3, minmax(44px, auto)); grid-auto-columns: max-content; gap: 8px; overflow-x: auto; max-width: 100%; padding: 6px 4px; margin-bottom: 16px; }
 .tag-scroll button { max-width: 260px; white-space: normal; overflow-wrap: anywhere; }
 .exercise-selection-row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--border); }

@@ -12,6 +12,7 @@
     "test:browser": "playwright test",
     "test:browser:preview": "playwright test --config playwright.preview.config.ts",
     "test:browser:static": "playwright test --config playwright.static.config.ts",
+    "test:browser:updates": "playwright test --config playwright.updates.config.ts",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist --cname boros-app.com --nojekyll"
