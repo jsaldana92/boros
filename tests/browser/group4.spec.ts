@@ -1,109 +1,81 @@
-import { cardAction } from './create-actions'
 import 'fake-indexeddb/auto'
+import { planService } from '../../src/db/plans'
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { BorosDatabase } from '../../src/db/database'
+import { scheduleService } from '../../src/db/schedules'
+import { occurrences } from '../../src/schemas/schedule'
+import { addDays } from '../../src/lib/calendar-dates'
 import { progressFixture } from '../fixtures/progress'
+import { runPage } from './calendar-actions'
 
 test.setTimeout(120000)
 const b = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
-const weights = (page: Page) => page.getByRole('combobox', { name: 'Select measurement', exact: true })
-const selection = (page: Page, name: string) => page.locator('.workout-progress-grid button').filter({ has: page.getByText(name, { exact: true }) })
+const selection = (page: Page, name: string) => page.getByRole('region', { name: 'Overall exercises' }).getByRole('button').filter({ has: page.getByText(name, { exact: true }) })
 async function seed(page: Page) {
-  const db = new BorosDatabase(`boros-test-group4-browser-${crypto.randomUUID()}`)
+  const db = new BorosDatabase(`boros-test-progress-browser-${crypto.randomUUID()}`)
   try {
-    const fixture = await progressFixture(db), stores = await Promise.all(db.tables.map(async (table) => ({ name: table.name, values: await table.toArray() })))
-    await page.goto('./'); await b(page, 'Progress').click(); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
-    await page.evaluate(async (stores) => {
+    const fixture = await progressFixture(db)
+    // Historical instance fixtures retain the original frozen session/draft days.
+    for (const plan of [fixture.alpha, fixture.beta]) {
+      const stored = (await db.plans.get([fixture.id, plan.id]))!
+      if (stored.archivedAt) await planService(db).setArchived(fixture.id, stored.id, stored.revision, false)
+      const run = await scheduleService(db).create(fixture.id, { planId: plan.id, planRevision: (await db.plans.get([fixture.id, plan.id]))!.revision, startWeek: '2024-12-30', timeZone: 'UTC', mapping: [{ dayId: plan.days[0].id, weekday: 0 }] })
+      const logs = (await db.sessions.where('profileId').equals(fixture.id).toArray()).filter(s => s.sourcePlanId === plan.id).sort((a, b) => a.completedAt.localeCompare(b.completedAt))
+      for (const [index, log] of logs.entries()) {
+        const week = addDays(run.startWeek, index * 7), ref = occurrences(run, week, addDays(week, 6))[0].ref
+        await db.sessions.update([fixture.id, log.id], { occurrence: ref, occurrenceKey: ref.key })
+        await db.drafts.update([fixture.id, log.draftId], { occurrence: ref, occurrenceKey: ref.key })
+      }
+    }
+    const stores = await Promise.all(db.tables.map(async table => ({ name: table.name, values: await table.toArray() })))
+    await page.goto('./'); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
+    await page.evaluate(async stores => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => { const r = indexedDB.open('boros'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error) })
-      await new Promise<void>((resolve, reject) => { const tx = db.transaction(stores.map((s) => s.name), 'readwrite'); tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error); for (const store of stores) for (const value of store.values) tx.objectStore(store.name).put(store.name === 'settings' ? { ...value, noticeAccepted: true } : value) }); db.close()
+      await new Promise<void>((resolve, reject) => { const tx = db.transaction(stores.map(s => s.name), 'readwrite'); tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error); for (const store of stores) for (const value of store.values) tx.objectStore(store.name).put(store.name === 'settings' ? { ...value, noticeAccepted: true } : value) }); db.close()
     }, stores)
-    await page.reload(); await expect(weights(page).locator('option')).toHaveCount(3)
-    return fixture
+    await page.reload(); await b(page, 'Progress').click(); await expect(page.locator('.weight-point')).toHaveCount(3)
   } finally { await db.delete() }
 }
 
-test('graph selection, overlap keyboard access, correction/deletion, theme and Settings synchronization', async ({ page }, info) => {
-  await seed(page); const address = page.url(), chart = page.getByRole('group', { name: /^Body weight over time/ })
-  await expect(page.getByRole('heading', { name: 'Measurement history', exact: true })).toHaveCount(0)
-  await expect(page.getByText(/Canonical:|Vertical scale:|Exact values and record details/)).toHaveCount(0)
-  await expect(chart.locator('.date-tick').first()).toHaveAttribute('transform', /rotate\(-40/)
-  await expect(chart.locator('.axis-label')).toHaveCount(8)
-  await expect(chart.locator('circle')).toHaveCount(3)
-  expect(await chart.locator('circle').nth(1).getAttribute('cx')).toBe(await chart.locator('circle').nth(2).getAttribute('cx'))
-  expect(await chart.locator('circle').nth(1).getAttribute('cy')).toBe(await chart.locator('circle').nth(2).getAttribute('cy'))
-  await chart.focus(); await page.keyboard.press('Home'); await expect(weights(page)).toHaveValue(await weights(page).locator('option').first().getAttribute('value') as string)
-  await page.keyboard.press('ArrowRight'); const middle = await weights(page).inputValue(); await page.keyboard.press('End'); expect(await weights(page).inputValue()).not.toBe(middle)
-  await b(page, 'Edit measurement').click(); await page.getByLabel('Weight (kg)', { exact: true }).fill('69'); await b(page, 'Save measurement').click(); await expect(page.locator('.current-weight')).toHaveText('Current weight: 69 kg')
-  await b(page, 'Settings').click(); await expect(page.getByLabel('Weight (kg, optional)', { exact: true })).toHaveValue('69'); await b(page, 'Light').click(); await b(page, 'Progress').click()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light'); await b(page, 'Delete measurement').click(); await page.keyboard.press('Escape'); await expect(b(page, 'Delete measurement')).toBeFocused()
-  await b(page, 'Delete measurement').click(); await b(page, 'Delete entry and its photo').click(); await expect(weights(page).locator('option')).toHaveCount(2); await expect(page.locator('.current-weight')).toHaveText('Current weight: 70 kg')
-  await page.screenshot({ path: info.outputPath('group4-body-light.png'), fullPage: true }); expect(page.url()).toBe(address)
-  await weights(page).selectOption({ index: 0 }); await b(page, 'Delete measurement').click(); await b(page, 'Delete entry and its photo').click()
-  await expect(chart.locator('circle')).toHaveCount(1); expect(Number(await chart.locator('circle').getAttribute('cx'))).toBeGreaterThan(0)
-  await b(page, 'Add measurement').click(); await page.getByLabel('Weight (kg)', { exact: true }).fill('70'); await page.getByLabel('Measurement date/time', { exact: true }).fill('2025-01-04T12:00'); await b(page, 'Save measurement').click()
-  await expect(chart.locator('circle')).toHaveCount(2); expect(await chart.locator('circle').first().getAttribute('cy')).toBe(await chart.locator('circle').last().getAttribute('cy'))
-  await expect(chart).not.toContainText('NaN'); expect(new Set(await chart.locator('g .axis-label').allTextContents()).size).toBe(5)
-})
-
-test('plan carousel, plan/all scopes, historical supersets, actual set selection and saved notes', async ({ page }, info) => {
+test('instance/Overall metrics, repeated and superset occurrences, paired actual-date extrema, filter and Back restoration', async ({ page }, info) => {
   await seed(page); const address = page.url()
-  await expect(page.locator('.workout-progress-grid')).toHaveCSS('grid-template-columns', /\S+ \S+ \S+/)
-  await b(page, 'Next plan card').click(); await expect(page.locator('.progress-carousel button').last()).toBeFocused()
-  await b(page, 'Previous plan card').click(); await page.keyboard.press('Enter'); await expect(page.getByRole('heading', { name: 'Alpha', exact: true })).toBeFocused()
-  await expect(page.locator('.progress-counts')).toContainText('0 Training days completed'); await expect(page.locator('.progress-counts')).toContainText('7 Exercise completions')
-  await selection(page, 'Renamed press').click(); await expect(page.getByRole('region', { name: 'Maximum recorded weight', exact: true })).toContainText('45.359237 kg × 7 reps')
-  await expect(page.getByRole('region', { name: 'Starting performance', exact: true })).toContainText('0 kg × 5 reps')
-  await expect(page.getByRole('region', { name: 'Starting performance', exact: true }).locator('.recorded-performance')).toHaveCount(2)
-  await b(page, 'Back to plan progress').click(); await b(page, 'Back to Progress').click(); await selection(page, 'Renamed press').click()
-  await expect(page.getByRole('region', { name: 'Maximum recorded weight', exact: true })).toContainText('61 kg × 7 reps')
-  const sets = page.getByRole('combobox', { name: 'Select recorded set for Renamed press', exact: true }); await expect(sets.locator('option')).toHaveCount(14)
-  await sets.selectOption({ index: 0 }); await b(page, 'Review selected session').click(); await expect(page.getByRole('region', { name: 'Saved session details', exact: true })).toContainText('Saved session note'); await expect(page.getByRole('region', { name: 'Saved session details', exact: true })).toContainText('Occurrence 2 note')
-  await b(page, 'Back to statistics').first().click(); await b(page, 'Back to Progress').click()
-  await selection(page, 'Superset · Renamed press + Row').click(); await expect(page.locator('.superset-progress-member')).toHaveCount(2)
-  const first = page.getByRole('region', { name: 'Member 1: Renamed press', exact: true }), second = page.getByRole('region', { name: 'Member 2: Row', exact: true })
-  expect(await first.locator('circle').first().getAttribute('fill')).not.toBe(await second.locator('circle').first().getAttribute('fill'))
-  await expect(first).toContainText('3 recorded sets'); await expect(second).toContainText('2 recorded sets')
-  await expect(first.getByRole('region', { name: 'Maximum recorded weight' })).toContainText('61 kg'); await expect(second.getByRole('region', { name: 'Maximum recorded weight' })).toContainText('70 kg')
-  await page.screenshot({ path: info.outputPath('group4-members-dark.png'), fullPage: true })
-  await b(page, 'Back to Progress').click(); await selection(page, 'Superset · Renamed press + Press').click(); await expect(page.getByRole('region', { name: 'Member 2: Press', exact: true })).toContainText('80 kg')
-  await b(page, 'Back to Progress').click(); await b(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Other history' }); await b(page, 'Progress').click()
-  await expect(selection(page, 'Renamed press')).toHaveCount(0); await selection(page, 'Private exercise').click(); await expect(page.locator('.exercise-statistics')).toContainText('999 kg')
-  await page.reload(); await expect(selection(page, 'Private exercise')).toBeVisible(); await expect(page.locator('.progress-drilldown')).toHaveCount(0); expect(page.url()).toBe(address)
+  await expect(selection(page, 'Renamed press')).toHaveCount(1); await expect(selection(page, 'Renamed press')).toContainText(/Date Added: \d{2}\/\d{2}\/\d{4}/)
+  await expect(page.getByText('Saved sessions', { exact: false })).toHaveCount(0)
+  await page.evaluate(() => { (window as any).photoReads = 0; const get = IDBObjectStore.prototype.get; IDBObjectStore.prototype.get = function (...args) { if (this.name === 'photos') (window as any).photoReads++; return get.apply(this, args) } })
+  const main = page.getByRole('region', { name: 'Exercises', exact: true }); await main.getByLabel('Search exercises', { exact: true }).fill('Renamed'); await selection(page, 'Renamed press').click()
+  await expect(page.getByRole('heading', { name: 'Body weight' })).toHaveCount(0); await expect(page.getByText('Overall', { exact: true })).toBeVisible()
+  await expect(page.locator('.analytics-metrics')).toContainText('5Times Completed'); await expect(b(page, 'Weight Max: 61 kg')).toBeVisible(); await b(page, 'Weight Min: 0 kg').click()
+  let popup = page.getByRole('dialog'); await expect(popup).toContainText('0 kg'); await expect(popup).toContainText('5 reps'); await expect(popup).toContainText('Alpha · Strength'); await expect(popup).toContainText('Jan 1, 2025'); await page.keyboard.press('Escape')
+  await b(page, 'Reps Max: 7').click(); await expect(page.getByRole('dialog')).toContainText('45.359237 kg'); await b(page, 'Close').click(); await b(page, 'Back').click()
+  await expect(main.getByLabel('Search exercises', { exact: true })).toHaveValue('Renamed'); await expect(selection(page, 'Renamed press')).toBeFocused()
+  await page.getByRole('article', { name: 'Run Alpha', exact: true }).locator('.catalog-card').click(); await expect(page.locator('.analytics-metrics')).toContainText('0Times Completed'); await expect(page.locator('.analytics-metrics')).toContainText('6Exercises Completed')
+  const grid = page.getByRole('region', { name: 'Plan exercises' }); await expect(grid.getByRole('button')).toHaveCount(6)
+  const presses = grid.getByRole('button').filter({ has: page.getByText('Press', { exact: true }) }); expect(await presses.count()).toBeGreaterThan(1)
+  await page.getByRole('region', { name: 'Plan analytics' }).getByLabel('Search exercises', { exact: true }).fill('Press'); await presses.first().click(); await expect(page.getByText('Alpha · Strength', { exact: true })).toBeVisible(); await expect(page.getByRole('heading', { name: 'Body weight' })).toHaveCount(0)
+  const max = page.getByRole('button', { name: /^Weight Max:/ }); await max.click(); popup = page.getByRole('dialog'); await expect(popup).not.toContainText('Alpha'); await expect(popup).not.toContainText(/UTC|America\//); await page.keyboard.press('Escape'); await b(page, 'Back').click()
+  await expect(page.getByRole('region', { name: 'Plan analytics' }).getByLabel('Search exercises', { exact: true })).toHaveValue('Press'); await expect(b(page, 'Back')).toHaveCount(1)
+  expect(await page.evaluate(() => (window as any).photoReads)).toBe(0)
+  await page.screenshot({ path: info.outputPath('plan-analytics-dark.png'), fullPage: true }); await b(page, 'Back').click(); await b(page, 'Settings').click(); await b(page, 'Light').click(); await b(page, 'Progress').click(); await selection(page, 'Renamed press').click(); await page.screenshot({ path: info.outputPath('exercise-analytics-light.png'), fullPage: true }); expect(page.url()).toBe(address)
 })
 
-test('live archive/restore retains history; backup replacement retires an open Progress selection', async ({ page, context }) => {
-  await seed(page); const other = await context.newPage(); await other.goto('./'); await b(other, 'Create').click()
-  await selection(page, 'Renamed press').click(); await expect(page.locator('.exercise-statistics')).toContainText('14 recorded sets')
-  const beta = other.getByRole('article', { name: 'Plan Beta', exact: true })
-  // Beta starts archived; the plan manager's archive control is independent of the exercise library.
-  await other.getByRole('checkbox', { name: 'Show archived plans', exact: true }).check(); await cardAction(other, beta, 'Restore')
-  await expect(page.locator('.exercise-statistics')).toContainText('14 recorded sets')
-  await b(page, 'Back to Progress').click(); await expect(page.locator('.progress-carousel button').filter({ hasText: 'Beta' })).not.toContainText('Archived')
-  await other.getByRole('checkbox', { name: 'Show archived plans', exact: true }).uncheck(); await cardAction(other, beta, 'Archive'); await other.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
-  await expect(page.locator('.progress-carousel button').filter({ hasText: 'Beta' })).toContainText('Archived')
-  await selection(page, 'Renamed press').click(); await b(other, 'Settings').click(); await other.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
-  const ready = other.waitForEvent('download'); await b(other, 'Download data').click(); const buffer = await readFile((await (await ready).path())!)
-  await other.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'replace.zip', mimeType: 'application/zip', buffer }); await expect(other.getByRole('heading', { name: /^Validated backup:/ })).toBeVisible()
-  await other.getByRole('combobox', { name: 'Import choice', exact: true }).selectOption('replace'); await b(other, 'Preview import').click(); await other.getByRole('checkbox', { name: /^I confirm/ }).check(); await b(other, 'Confirm and save').click()
-  await expect(page.locator('.exercise-statistics')).toHaveCount(0); await page.reload(); await selection(page, 'Renamed press').click(); await expect(page.locator('.exercise-statistics')).toContainText('14 recorded sets')
-  await other.close()
+test('Progress shares Previous Plans Hide/Unhide/Delete state, wording and result removal with Calendar', async ({ page }) => {
+  await seed(page); const alpha = page.getByRole('article', { name: 'Run Alpha', exact: true })
+  await b(page, 'Actions for Alpha').click(); await b(page, 'Hide').click(); await expect(alpha).toHaveCount(0)
+  await selection(page, 'Renamed press').click(); await expect(b(page, 'Weight Min: 0 kg')).toBeVisible(); await b(page, 'Back').click()
+  await b(page, 'Calendar').click(); await runPage(page, 'Previous Plans'); await expect(alpha).toHaveCount(0); await page.getByRole('checkbox', { name: 'Show hidden plans' }).check(); await alpha.getByRole('button').click(); await b(page, 'Unhide').click()
+  await b(page, 'Progress').click(); await expect(alpha).toBeVisible(); await b(page, 'Actions for Alpha').click(); await b(page, 'Delete').click(); const confirm = page.getByRole('dialog', { name: 'Delete Plan?', exact: true }); await expect(confirm).toContainText('Deleting this plan will delete all results associated with it. This cannot be undone.'); await confirm.getByRole('button', { name: 'Cancel', exact: true }).click(); await page.keyboard.press('Escape'); await expect(alpha).toBeVisible()
+  await b(page, 'Actions for Alpha').click(); await b(page, 'Delete').click(); await confirm.getByRole('button', { name: 'Delete', exact: true }).click(); await expect(alpha).toHaveCount(0)
+  await selection(page, 'Renamed press').click(); await expect(b(page, 'Weight Min: 40 kg')).toBeVisible(); await expect(page.locator('.analytics-metrics')).toContainText('2Times Completed')
 })
 
-test('export/restore preserves analytics, Clear invalidates an open view, large text and navigation clearance', async ({ page, context }, info) => {
+test('backup round trip, profile isolation, Clear invalidation and enlarged text preserve analytics', async ({ page, context }, info) => {
   await seed(page); await b(page, 'Settings').click(); await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
   const download = page.waitForEvent('download'); await b(page, 'Download data').click(); const buffer = await readFile((await (await download).path())!)
-  await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'group4.zip', mimeType: 'application/zip', buffer })
-  await expect(page.getByRole('heading', { name: /^Validated backup:/ })).toBeVisible(); await page.getByRole('combobox', { name: 'Import choice', exact: true }).selectOption('new'); await page.getByLabel('Imported profile name', { exact: true }).fill('Progress restored')
-  await b(page, 'Preview import').click(); await page.getByRole('checkbox', { name: /^I confirm/ }).check(); await b(page, 'Confirm and save').click(); await expect(page.getByText(/Changes are saved locally\./)).toBeVisible(); await page.reload()
-  await b(page, 'Progress').click(); await expect(weights(page).locator('option')).toHaveCount(3); await selection(page, 'Renamed press').click(); await expect(page.locator('.exercise-statistics')).toContainText('14 recorded sets')
-  await expect(page.getByRole('region', { name: 'Maximum recorded weight' })).toContainText('61 kg')
-  await b(page, 'Review selected session').focus(); const action = await b(page, 'Review selected session').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(action!.y + action!.height).toBeLessThanOrEqual(nav!.y)
-  await page.evaluate(() => { document.documentElement.style.fontSize = '24px' }); await page.setViewportSize({ width: 320, height: 844 }); await b(page, 'Back to Progress').click()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: info.outputPath('group4-large-text.png'), fullPage: true }); await selection(page, 'Renamed press').click()
-  const other = await context.newPage(); await other.goto('./'); await b(other, 'Settings').click(); await b(other, 'Clear data').click()
-  await other.getByRole('checkbox', { name: /^I confirm/ }).check(); await b(other, 'Confirm and save').click()
-  await expect(page.locator('.exercise-statistics')).toHaveCount(0); await expect(page.getByRole('alert').filter({ hasText: /unavailable|replaced|changed/ }).first()).toBeVisible()
-  await other.close()
+  await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'progress.zip', mimeType: 'application/zip', buffer }); await expect(page.getByRole('heading', { name: /^Validated backup:/ })).toBeVisible()
+  await page.getByRole('combobox', { name: 'Import choice', exact: true }).selectOption('new'); await page.getByLabel('Imported profile name', { exact: true }).fill('Progress restored'); await b(page, 'Preview import').click(); await page.getByRole('checkbox', { name: /^I confirm/ }).check(); await b(page, 'Confirm and save').click(); await expect(page.getByText(/Changes are saved locally\./)).toBeVisible(); await page.reload()
+  await b(page, 'Progress').click(); await expect(page.locator('.weight-point')).toHaveCount(3); await selection(page, 'Renamed press').click(); await expect(b(page, 'Weight Max: 61 kg')).toBeVisible(); await b(page, 'Back').click()
+  await page.evaluate(() => { document.documentElement.style.fontSize = '24px' }); await page.setViewportSize({ width: 320, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: info.outputPath('progress-large-text.png'), fullPage: true })
+  await b(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Other history' }); await b(page, 'Progress').click(); await expect(selection(page, 'Renamed press')).toHaveCount(0); await selection(page, 'Private exercise').click(); await expect(b(page, 'Weight Max: 999 kg')).toBeVisible()
+  const other = await context.newPage(); await other.goto('./'); await b(other, 'Settings').click(); await b(other, 'Clear data').click(); await other.getByRole('checkbox', { name: /^I confirm/ }).check(); await b(other, 'Confirm and save').click(); await expect(page.locator('.exercise-statistics')).toHaveCount(0); await expect(page.getByRole('alert').filter({ hasText: /unavailable|replaced|changed/ }).first()).toBeVisible(); await other.close()
 })

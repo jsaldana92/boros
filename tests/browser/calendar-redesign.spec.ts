@@ -25,6 +25,7 @@ async function scheduled(page: Page) { await setup(page); await preview(page); a
 
 test('pointer down/up does not move the occurrence or lose its click; phone tap and keyboard controls', async ({ page }, info) => {
   await scheduled(page)
+  await b(page, 'Week 4').click()
   const event = page.getByRole('region', { name: '2026-10-19', exact: true }).locator('.calendar-event')
   await event.evaluate(el => { const nav = document.querySelector('.main-nav')!.getBoundingClientRect(); window.scrollBy(0, el.getBoundingClientRect().bottom - nav.top - 10) })
   const before = await event.boundingBox(), y = await page.evaluate(() => scrollY)
@@ -55,7 +56,7 @@ test('menu blocks background, Escape restores focus; run pages return the view/d
   await runPage(page, 'Previous Plans'); await expect(page.getByText('No previous plans.', { exact: true })).toBeVisible(); await returnCalendar(page); expect(page.url()).toBe(address)
   const card = page.locator('.calendar-event').first(); await expect(card.locator(':scope > span')).toHaveCount(3); await expect(card).not.toContainText('Schedule'); await expect(card).not.toContainText('UTC'); await expect(card).toContainText('Pending')
   await b(page, 'Today').click(); await expect(page.locator('.calendar-event').first()).toContainText('Due Today')
-  await b(page, 'Month').click(); await expect(page.locator('.calendar-day.adjacent-month').first()).toBeVisible()
+  await b(page, 'Month').click(); await b(page, 'Week 1').click(); await expect(page.locator('.calendar-day.adjacent-month').first()).toBeVisible()
   await expect(page.getByText(/^Today uses/)).toHaveCount(0); await expect(page.getByRole('region', { name: 'Unassigned weekly training' })).toHaveCount(0)
 })
 

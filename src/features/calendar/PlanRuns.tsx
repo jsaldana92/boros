@@ -1,3 +1,4 @@
+import { MoreHorizontal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { nameKey } from '../../schemas/profile'
@@ -19,12 +20,12 @@ export function RunIndicators({ progress }: { progress: ReturnType<typeof runPro
   })}{progress.total === undefined && <span className="muted run-total">No fixed total</span>}{progress.total === 0 && <span className="muted run-total">No prescribed days</span>}</span>
 }
 
-export function PlanRuns({ profileId, runs, sessions, instant, previous, duplicateIds, onEdit, onCancel }: { profileId: string; runs: Schedule[]; sessions: CompletedSession[]; instant: Date; previous: boolean; duplicateIds: Set<string>; onEdit: (schedule: Schedule) => void; onCancel: () => void }) {
+export function PlanRuns({ profileId, runs, sessions, instant, previous, duplicateIds = new Set(), onEdit, onCancel, onOpen, focusTargetId = 'calendar-heading' }: { profileId: string; runs: Schedule[]; sessions: CompletedSession[]; instant: Date; previous: boolean; duplicateIds?: Set<string>; onOpen?: (run: Schedule) => void; focusTargetId?: string; onEdit?: (schedule: Schedule) => void; onCancel?: () => void }) {
   const [selectedId, setSelectedId] = useState<string>(), [confirmation, setConfirmation] = useState<{ kind: 'reset' | 'end' | 'delete'; preview: RunActionPreview }>(), [error, setError] = useState(''), [busy, setBusy] = useState(false), lock = useRef(false)
   const [search, setSearch] = useState(''), [sort, setSort] = useState<LibrarySort>('newest'), [hidden, setHidden] = useState(false)
   const list = useListSpace()
   const focusAfterAction = useRef(false)
-  useEffect(() => { if (!selectedId && focusAfterAction.current) { focusAfterAction.current = false; document.getElementById('calendar-heading')?.focus({ preventScroll: true }) } }, [selectedId])
+  useEffect(() => { if (!selectedId && focusAfterAction.current) { focusAfterAction.current = false; document.getElementById(focusTargetId)?.focus({ preventScroll: true }) } }, [selectedId, focusTargetId])
   const selected = runs.find((r) => r.id === selectedId)
   const shown = runs.filter((run) => runLifecycle(run, sessions, instant).previous === previous && (!previous || hidden || !run.hiddenAt) && nameKey(run.revisions.at(-1)?.planName ?? '').includes(nameKey(search))).sort((a, b) => { const alpha = nameKey(a.revisions.at(-1)?.planName ?? '').localeCompare(nameKey(b.revisions.at(-1)?.planName ?? '')) || a.id.localeCompare(b.id); return sort === 'az' ? alpha : sort === 'za' ? -alpha : (sort === 'newest' ? -1 : 1) * (a.createdAt ?? a.startWeek ?? '').localeCompare(b.createdAt ?? b.startWeek ?? '') || alpha })
   const shownIds = shown.map((r) => r.id).join(',')
@@ -41,16 +42,16 @@ export function PlanRuns({ profileId, runs, sessions, instant, previous, duplica
   return <>{previous && <><PlanBrowseControls search={search} sort={sort} onSearch={setSearch} onSort={setSort} /><label className="check-label"><input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />Show hidden plans</label></>}{!shown.length && <p>{search ? 'No plans match this search.' : `No ${previous ? 'previous' : 'current'} plans.`}</p>}
     <div ref={list} className={previous ? 'previous-plan-list' : 'catalog-grid'} aria-label={previous ? 'Previous plan runs' : 'Current plan runs'} tabIndex={previous ? 0 : undefined}>{shown.map((run) => {
       const revision = run.revisions.at(-1), lifecycle = runLifecycle(run, sessions, instant)
-      return <PlanCard key={run.id} label={`Run ${revision?.planName ?? 'Plan unavailable'}`} plan={{ name: revision?.planName ?? 'Plan unavailable', days: revision?.days ?? [], durationWeeks: (run.durationChanges?.at(-1) ?? run).durationWeeks }} onClick={() => { setSelectedId(run.id); setError('') }}>
+      return <PlanCard key={run.id} label={`Run ${revision?.planName ?? 'Plan unavailable'}`} plan={{ name: revision?.planName ?? 'Plan unavailable', days: revision?.days ?? [], durationWeeks: (run.durationChanges?.at(-1) ?? run).durationWeeks }} onClick={() => { if (onOpen) onOpen(run); else { setSelectedId(run.id); setError('') } }} actions={onOpen && <button className="plan-card-actions" aria-label={`Actions for ${revision?.planName ?? 'Plan'}`} onClick={() => { setSelectedId(run.id); setError('') }}><MoreHorizontal aria-hidden="true" /></button>}>
         <span className="muted">{displayRunDate(run.startWeek)} - {previous ? displayRunDate(lifecycle.end) : 'On Going'}</span>
         <span className="status-pill">{run.kind === 'unscheduled' ? 'Non-Scheduled' : 'Scheduled'}</span>{run.hiddenAt && <span className="muted">Hidden</span>}
-        {duplicateIds.has(run.planId) && !lifecycle.previous && run.kind !== 'unscheduled' && <span>Multiple Calendar assignments — review this run</span>}
+        {duplicateIds.has(run.planId) && !lifecycle.previous && <span>Multiple active instances — review this run</span>}
         <RunIndicators progress={lifecycle.progress} />
       </PlanCard>
     })}</div>
-    {previous && <div className="actions"><button onClick={onCancel}>Cancel</button></div>}
+    {previous && onCancel && <div className="actions"><button onClick={onCancel}>Cancel</button></div>}
     {selected && <ActionDialog title={selected.revisions.at(-1)?.planName ?? 'Plan actions'} hideTitle onClose={close} actions={<button disabled={busy} onClick={close}>Cancel</button>}>
-      <div className="stacked-actions">{previous ? <><button disabled={busy} onClick={() => void act(async () => { await runActions.setHidden(profileId, selected.id, selected.revision, !selected.hiddenAt); finish() })}>{selected.hiddenAt ? 'Unhide' : 'Hide'}</button><button className="destructive" disabled={busy} onClick={() => prepare('delete')}>Delete</button></> : <><button disabled={busy} onClick={() => { setSelectedId(undefined); onEdit(selected) }}>Edit</button><button disabled={busy} onClick={() => prepare('reset')}>Reset</button><button className="destructive" disabled={busy} onClick={() => prepare('end')}>End</button></>}</div>
+      <div className="stacked-actions">{previous ? <><button disabled={busy} onClick={() => void act(async () => { await runActions.setHidden(profileId, selected.id, selected.revision, !selected.hiddenAt); finish() })}>{selected.hiddenAt ? 'Unhide' : 'Hide'}</button><button className="destructive" disabled={busy} onClick={() => prepare('delete')}>Delete</button></> : <><button disabled={busy} onClick={() => { setSelectedId(undefined); onEdit?.(selected) }}>Edit</button><button disabled={busy} onClick={() => prepare('reset')}>Reset</button><button className="destructive" disabled={busy} onClick={() => prepare('end')}>End</button></>}</div>
       {!confirmation && error && <p role="alert">{error}</p>}
     </ActionDialog>}
     {confirmation && selected && <ConfirmDialog title={confirmation.kind === 'reset' ? 'Reset Plan?' : confirmation.kind === 'end' ? 'Ending a Plan?' : 'Delete Plan?'} confirmLabel={confirmation.kind === 'reset' ? 'Reset' : confirmation.kind === 'end' ? 'End' : 'Delete'} destructive busy={busy} onCancel={() => { setConfirmation(undefined); setError('') }} onConfirm={() => void act(async () => { if (confirmation.kind === 'reset') await runActions.resetRun(confirmation.preview); else if (confirmation.kind === 'end') await runActions.leave(confirmation.preview); else await runActions.deletePrevious(confirmation.preview); finish() })}>

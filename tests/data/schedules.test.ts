@@ -40,7 +40,7 @@ test('validation, stable IDs, overlapping schedules, range-only generation and p
   const { db, profiles, id, plans, plan, service, schedule, input, sessions } = await setup(t)
   for (const invalid of [{ ...input, startWeek: '2025-01-07' }, { ...input, startWeek: '2025-02-30' }, { ...input, timeZone: 'Invalid/Zone' }, { ...input, mapping: input.mapping.map((item) => ({ ...item, weekday: 0 })) }]) assert.equal(scheduleInputSchema.safeParse(invalid).success, false)
   await assert.rejects(service.create(id, { ...input, mapping: input.mapping.slice(1) }), /every current/)
-  await assert.rejects(service.create(id, input), /Already in Calendar/)
+  await assert.rejects(service.create(id, input), /already has an active instance/)
   const different = await plans.save(id, { ...planToInput(plan), name: 'Different template', durationWeeks: 104 })
   const another = await service.create(id, { ...input, planId: different.id, planRevision: different.revision }); assert.notEqual(another.id, schedule.id)
   const events = await service.events(id, '2024-12-30', '2025-01-05', input.timeZone)

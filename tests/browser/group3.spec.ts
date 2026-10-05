@@ -82,7 +82,7 @@ test('concurrent Add Plan appends safely; failed selection and draft writes reta
 
 test('schedule-local status refreshes at midnight and old runs retain their saved zone', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-01-05T23:59:30Z') }); await start(page); await zone(page, 'UTC'); await importPlan(page, 'Alpha')
-  await schedule(page, 'Alpha', '2025-01-06'); await select(page, ['Alpha']); await card(page, 'Alpha').getByRole('button').click(); await button(page, 'Next week').click()
+  await schedule(page, 'Alpha', '2025-01-06'); await button(page, 'Train').click(); await card(page, 'Alpha').getByRole('button').click(); await button(page, 'Next week').click()
   await expect(page.locator('.training-day-card')).toContainText('Pending'); await page.clock.fastForward(31000); await expect(page.locator('.training-day-card')).toContainText('Due Today')
   await page.clock.setSystemTime(new Date('2025-01-07T00:00:01Z')); await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await expect(page.locator('.training-day-card')).toContainText('Past Due')
   const original = (await records(page)).schedules[0]; await zone(page, 'Pacific/Honolulu'); await page.reload(); await expect(field(page, 'Time zone')).toHaveValue('Pacific/Honolulu')

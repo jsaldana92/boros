@@ -63,7 +63,7 @@ test('Train preferences survive reload, reject stale/foreign/missing selections 
   await assert.rejects(profiles.selectPlans(id, saved.revision, [crypto.randomUUID()]), /unavailable/)
   await assert.rejects(profiles.selectPlans(id, saved.revision, [plan.id, plan.id]), /only once/)
   const archived = await plans.setArchived(id, plan.id, plan.revision, true)
-  assert.deepEqual((await profiles.getProfile(id)).selectedPlanIds, [plan.id]); assert.equal((await sessions.library(id)).plans.length, 0)
+  assert.deepEqual((await profiles.getProfile(id)).selectedPlanIds, [plan.id]); assert.equal((await sessions.library(id)).plans.length, 1) // Frozen active runs remain available even when their template is archived.
   await plans.setArchived(id, plan.id, archived.revision, false); assert.equal((await sessions.library(id)).plans[0].id, plan.id)
   await profiles.selectPlans(id, saved.revision, [])
   assert.deepEqual(await db.schedules.get([id, schedule.id]), schedule); assert.deepEqual(await sessions.getDraft(id, draft.id), draft)

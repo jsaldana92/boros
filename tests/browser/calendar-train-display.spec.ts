@@ -53,11 +53,11 @@ test('Train card week follows progression and gaps independently of the browsed 
   await page.clock.setFixedTime(new Date('2026-10-19T12:00:00Z')); await page.reload(); await expect(planCard(page).locator('.current-program-week')).toHaveText('Week 2')
   await planCard(page).getByRole('button').click(); await b(page, 'Next week').click(); await expect(page.getByText('Week 3', { exact: true })).toBeVisible(); await b(page, 'Next week').click(); await expect(page.getByText('No active training in this week.')).toBeVisible(); await expect(page.locator('.training-day-cards > *')).toHaveCount(0)
   await b(page, 'Back to Plans').click(); await expect(planCard(page).locator('.current-program-week')).toHaveText('Week 2')
-  await page.clock.setFixedTime(new Date('2026-11-02T12:00:00Z')); await page.reload(); await expect(planCard(page).locator('.current-program-week')).toHaveText('Ended')
+  await page.clock.setFixedTime(new Date('2026-11-02T12:00:00Z')); await page.reload(); await expect(planCard(page)).toHaveCount(0)
 })
 
 test('direct reassignment preserves colliding saved dates, rest rows and following-week assignments', async ({ page }) => {
-  await setup(page); await b(page, 'Calendar').click(); await addCalendarPlan(page, '2026-10-05'); await select(page); await planCard(page).getByRole('button').click()
+  await setup(page); await b(page, 'Calendar').click(); await addCalendarPlan(page, '2026-10-05'); await b(page, 'Train').click(); await planCard(page).getByRole('button').click()
   await day(page).click(); await b(page, 'Mark as Complete').click(); await b(page, 'Calendar').click(); await manageRun(page, 'Edit')
   await expect(page.locator('.schedule-editor')).not.toContainText('UTC'); await f(page, 'Upper weekday').selectOption('2'); await f(page, 'Lower weekday').selectOption('0'); await f(page, 'Pull weekday').selectOption('4'); await b(page, 'Save').focus(); await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Current Plans'); await expect(page.getByRole('dialog')).toHaveCount(0)

@@ -1,86 +1,83 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { progress } from '../../db/progress'
 import { useWorkspace } from '../../app/workspace-context'
-import { performanceStats, selectPerformances, type Performance, type ProgressItem } from '../../lib/progress-analytics'
-import { displayDateTime } from '../../lib/display-dates'
-import { displayNumber, fromKg, type WeightUnit } from '../../schemas/profile'
-import type { CompletedSession } from '../../schemas/session'
-import { SessionReview } from '../train/SessionReview'
+import { exerciseCounts, performanceStats, selectPerformances, type Performance, type ProgressItem } from '../../lib/progress-analytics'
+import { displayNumber, fromKg, nameKey, type WeightUnit } from '../../schemas/profile'
+import { displayRunDate } from '../../lib/run-progress'
+import { useCurrentInstant } from '../../lib/use-current-instant'
+import { PlanRuns } from '../calendar/PlanRuns'
+import { LibraryFilters } from '../create/LibraryFilters'
+import { filterExercises, type LibrarySort } from '../create/library'
+import { BoundedGrid } from '../../components/ui/BoundedGrid'
+import { ActionDialog } from '../../components/ui/ConfirmDialog'
 import { PointChart } from './PointChart'
 
-const completionLabel = (session: CompletedSession, zone: string) => `${displayDateTime(session.completedAt, session.occurrence?.timeZone ?? zone)} · ${session.occurrence?.timeZone ?? zone}`
-const performanceLabel = (p: Performance) => `${p.session.planName} / ${p.session.day.name} / Exercise ${p.occurrenceIndex + 1}${p.session.partial ? ' · Partial session' : ''}`
-type View = { planId?: string; itemKey?: string; sessionId?: string }
-export function WorkoutProgress() {
-  const { snapshot } = useWorkspace(), profileId = snapshot.profile.id
-  const [view, setView] = useState<View>({}), [attempt, retry] = useState(0), heading = useRef<HTMLHeadingElement>(null), carousel = useRef<HTMLDivElement>(null)
-  const result = useLiveQuery(async () => { try { return { data: await progress.read(profileId), error: '' } } catch (error) { return { error: (error as Error).message } } }, [profileId, attempt])
-  const navigate = (next: View) => { setView(next); requestAnimationFrame(() => heading.current?.focus()) }
-  const data = result?.data, plan = data?.plans.find((p) => p.id === view.planId), item = (plan?.items ?? data?.items)?.find((p) => p.key === view.itemKey), session = data?.sessions.find((s) => s.id === view.sessionId)
-  // Deletions/Clear/restore must not leave an obsolete selection or revive it later.
-  useEffect(() => {
-    if (data && ((view.planId && !plan) || (view.itemKey && !item) || (view.sessionId && !session))) {
-      const frame = requestAnimationFrame(() => { setView({}); requestAnimationFrame(() => heading.current?.focus()) })
-      return () => cancelAnimationFrame(frame)
-    }
-  }, [data, view, plan, item, session])
-  const zone = snapshot.profile.timeZone ?? 'UTC', unit = snapshot.profile.weightUnit
-  const back = () => navigate(view.sessionId ? { planId: view.planId, itemKey: view.itemKey } : view.itemKey ? { planId: view.planId } : {})
-  if (!result) return <p role="status">Loading workout progress…</p>
-  if (result.error || !data) return <p role="alert">Could not load workout progress. {result.error} <button onClick={() => retry(attempt + 1)}>Retry workout progress</button></p>
-  const identities = data.items.filter((entry) => !entry.members).map((entry) => entry.key).sort()
-  const colorFor = (key: string) => Math.max(0, identities.indexOf(key)) % 5
-  if (view.planId || view.itemKey || view.sessionId) return <section className="progress-section progress-drilldown" aria-label="Workout progress details">
-    <button onClick={back}>Back {view.sessionId ? 'to statistics' : view.itemKey && plan ? 'to plan progress' : 'to Progress'}</button>
-    <h2 ref={heading} tabIndex={-1}>{session ? 'Saved session' : item?.name ?? plan?.name ?? 'Progress'}</h2>
-    {session ? <SessionReview session={session} backLabel="Back to statistics" onClose={back} /> : item ? <>
-      <p>{plan ? `Plan: ${plan.name}` : 'Across all plans'}</p>
-      {item.members ? item.members.map((member, index) => <section className="superset-progress-member" key={`${member.key}:${index}`} aria-label={`Member ${index + 1}: ${member.name}`}><h3>Member {index + 1}: {member.name}</h3><ExerciseStatistics key={`${item.key}:${index}`} name={member.name} color={colorFor(member.key)} performances={selectPerformances(data, item.key, plan?.id, index)} unit={unit} zone={zone} onReview={(sessionId) => navigate({ ...view, sessionId })} /></section>) : <ExerciseStatistics key={item.key} name={item.name} color={colorFor(item.key)} performances={selectPerformances(data, item.key, plan?.id)} unit={unit} zone={zone} onReview={(sessionId) => navigate({ ...view, sessionId })} />}
-    </> : plan && <>
-      <div className="progress-counts"><p><strong>{plan.daysCompleted}</strong> Training days completed</p><p><strong>{plan.daysSkipped}</strong> Training days skipped</p><p><strong>{plan.manualCompletions}</strong> Manual completions (no results)</p><p><strong>{plan.exercisesCompleted}</strong> Exercise completions</p></div>
-      <p className="muted">Completed days count fully completed sessions and days marked complete, once per occurrence. Partial sessions keep their recorded results. Each exercise performed with a recorded set counts once; superset members count separately.</p>
-      <ItemGrid items={plan.items} onSelect={(itemKey) => navigate({ planId: plan.id, itemKey })} />
-      <SessionList sessions={plan.sessions} zone={zone} onReview={(sessionId) => navigate({ planId: plan.id, sessionId })} />
-    </>}
-  </section>
-  const scroll = (direction: number) => {
-    const element = carousel.current
-    if (!element) return
-    const buttons = [...element.querySelectorAll('button')], current = buttons.findIndex((b) => b.getBoundingClientRect().left >= element.getBoundingClientRect().left - 2)
-    const next = buttons[Math.max(0, Math.min(buttons.length - 1, current + direction))]
-    next?.focus(); next?.scrollIntoView({ block: 'nearest', inline: 'start', behavior: 'smooth' })
+type View = { planId?: string; itemKey?: string }
+export function WorkoutProgress({ mainContent, mainOnly = false }: { mainContent: ReactNode; mainOnly?: boolean }) {
+  const { snapshot } = useWorkspace(), profileId = snapshot.profile.id, instant = useCurrentInstant()
+  const [view, setView] = useState<View>({}), [attempt, retry] = useState(0)
+  const positions = useRef(new Map<string, { y: number; trigger: HTMLElement | null }>())
+  const result = useLiveQuery(async () => { try { return { data: await progress.read(profileId), error: '' } } catch (e) { return { error: (e as Error).message } } }, [profileId, attempt])
+  const navigate = (next: View, returning = false) => {
+    positions.current.set(JSON.stringify(view), { y: window.scrollY, trigger: document.activeElement as HTMLElement })
+    setView(next)
+    requestAnimationFrame(() => {
+      const previous = returning ? positions.current.get(JSON.stringify(next)) : undefined
+      const fallback = document.getElementById(next.planId || next.itemKey ? 'analytics-heading' : 'progress-heading')
+      ;(previous?.trigger?.isConnected ? previous.trigger : fallback)?.focus({ preventScroll: true }); window.scrollTo(0, previous?.y ?? 0)
+    })
   }
+  const data = result?.data, plan = data?.plans.find((p) => p.id === view.planId), item = (plan?.items ?? data?.items)?.find((p) => p.key === view.itemKey)
+  useEffect(() => {
+    if (data && ((view.planId && !plan) || (view.itemKey && !item))) {
+      const frame = requestAnimationFrame(() => { setView({}); document.getElementById('progress-heading')?.focus() }); return () => cancelAnimationFrame(frame)
+    }
+  }, [data, view, plan, item])
+  const main = !view.planId && !view.itemKey, unit = snapshot.profile.weightUnit, zone = snapshot.profile.timeZone ?? 'UTC'
+  const planTags = [...new Set(plan?.items.flatMap((i) => i.tagIds) ?? [])].map((id) => ({ id, name: data?.tags.find((t) => nameKey(t.name) === id)?.name ?? id }))
   return <>
-    <section className="progress-section" aria-labelledby="plan-progress-heading"><h2 id="plan-progress-heading" ref={heading} tabIndex={-1}>Plans</h2>
-      {!data.plans.length ? <p>No saved plans yet.</p> : <><div className="actions"><button aria-label="Previous plan card" onClick={() => scroll(-1)}>Previous</button><button aria-label="Next plan card" onClick={() => scroll(1)}>Next</button></div>
-        <div className="progress-carousel" ref={carousel} aria-label="Plan progress cards">{data.plans.map((p) => <button key={p.id} onClick={() => navigate({ planId: p.id })}><strong>{p.name}</strong><small>{p.archived ? 'Archived · ' : p.historical ? 'Historical · ' : ''}{p.daysCompleted} training days completed</small></button>)}</div></>}
-    </section>
-    <section className="progress-section" aria-labelledby="workout-progress-heading"><h2 id="workout-progress-heading">Workouts</h2><ItemGrid items={data.items} onSelect={(itemKey) => navigate({ itemKey })} />
-      <details className="progress-history"><summary>Saved sessions ({data.sessions.length})</summary><SessionList sessions={data.sessions} zone={zone} onReview={(sessionId) => navigate({ sessionId })} /></details>
-    </section>
+    {main && mainContent}
+    {!result && <p role="status">Loading workout progress…</p>}
+    {result?.error && <p role="alert">Could not load workout progress. {result.error} <button onClick={() => retry(attempt + 1)}>Retry workout progress</button></p>}
+    {data && <>
+      <div hidden={!main || mainOnly}>
+        <section className="progress-section" aria-labelledby="plan-progress-heading"><h2 id="plan-progress-heading" tabIndex={-1}>Plans</h2><PlanRuns profileId={profileId} runs={data.runs} sessions={data.sessions} instant={instant} previous focusTargetId="plan-progress-heading" onOpen={(run) => navigate({ planId: run.id })} />
+          {data.plans.some((p) => p.legacy) && <details className="progress-history"><summary>Legacy plan history</summary>{data.plans.filter((p) => p.legacy).map((p) => <button key={p.id} onClick={() => navigate({ planId: p.id })}>{p.name}</button>)}</details>}
+        </section>
+        <section className="progress-section" aria-labelledby="exercise-progress-heading"><h2 id="exercise-progress-heading">Exercises</h2><ItemBrowser items={data.items} tags={data.tags} onSelect={(itemKey) => navigate({ itemKey })} overall /></section>
+      </div>
+      {plan && <section hidden={!!item} className="progress-section progress-drilldown" aria-label="Plan analytics">
+        <h2 id={!item ? 'analytics-heading' : undefined} tabIndex={-1}>{plan.name}</h2>
+        <div className="analytics-metrics"><Metric label="Times Completed" value={plan.timesCompleted} /><Metric label="Exercises Completed" value={plan.exercisesCompleted} /><Metric label="Training Days Completed" value={plan.daysCompleted} /><Metric label="Training Days Skipped" value={plan.daysSkipped} /></div>
+        <ItemBrowser key={plan.id} items={plan.items} tags={planTags} onSelect={(itemKey) => navigate({ planId: plan.id, itemKey })} />
+        <div className="actions"><button onClick={() => navigate({}, true)}>Back</button></div>
+      </section>}
+      {item && <section className="progress-section progress-drilldown" aria-label="Exercise analytics"><h2 id="analytics-heading" tabIndex={-1}>{item.name}</h2><p>{plan ? `${plan.name} · ${item.context}` : 'Overall'}</p>
+        <ExerciseStatistics key={`${plan?.id ?? ''}:${item.key}`} name={item.name} performances={selectPerformances(data, item.key, plan?.id)} counts={exerciseCounts(data, item.key, plan?.id)} unit={unit} zone={zone} overall={!plan} />
+        <div className="actions"><button onClick={() => navigate(plan ? { planId: plan.id } : {}, true)}>Back</button></div>
+      </section>}
+    </>}
   </>
 }
-function ItemGrid({ items, onSelect }: { items: ProgressItem[]; onSelect: (key: string) => void }) {
-  return items.length ? <div className="workout-progress-grid">{items.map((item) => <button key={item.key} onClick={() => onSelect(item.key)}><strong>{item.name}</strong><small>{item.context}</small></button>)}</div> : <p>No saved workouts yet.</p>
+function ItemBrowser({ items, tags, onSelect, overall = false }: { items: ProgressItem[]; tags: { id: string; name: string }[]; onSelect: (key: string) => void; overall?: boolean }) {
+  const [search, setSearch] = useState(''), [sort, setSort] = useState<LibrarySort>('az'), [filterTags, setFilterTags] = useState<string[]>([])
+  const visible = filterExercises(items.map((i) => ({ ...i, id: i.key })), search, sort, filterTags, false)
+  return <><LibraryFilters search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
+    {visible.length ? <BoundedGrid rows={3} label={overall ? 'Overall exercises' : 'Plan exercises'} className="workout-progress-grid">{visible.map((item) => <button key={item.key} onClick={() => onSelect(item.key)}><strong>{item.name}</strong><small>{overall ? `Date Added: ${displayRunDate(item.createdAt.slice(0, 10))}` : item.context}</small></button>)}</BoundedGrid> : <p>{search || filterTags.length ? 'No exercises match these filters.' : 'No exercises yet.'}</p>}
+  </>
 }
-function SessionList({ sessions, zone, onReview }: { sessions: CompletedSession[]; zone: string; onReview: (id: string) => void }) {
-  return <div className="progress-sessions">{[...sessions].reverse().map((s) => <article key={s.id}><p>{s.planName} / {s.day.name}<br />{completionLabel(s, zone)} · {s.partial ? 'Partial session' : 'Complete session'}</p><button onClick={() => onReview(s.id)}>Review session</button></article>)}</div>
+function Metric({ label, value, onClick }: { label: string; value: ReactNode; onClick?: () => void }) {
+  return <div className="analytics-metric">{onClick ? <button className="metric-value" aria-label={`${label}: ${value}`} onClick={onClick}>{value}</button> : <strong className="metric-value">{value}</strong>}<span>{label}</span></div>
 }
-function ExerciseStatistics({ performances, unit, zone, onReview, name, color }: { performances: Performance[]; unit: WeightUnit; zone: string; onReview: (id: string) => void; name: string; color: number }) {
-  const stats = useMemo(() => performanceStats(performances), [performances]), [selection, setSelection] = useState<string>()
-  const selected = stats.sets.find((s) => s.id === selection) ?? stats.sets.at(-1)
-  const pair = (weight: number, reps: number) => `${displayNumber(fromKg(weight, unit))} ${unit} × ${reps} reps`
-  const dates = useMemo(() => new Map(performances.map((p) => [p.session.id, completionLabel(p.session, zone)])), [performances, zone])
-  const performance = (list: Performance[]) => list.map((p) => <div className="recorded-performance" key={p.id}><p>{dates.get(p.session.id)}<br />{performanceLabel(p)}</p><ul>{p.sets.map((s) => <li key={s.id}>Set {s.index + 1}: {pair(s.result.weightKg, s.result.reps)}</li>)}</ul></div>)
-  if (!stats.sets.length) return <p>No recorded sets yet.</p>
-  return <div className="exercise-statistics">
-    <p>{performances.length} exercise completions · {stats.sets.length} recorded sets</p>
-    <div className="performance-stats"><section aria-label="Starting performance"><h3>Starting performance</h3>{performance(stats.starting)}</section><section aria-label="Latest performance"><h3>Latest performance</h3>{performance(stats.latest)}</section>
-      {([['Maximum', stats.maximum], ['Minimum', stats.minimum]] as const).map(([label, s]) => s && <section key={label} aria-label={`${label} recorded weight`}><h3>{label} recorded weight</h3><p>{pair(s.result.weightKg, s.result.reps)}<br />{dates.get(s.performance.session.id)}<br />{performanceLabel(s.performance)} · Set {s.index + 1}</p></section>)}
-    </div>
-    <p className="muted">Starting and latest include every recorded set in that session. Equal times use a stable saved order. Tied weights show the earliest set.</p>
-    <PointChart title={`${name} recorded loads`} unit={unit} selectorLabel={`Select recorded set for ${name}`} selectedId={selected?.id} onSelect={setSelection} points={stats.sets.map((s) => ({ id: s.id, time: Date.parse(s.performance.session.completedAt), value: fromKg(s.result.weightKg, unit), color, date: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: '2-digit', timeZone: s.performance.session.occurrence?.timeZone ?? zone }).format(new Date(s.performance.session.completedAt)), label: `${pair(s.result.weightKg, s.result.reps)} · ${dates.get(s.performance.session.id)} · ${performanceLabel(s.performance)} · Set ${s.index + 1}` }))} />
-    {selected && <button onClick={() => onReview(selected.performance.session.id)}>Review selected session</button>}
+function ExerciseStatistics({ performances, counts, unit, zone, overall, name }: { performances: Performance[]; counts: { completed: number; skipped: number }; unit: WeightUnit; zone: string; overall: boolean; name: string }) {
+  const stats = performanceStats(performances), [selection, setSelection] = useState<string>(), [detail, setDetail] = useState<{ id: string; reps: boolean; label: string }>()
+  const selected = stats.sets.find((s) => s.id === selection) ?? stats.sets.at(-1), extreme = stats.sets.find((s) => s.id === detail?.id)
+  const weight = (kg: number) => `${displayNumber(fromKg(kg, unit))} ${unit}`
+  const date = (set: NonNullable<typeof extreme>) => new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: set.performance.session.occurrence?.timeZone ?? zone }).format(new Date(set.performance.session.completedAt))
+  const metrics = [['Weight Max', stats.maximum, false], ['Weight Min', stats.minimum, false], ['Reps Max', stats.repsMaximum, true], ['Reps Min', stats.repsMinimum, true]] as const
+  return <div className="exercise-statistics"><div className="analytics-metrics"><Metric label="Times Completed" value={counts.completed} /><Metric label="Times Skipped" value={counts.skipped} />{metrics.map(([label, set, reps]) => <Metric key={label} label={label} value={set ? reps ? set.result.reps : weight(set.result.weightKg) : '—'} onClick={set ? () => setDetail({ id: set.id, reps, label }) : undefined} />)}</div>
+    {(['Weight', 'Reps'] as const).map((kind) => <PointChart key={kind} title={`${name} recorded ${kind.toLowerCase()}`} unit={kind === 'Weight' ? unit : 'reps'} selectorLabel={`Select ${kind.toLowerCase()} set for ${name}`} selectedId={selected?.id} onSelect={setSelection} points={stats.sets.map((s) => ({ id: s.id, time: Date.parse(s.performance.session.completedAt), value: kind === 'Weight' ? fromKg(s.result.weightKg, unit) : s.result.reps, date: date(s), label: `${weight(s.result.weightKg)} × ${s.result.reps} reps · ${date(s)} · ${s.performance.session.planName} · ${s.performance.session.day.name} · Set ${s.index + 1}` }))} />)}
+    {extreme && detail && <ActionDialog title={detail.label} hideTitle onClose={() => setDetail(undefined)} actions={<button onClick={() => setDetail(undefined)}>Close</button>}><p className="weight-detail-value">{detail.reps ? `${extreme.result.reps} reps` : weight(extreme.result.weightKg)}</p><p>{detail.reps ? weight(extreme.result.weightKg) : `${extreme.result.reps} reps`}</p><p>{date(extreme)}</p>{overall && <p>{extreme.performance.session.planName} · {extreme.performance.session.day.name}</p>}</ActionDialog>}
   </div>
 }

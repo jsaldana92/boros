@@ -101,7 +101,8 @@ test('Reset rechecks pending writes and rolls back all results/timer deletion on
 })
 
 test('scheduled Reset restores zone-based due states; Leave stops future generation and retains historical results', async (t) => {
-  const { db, id, plan, sessions, actions } = await setup(t), calendar = scheduleService(db)
+  const { db, id, plan, sessions, actions, run: unscheduled } = await setup(t), calendar = scheduleService(db)
+  await actions.leave(await actions.preview(id, unscheduled.id, unscheduled.revision))
   const today = localToday('America/New_York'), previous = addDays(today, -7)
   let run = await calendar.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: monday(previous), timeZone: 'America/New_York', mapping: plan.days.map((day, index) => ({ dayId: day.id, weekday: (weekday(today) + index) % 7 })) })
   const complete = async (date: string) => {
@@ -151,7 +152,8 @@ test('Leave closes one run, deletes ALL unfinished weeks atomically, preserves c
 
 test('another run of the same template survives Leave; stale preview is rejected; cleanup is conclusive and idempotent', async (t) => {
   const { db, id, run, plan, open, sessions, actions, profiles } = await setup(t)
-  const calendar = scheduleService(db), otherRun = await calendar.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: run.startWeek, timeZone: run.timeZone, mapping: plan.days.map((day, weekday) => ({ dayId: day.id, weekday })) })
+  // Preserve a legacy duplicate fixture; current services correctly reject creating one.
+  const otherRun = { ...structuredClone(run), id: crypto.randomUUID() }; await db.schedules.add(otherRun)
   const e = occurrences(otherRun, otherRun.startWeek, addDays(otherRun.startWeek, 6))[0], independent = (await sessions.openOccurrence(id, otherRun.id, e.ref.dayId, e.ref.scheduledDate)).draft!
   const abandoned = await open(0), preview = await actions.preview(id, run.id, run.revision), input = structuredClone(abandoned.input); input.notes = 'new write'
   const changed = await sessions.update(id, abandoned.id, abandoned.revision, input); await assert.rejects(actions.leave(preview), /changed after preview/)

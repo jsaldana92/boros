@@ -1,6 +1,6 @@
 import { createId } from '../../lib/browser-crypto.ts'
 import { ImportPanel } from './ImportPanel'
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
 import { exercises, exerciseToInput } from '../../db/exercises'
@@ -22,10 +22,10 @@ function CreateWorkspace({ profileId }: { profileId: string }) {
   const [startNew, setStartNew] = useState(0)
   const [importStatus, setImportStatus] = useState('')
   const closeImport = (message = '') => { setMode('library'); setImportStatus(message); requestAnimationFrame(() => document.getElementById('import-output-trigger')?.focus()) }
-  return <><ExerciseLibrary profileId={profileId} planOpen={mode === 'plan' || mode === 'import'} onImport={() => { setImportStatus(''); setMode('import') }} onEditing={(value) => setMode(value ? 'exercise' : 'library')} onPlan={() => { setStartNew((value) => value + 1); setMode('plan') }} /><PlanLibrary profileId={profileId} startNew={startNew} onEditing={(value) => setMode(value ? 'plan' : 'library')} hidden={mode === 'exercise' || mode === 'import'} />{mode === 'import' && <ImportPanel profileId={profileId} onClose={closeImport} />}<p role="status">{importStatus}</p></>
+  return <><ExerciseLibrary plans={<PlanLibrary profileId={profileId} startNew={startNew} onEditing={(value) => setMode(value ? 'plan' : 'library')} hidden={mode === 'exercise' || mode === 'import'} />} profileId={profileId} planOpen={mode === 'plan' || mode === 'import'} onImport={() => { setImportStatus(''); setMode('import') }} onEditing={(value) => setMode(value ? 'exercise' : 'library')} onPlan={() => { setStartNew((value) => value + 1); setMode('plan') }} />{mode === 'import' && <ImportPanel profileId={profileId} onClose={closeImport} />}<p role="status">{importStatus}</p></>
 }
 
-function ExerciseLibrary({ profileId, planOpen, onPlan, onEditing, onImport }: { profileId: string; planOpen: boolean; onPlan: () => void; onEditing: (value: boolean) => void; onImport: () => void }) {
+function ExerciseLibrary({ plans, profileId, planOpen, onPlan, onEditing, onImport }: { plans: ReactNode; profileId: string; planOpen: boolean; onPlan: () => void; onEditing: (value: boolean) => void; onImport: () => void }) {
   const [attempt, setAttempt] = useState(0)
   const result = useLiveQuery(async () => {
     try { return { data: await exercises.library(profileId), error: '' } }
@@ -59,8 +59,11 @@ function ExerciseLibrary({ profileId, planOpen, onPlan, onEditing, onImport }: {
     {!editor && !planOpen && <h1>Create</h1>}
     {editor && <ExerciseEditor key={editor.key} profileId={profileId} initial={editor.draft} original={editor.original} tags={data?.tags ?? []} onClose={close} onSaved={(name) => { close(); setStatus(`Saved ${name}.`) }} />}
     <div hidden={!!editor || planOpen}>
-      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button aria-label="Import AI Output" id="import-output-trigger" disabled={busy} onClick={onImport}>AI</button></div>
-      <h2 className="library-heading">Exercise library</h2>
+      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button><button aria-label="Import AI Output" id="import-output-trigger" disabled={busy} onClick={onImport}>AI</button></div>
+    </div>
+    {plans}
+    <div hidden={!!editor || planOpen}>
+      <h2 className="library-heading">Exercises</h2>
       {!result && <p role="status">Loading exercises...</p>}
       {result?.error && <><p role="alert">Could not read the library. {result.error}</p><button onClick={() => setAttempt((value) => value + 1)}>Retry library</button></>}
       {data && <>

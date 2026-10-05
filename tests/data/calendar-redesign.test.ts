@@ -31,11 +31,11 @@ test('same-template assignment is transaction safe across connections; retry, re
   const otherConnection = new BorosDatabase(db.name); t.after(async () => otherConnection.close())
   const outcomes = await Promise.allSettled([calendar.create(id, input), scheduleService(otherConnection).create(id, input)])
   assert.equal(outcomes.filter((r) => r.status === 'fulfilled').length, 1)
-  assert.match(String(outcomes.find((r) => r.status === 'rejected')!.reason), /Already in Calendar/)
+  assert.match(String(outcomes.find((r) => r.status === 'rejected')!.reason), /already has an active instance/)
   const saved = (await db.schedules.toArray())[0]
   assert.deepEqual(await calendar.create(id, input, saved.id), saved)
   const renamed = await plans.save(id, { ...planToInput(plan), name: 'Renamed' }, plan)
-  await assert.rejects(calendar.create(id, { ...input, planRevision: renamed.revision }), /Already in Calendar/)
+  await assert.rejects(calendar.create(id, { ...input, planRevision: renamed.revision }), /already has an active instance/)
   const different = await plans.save(id, { ...planToInput(renamed), name: 'Different identity' })
   await calendar.create(id, { ...input, planId: different.id, planRevision: different.revision, mapping: different.days.map((d, weekday) => ({ dayId: d.id, weekday })) })
   assert.equal(await db.schedules.count(), 2)
@@ -48,7 +48,7 @@ test('left/ended runs keep history and permit new runs; stop in the future still
   const { db, id, calendar, input, actions } = await setup(t)
   const old = await calendar.create(id, { ...input, startWeek: '2024-01-01' }), current = await calendar.create(id, input)
   const stopped = await calendar.commit(id, await calendar.preview(id, { scheduleId: current.id, revision: current.revision, kind: 'stop', effectiveFrom: addDays(input.startWeek, 7), mapping: [] }), true)
-  await assert.rejects(calendar.create(id, input), /Already in Calendar/)
+  await assert.rejects(calendar.create(id, input), /already has an active instance/)
   await actions.leave(await actions.preview(id, stopped.id, stopped.revision))
   const again = await calendar.create(id, input)
   assert.notEqual(again.id, current.id); assert.deepEqual(await calendar.get(id, old.id), old)
@@ -103,14 +103,14 @@ test('legacy duplicate assignments survive backup/read/restore and block new wri
   const first = await calendar.create(id, input), legacy = { ...structuredClone(first), id: crypto.randomUUID() }
   await db.schedules.add(legacy) // Pre-rule/imported data, not a new service assignment.
   assert.equal(calendarAssignments((await calendar.library(id)).schedules, []).length, 2)
-  await assert.rejects(calendar.create(id, input), /Already in Calendar/)
+  await assert.rejects(calendar.create(id, input), /already has an active instance/)
   const snapshot = await captureProfile(id, db), backup = await readBackup((await generateBackup(snapshot, 'calendar-redesign')).bytes)
   const restored = await buildRestorePlan(backup, undefined, 'new', crypto.randomUUID(), 'Restored', new Date().toISOString())
   assert.equal(restored.result.schedules.length, 2)
   assert.equal(calendarAssignments(restored.result.schedules, []).length, 2)
   await actions.leave(await actions.preview(id, legacy.id, legacy.revision))
   assert.deepEqual(await calendar.get(id, first.id), first)
-  await assert.rejects(calendar.create(id, input), /Already in Calendar/)
+  await assert.rejects(calendar.create(id, input), /already has an active instance/)
   await actions.leave(await actions.preview(id, first.id, first.revision)); await calendar.create(id, input)
   assert.equal(await db.schedules.count(), 3)
 })
@@ -143,7 +143,7 @@ test('future shortening cannot end a currently active segment early; revival and
   const historical = await calendar.create(id, { ...input, startWeek: '2024-01-01' })
   await plans.save(id, { ...planToInput(plan), durationWeeks: 1000 }, plan)
   const preview = await calendar.preview(id, { scheduleId: historical.id, revision: historical.revision, kind: 'duration', effectiveFrom: input.startWeek, mapping: [] })
-  await assert.rejects(calendar.commit(id, preview, true), /Already in Calendar/)
+  await assert.rejects(calendar.commit(id, preview, true), /already has an active instance/)
   assert.deepEqual(await calendar.get(id, historical.id), historical)
   // Moving this active assignment retains its ID and cannot produce another run.
   const moved = await weekly.move(id, await weekly.previewMove(id, run.id, run.revision, addDays(run.startWeek, 7), 1))
@@ -158,7 +158,7 @@ test('retained original occurrences after remap/shortening stay in the workload 
   assert.deepEqual(runProgress(remapped, []), { total: 40, completed: 20, skipped: 0, resolved: 20 })
   assert.equal(runLifecycle(remapped, []).previous, false)
   await db.schedules.put(remapped)
-  await assert.rejects(calendar.create(id, input), /Already in Calendar/)
+  await assert.rejects(calendar.create(id, input), /already has an active instance/)
   assert.equal(runProgress({ ...remapped, closedAt: new Date().toISOString(), stoppedFrom: localToday('UTC') }, []).total, 40)
   // Weekly identity still resolves once when only its date changes within the week.
   const weekly = { ...run, identity: 'program-week' as const }

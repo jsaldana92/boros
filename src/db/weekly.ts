@@ -1,6 +1,7 @@
 import { planInstructionsSnapshot } from '../schemas/plan.ts'
 import { assertCalendarAssignment } from './calendar-assignment.ts'
 import { runLifecycle } from '../lib/run-progress.ts'
+import { linkActivePlan } from './active-plans.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { addDays, browserZone, localToday, monday } from '../lib/calendar-dates.ts'
@@ -52,11 +53,9 @@ export function weeklyService(database: BorosDatabase) {
     async activate(profileId: string, planId: string) { return database.transaction('rw', tables, () => activate(profileId, planId)) },
     async addPlan(profileId: string, planId: string) {
       return database.transaction('rw', tables, async () => {
-        const profile = await owner(profileId)
+        await owner(profileId)
         await activate(profileId, planId)
-        if (profile.selectedPlanIds?.includes(planId)) return profile
-        const next = { ...profile, selectedPlanIds: [...(profile.selectedPlanIds ?? []), planId], revision: profile.revision + 1, updatedAt: new Date().toISOString() }
-        await database.profiles.put(next); return next
+        return linkActivePlan(database, profileId, planId)
       })
     },
     async removePlan(profileId: string, planId: string) {

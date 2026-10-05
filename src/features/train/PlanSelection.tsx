@@ -5,10 +5,10 @@ import type { Plan } from '../../schemas/plan'
 import { ActionDialog } from '../../components/ui/ConfirmDialog'
 import { PlanCard } from '../create/PlanCard'
 
-export function PlanSelection({ plans, onClose }: { plans: Plan[]; onClose: () => void }) {
+export function PlanSelection({ plans, activeIds, onClose }: { plans: Plan[]; activeIds: Set<string>; onClose: () => void }) {
   const { snapshot } = useWorkspace(), profileId = snapshot.profile.id
   const lock = useRef(false), [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const available = plans.filter((plan) => !snapshot.profile.selectedPlanIds?.includes(plan.id))
+  const available = plans.filter((plan) => !plan.archivedAt && !activeIds.has(plan.id))
   const close = () => { if (!lock.current) onClose() }
   return <ActionDialog title="Add Plan" onClose={close} actions={<button disabled={busy} onClick={close}>Cancel</button>}>
     {!available.length && <p>No more available plans. Create a plan in Create.</p>}

@@ -6,6 +6,7 @@ import { createId } from '../lib/browser-crypto.ts'
 import { localToday, monday } from '../lib/calendar-dates.ts'
 import { appendRevision, revisionAt, scheduleInputSchema, validateMapping, type Mapping, type OccurrenceRef, type ScheduleInput } from '../schemas/schedule.ts'
 import { z } from 'zod'
+import { linkActivePlan } from './active-plans.ts'
 
 export interface StagedPlan { id: string; input: ScheduleInput }
 export interface Reassignment { profileId: string; runId: string; revision: number; mapping: Mapping; effectiveFrom: string; fingerprint: string; protectedCount: number }
@@ -41,6 +42,7 @@ export function calendarRunService(database: BorosDatabase) {
         const committed = batch.map((p) => runs.find((r) => r.id === p.id))
         if (committed.every(Boolean)) {
           if (committed.some((r, i) => r!.planId !== batch[i].input.planId || r!.startWeek !== batch[i].input.startWeek || r!.timeZone !== batch[i].input.timeZone || r!.revisions[0].planRevision !== batch[i].input.planRevision || JSON.stringify(r!.revisions[0].mapping) !== JSON.stringify(batch[i].input.mapping))) throw new Error('This save identity was already used. Reopen Add Plan.')
+          for (const run of committed) if (!runLifecycle(run!, sessions).previous) await linkActivePlan(database, profileId, run!.planId)
           return committed.map((r) => r!)
         }
         if (committed.some(Boolean)) throw new Error('This selection changed after saving. Reopen Add Plan.')
@@ -52,7 +54,7 @@ export function calendarRunService(database: BorosDatabase) {
           validateMapping(item.input.mapping, plan.days)
         }
         const saved = []
-        for (const item of batch) saved.push(await scheduleService(database).create(profileId, item.input, item.id))
+        for (const item of batch) { saved.push(await scheduleService(database).create(profileId, item.input, item.id)); await linkActivePlan(database, profileId, item.input.planId) }
         return saved
       })
     },

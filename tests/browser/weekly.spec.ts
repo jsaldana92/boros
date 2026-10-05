@@ -48,7 +48,7 @@ for (const theme of ['Dark', 'Light']) test(`weekly markers, gaps, reversal, Cal
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await b(page, 'Calendar').click(); await expect(page.getByRole('region', { name: 'Unassigned weekly training' })).toHaveCount(0)
   await runPage(page); await expect(page.getByRole('img', { name: /^Completed: 1 of/ })).toBeVisible(); await expect(page.getByRole('img', { name: /^Skipped: 1 of/ })).toBeVisible(); await returnCalendar(page)
-  await b(page, 'Progress').click(); await page.getByRole('button', { name: /Weekly strength.*training days completed/ }).click(); await expect(page.locator('.progress-counts')).toContainText('1 Training days completed'); await expect(page.locator('.progress-counts')).toContainText('1 Training days skipped'); await expect(page.locator('.progress-counts')).toContainText('0 Exercise completions')
+  await b(page, 'Progress').click(); await expect(page.getByText('No previous plans.', { exact: true })).toBeVisible()
   await page.reload(); await b(page, 'Train').click(); await page.getByRole('article', { name: 'Plan Weekly strength', exact: true }).getByRole('button').click(); await expect(card(page, 'Upper')).toContainText('Skipped')
   expect((await rows(page, 'profiles'))[0].id).toBe(profile.id); expect((await rows(page, 'plans'))[0]).toEqual(plan)
   await card(page, 'Upper').click(); await b(page, 'Correct marker to Pending').click(); await expect(card(page, 'Upper')).toContainText('Pending')

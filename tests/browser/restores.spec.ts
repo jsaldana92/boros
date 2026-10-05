@@ -70,7 +70,7 @@ test('new profile and rename restore recover photos, null fields, saved drafts/h
   await button(page, 'Train').click(); await page.getByRole('button', { name: /Resume Plan.*Day 3/ }).click(); await waitForDraft(page)
   await expect(page.getByRole('textbox', { name: /set 1 Weight/ }).first()).toHaveValue('12.')
   await page.reload(); await button(page, 'Calendar').click(); await runPage(page); await page.getByRole('article', { name: /^Run/ }).first().getByRole('button').click(); await expect(page.getByRole('dialog')).not.toContainText('America/New_York'); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
-  await button(page, 'Progress').click(); await page.getByRole('combobox', { name: 'Select measurement', exact: true }).selectOption({ index: 0 }); await expect(button(page, 'View progress photo').first()).toBeVisible(); await button(page, 'View progress photo').first().click(); await expect(page.getByRole('dialog').getByRole('img')).toBeVisible(); await button(page, 'Close photo').click()
+  await button(page, 'Progress').click(); await page.locator('.weight-point').first().click(); await expect(page.getByRole('dialog').getByRole('img')).toBeVisible(); await button(page, 'Close').click()
   await button(page, 'Settings').click(); await button(page, 'Light').click(); await upload(page, f.bytes)
   await page.getByLabel('Import choice').selectOption('new'); await page.getByLabel('Imported profile name').fill('Renamed copy'); await preview(page)
   await page.addStyleTag({ content: 'html { font-size: 24px; }' }); await button(page, 'Confirm and save').focus(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)

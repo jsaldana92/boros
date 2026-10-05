@@ -43,12 +43,14 @@ test('batch creation is atomic, validates every plan/mapping/revision and preser
   await assert.rejects(batch.addBatch(id, stale), /plan changed/); assert.equal(await db.schedules.count(), 0)
   db.schedules.hook('creating', function fail(_key, value) { if (value.planId === second.id) throw new Error('Injected second write failure') })
   await assert.rejects(batch.addBatch(id, pending), /second write failure/); assert.equal(await db.schedules.count(), 0)
+  assert.deepEqual((await db.profiles.get(id))!.selectedPlanIds ?? [], [])
   assert.deepEqual(pending, copy); assert.equal((await db.plans.get([id, plan.id]))!.revision, plan.revision)
 })
 
 test('batch retries and competing tabs cannot duplicate active scheduled or unscheduled runs; history stays independent', async (t) => {
   const { db, id, plan, second, batch, weekly, actions, calendar, stage } = await setup(t), other = new BorosDatabase(db.name); t.after(async () => other.close())
   const pending = [stage(), stage(second)], saved = await batch.addBatch(id, pending)
+  assert.deepEqual((await db.profiles.get(id))!.selectedPlanIds, [plan.id, second.id])
   assert.deepEqual(await batch.addBatch(id, pending), saved); assert.equal(await db.schedules.count(), 2)
   await assert.rejects(calendarRunService(other).addBatch(id, [stage()]), /active run/)
   await actions.leave(await actions.preview(id, saved[0].id, saved[0].revision))
@@ -57,6 +59,34 @@ test('batch retries and competing tabs cannot duplicate active scheduled or unsc
   assert.ok(outcomes.some((r) => r.status === 'fulfilled')); assert.ok((await calendar.get(id, saved[0].id)).closedAt)
   const third = await planService(db).save(id, { name: 'Third', durationWeeks: 5, days: plan.days })
   await weekly.activate(id, third.id); await assert.rejects(batch.addBatch(id, [stage(third)]), /active run/)
+})
+
+test('Calendar repairs a missing Train link using the existing run; link failures roll back activation', async (t) => {
+  const { db, id, plan, batch, stage, weekly } = await setup(t), pending = [stage()], [run] = await batch.addBatch(id, pending)
+  await db.profiles.update(id, { selectedPlanIds: [] })
+  const before = await db.schedules.toArray()
+  await weekly.addPlan(id, plan.id)
+  assert.deepEqual(await db.schedules.toArray(), before)
+  assert.equal((await weekly.activate(id, plan.id))[0].id, run.id)
+  assert.deepEqual((await db.profiles.get(id))!.selectedPlanIds, [plan.id])
+  const fresh = await planService(db).save(id, { name: 'Atomic link', durationWeeks: 2, days: plan.days })
+  const put = db.profiles.put.bind(db.profiles)
+  db.profiles.put = async () => { throw new Error('Link failure') }
+  await assert.rejects(batch.addBatch(id, [stage(fresh)]), /Link failure/)
+  db.profiles.put = put
+  assert.deepEqual(await db.schedules.toArray(), before)
+})
+
+test('direct scheduled creation and Train activation serialize across connections, including unscheduled ownership', async (t) => {
+  const { db, id, plan, calendar, weekly, stage, actions } = await setup(t), other = new BorosDatabase(db.name); t.after(async () => other.close())
+  await weekly.addPlan(id, plan.id)
+  await assert.rejects(scheduleService(other).create(id, stage().input), /active instance/)
+  const [existing] = await weekly.activate(id, plan.id)
+  await actions.leave(await actions.preview(id, existing.id, existing.revision))
+  await Promise.allSettled([calendar.create(id, stage().input), weeklyService(other).addPlan(id, plan.id)])
+  const all = await db.schedules.toArray()
+  assert.equal(all.filter((r) => !runLifecycle(r, []).previous).length, 1)
+  assert.equal(all.length, 2)
 })
 
 test('reassignment keeps prior weeks and completed/skipped/manual/draft identities; only untouched pending moves', async (t) => {
@@ -208,7 +238,7 @@ test('reset cannot use old completed results to bypass assignment uniqueness, an
   assert.equal(runLifecycle(run, await db.sessions.toArray()).previous, false)
   const duplicate = { ...structuredClone(run), id: crypto.randomUUID() }; await db.schedules.add(duplicate)
   const before = await captureProfile(id, db)
-  await assert.rejects(actions.resetRun(await actions.preview(id, run.id, run.revision)), /Already in Calendar/)
+  await assert.rejects(actions.resetRun(await actions.preview(id, run.id, run.revision)), /already has an active instance/)
   const after = await captureProfile(id, db); assert.deepEqual(after.sessions, before.sessions); assert.deepEqual(after.drafts, before.drafts); assert.deepEqual(await calendar.get(id, run.id), run)
 })
 

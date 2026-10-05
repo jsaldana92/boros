@@ -42,7 +42,7 @@ test('four-day schedule: partial completion, next/prior week, all views, reload,
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText(`Completed: ${localCompletion}`)
   await button(page, 'Settings').click(); await button(page, 'Light').click()
   await page.getByLabel('New profile name', { exact: true }).fill('Other calendar'); await button(page, 'Create profile').click()
-  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await expect(page.locator('.calendar-event')).toHaveCount(0); await expect(page.getByText('No Calendar assignments. Add a plan to begin.')).toBeVisible()
+  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await expect(page.locator('.calendar-event')).toHaveCount(0); await expect(page.getByText('No Calendar assignments. Add a plan to begin.')).toHaveCount(0)
   await button(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await button(page, 'Calendar').click()
   await page.getByLabel('Calendar date', { exact: true }).fill('2024-12-30'); await expect(page.locator('.calendar-event').filter({ hasText: 'Incomplete' })).toHaveCount(1)
   expect(page.url()).toBe(address)

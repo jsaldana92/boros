@@ -83,7 +83,7 @@ test('snapshot information, previous placeholders and occurrence Reset agree wit
   await b(page, 'Previous week').click(); await day(page).click(); await b(page, 'Reset').click(); const reset = page.getByRole('dialog', { name: 'Reset this training day?' }); await expect(reset).toContainText('Saved results for this occurrence will be deleted'); await reset.getByRole('button', { name: 'Cancel', exact: true }).click(); await b(page, 'Close').click(); expect(await rows(page, 'sessions')).toHaveLength(1)
   await day(page).click(); await b(page, 'Reset').click(); await reset.getByRole('button', { name: 'Reset', exact: true }).click(); await expect(day(page)).toContainText('Pending'); expect(await rows(page, 'sessions')).toHaveLength(0)
   await b(page, 'Calendar').click(); await expect(page.getByRole('region', { name: 'Unassigned weekly training' })).toHaveCount(0)
-  await b(page, 'Progress').click(); await expect(page.getByRole('button', { name: /Refined plan.*0 training days completed/ })).toBeVisible()
+  await b(page, 'Progress').click(); await expect(page.getByText('No previous plans.', { exact: true })).toBeVisible()
   await page.screenshot({ path: info.outputPath('reset-progress.png'), fullPage: true })
 })
 

@@ -1,5 +1,6 @@
 import { PlanBrowseControls } from './PlanBrowseControls'
 import { PlanCard } from './PlanCard'
+import { BoundedGrid } from '../../components/ui/BoundedGrid'
 import { PlanDetails } from './PlanDetails'
 import { createId } from '../../lib/browser-crypto.ts'
 import { useEffect, useRef, useState } from 'react'
@@ -49,7 +50,7 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
       {data && <><PlanBrowseControls search={search} sort={sort} onSearch={setSearch} onSort={setSort} />
         <label className="check-label"><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />Show archived plans</label>
         {!visible.length && <p>{search ? 'No plans match this search.' : archived ? 'No archived plans.' : 'No plans yet. Choose Create Plan to add one.'}</p>}
-        {visible.map((plan) => <PlanCard key={plan.id} plan={plan} onClick={() => { trigger.current = document.activeElement as HTMLElement; setError(''); setSelected(plan) }} />)}
+        <BoundedGrid rows={2} label="Plan catalog" className="catalog-grid">{visible.map((plan) => <PlanCard key={plan.id} plan={plan} onClick={() => { trigger.current = document.activeElement as HTMLElement; setError(''); setSelected(plan) }} />)}</BoundedGrid>
       </>}
       <p role="status">{status}</p>{error && !selected && !archiveTarget && <p role="alert">{error}</p>}
     </div>

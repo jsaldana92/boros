@@ -5,10 +5,11 @@ local profiles/settings, photos, dated weights, and an exercise library with
 Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
-The latest local revision adds staged multi-plan Calendar assignment, protected
-current-week reassignment, and run-scoped Reset/End/Hide/Delete. Existing records,
-profile isolation, and the preceding Calendar pointer/focus fix are preserved.
-See [Calendar refinements verification](docs/calendar-refinements-verification.md).
+The latest local revision makes active plan instances authoritative across Calendar
+and Train, adds collapsible Calendar weeks and bounded Create lists, and redesigns
+Progress weight logging, charts and instance/Overall analytics. Existing records,
+profile isolation and shared run actions are preserved. See
+[Calendar/Create/Progress verification](docs/progress-redesign-verification.md).
 
 The preceding revision adds read-only Create plan details and optional plan
 Instructions through editing, duplication, AI import, frozen training snapshots
@@ -777,13 +778,13 @@ for actual test results and remaining physical-device checks.
 
 ## Progress weights and photos (Phase 7)
 
-Progress provides dated weights, optional photos and a selectable SVG graph.
-The graph is the primary display; its selector exposes every saved measurement. Add measurement defaults to the current instant; a local date/time
-field permits backdating. Edit keeps the entry ID and measured time unless
-**Change measurement date/time** is selected. Confirmed entry deletion removes
-the entry and only its unshared photo. Removing a photo in the editor is staged:
-confirm **Remove photo from entry**, then **Save measurement** to commit it.
-Canceling the editor keeps the saved photo and weight.
+Progress provides dated weights, optional photos and selectable graph points.
+**Log Weight** automatically captures the device's actual instant and timezone
+at submission, retaining that timestamp and save identity across retries.
+There is no date editor. A point opens details; **Update Weight** preserves its
+original measured time and photo unless a replacement is successfully saved.
+Cancel keeps the saved weight/photo. **Delete Weight?** removes only that entry
+and genuinely unreferenced associated assets.
 
 The existing measurements table is the single weight source. Current weight uses
 the greatest measured timestamp, then greatest ID for tied timestamps (the
@@ -802,11 +803,9 @@ and measured-local/time-zone/offset fields. Existing records remain readable
 without rewriting them (revision defaults to 1, update time to creation time).
 Measured time is separate from creation/update time. New records retain a UTC
 instant and validated local wall time/IANA zone/offset; history retains that zone
-after a device-zone change. Legacy records without context are explicitly shown
-in UTC. Default timestamps retain the exact instant during repeated DST hours;
-explicitly entered ambiguous times use the earlier occurrence, and nonexistent
-local times are rejected. These native date semantics follow
-[MDN's Date documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date#date_components_and_time_zones).
+after a device-zone change. Legacy records without context use their UTC date
+and minute. Visible dates omit timezone annotations; full internal precision is
+retained. Automatic timestamps retain the exact instant during repeated DST hours.
 
 Measurement edits/deletes compare revisions transactionally. Every measurement
 mutation also increments its owner's profile revision, so an already-open stale
@@ -827,13 +826,16 @@ load only when an editor/viewer opens; previews revoke object URLs on replacemen
 and unmount. Photos are not resized or thumbnailed. Delayed decoding cannot move
 input into another profile.
 
-The graph uses actual measured time horizontally, numeric weight ticks in the
-selected unit, angled date labels, and colored points. Click a point, use the
-labeled selector/Previous/Next controls, or focus the graph and use arrows/Home/End.
-Every overlapping entry remains selectable at its real date/value. Selected-entry
-actions retain correction, confirmed deletion and photo viewing. There is no
-visible history/debug dump; all underlying measurements remain in local storage
-and backups. Full photo blobs load only on explicit editor/viewer entry.
+The graph uses chronological record slots with real angled date labels, a fixed
+numeric Y axis, and a horizontally scrolling plot/X axis. Slot distance does not
+encode elapsed time; same-date records remain distinct. Every point is a touch
+and keyboard control (Tab, arrows, Home/End, Enter/Space). Filter supports inclusive
+one-sided or two-sided displayed-date bounds without changing current weight.
+Initial unfiltered positioning is near the measurement closest to now; closing
+details or returning from analytics preserves scroll and filtering. Photo blobs
+load only for the selected details viewer. See the
+[current revision record](docs/progress-redesign-verification.md) for definitions,
+current checks and physical-device limitations. The Phase 7 results below are historical.
 
 Phase 7 checks passed: `npm run build`, `npm run typecheck`, `npm run lint`,
 `git diff --check`, and `npm run test:data` (66/66). Full development and production
@@ -1111,41 +1113,45 @@ See [Group 3 verification](docs/group3-verification.md) for actual checks and th
 remaining owner checklist. Group 4 is described below. HTTPS remains
 owner-confirmed resolved; these tasks do not publish changes.
 
-## Group 4: Progress by body weight, plan and workout
+## Current Calendar, Create and Progress behavior
 
-Progress separates Body weight, Plans and Workouts. Scroll or use Previous/Next
-through plan cards, including archived plans with history. Plan views show
-training-day and exercise completions, then exercise/superset drill-downs. The
-alphabetical Workouts grid shows the same statistics across all plans. Names wrap
-in three columns, with two columns below 341px. Back controls remain inside the
-single public address. Refresh returns to Progress's overview, not its drill-down.
+Active program instances are the shared source of truth for Train and Calendar.
+Calendar's final staged Save creates its instance and Train compatibility link
+atomically. Train Add excludes every active template, including existing schedules
+with a missing selection link. Scheduling an existing Non-Scheduled run preserves
+its identity/results. Legacy duplicates remain available for explicit guarded
+resolution; historical instances permit new runs. The database remains boros v5.
 
-Training-day totals count distinct fully completed occurrences/sessions and explicit
-Mark as Complete outcomes. Partial sessions retain their results and marker but do
-not count as fully completed days. Exercise totals count
-each performed occurrence with at least one recorded set. Superset members count
-separately, without counting the group again. Drafts and skipped work do not count.
-Statistics use saved actual results and completion instants, not today's targets,
-scheduled dates or import time. Starting/latest show all set weight/repetition
-pairs from the earliest/latest qualifying session, including repeated occurrences.
-Equal completion times use stable session-ID order. Min/max ties retain the
-first matching set in chronological, occurrence and set order. Zero is valid;
-missing/skipped sets are omitted. Historical kg/lb values compare canonically
-and convert for display without changing saved values. Scheduled completion dates
-use their stored zone; unscheduled sessions use the profile zone because they
-have no historical zone field.
+Calendar Month has independently collapsible Week sections with seven vertically
+stacked day cards. Today expands the relevant week. Create has Plan / Exercise /
+AI actions, then Plans and Exercises, using shared filters and measured scrolling
+lists. The Plans list shows approximately two rows.
 
-Library IDs and explicit saved plan-occurrence references join exercise history;
-names never do. Unknown legacy links stay separate. Supersets match by ordered
-member identities and multiplicity, retaining historical compositions. Each
-member has its own graph and statistics. Graph point selectors preserve every
-set, even exact overlaps, and link to saved session details/notes. The optional
-additional weight/reps/date graph is deferred. Current statistics are derived
-locally; Group 4 did not change database v5, then-current backups v3 or AI v2.
-The template-ownership revision introduced backups v4 with v1/v2/v3 reading;
-the subsequent Train revision writes v5 and also retains strict v4 reading.
+Progress has Body weight / Plans / Exercises. Plans shares Calendar Previous
+Plans eligibility, cards, rings, filters, five-card scrolling and Hide/Unhide/Delete
+semantics. A card opens that instance's analytics; its separate action menu manages
+visibility/deletion. Hidden history still contributes to Overall; deleted results
+do not. Legacy sessions without an available instance remain accessible through
+Legacy plan history, without guessed library links or fabricated instances.
 
-See [Group 4 verification](docs/group4-verification.md) for exact identity rules,
-checks, performance observations and remaining owner checks. Next is integrated
-verification of Groups 1–4 and the final published-version smoke test. Overall
-release acceptance and publication remain separate.
+Overall Exercises has one card per standalone library ID and its actual creation
+date. Search, sort, collapsible ANY-match tags and Clear are shared with Create.
+Plan analytics retains separate day/exercise occurrences, including repeated and
+superset members. A fully recorded exercise counts once; partially recorded work
+still contributes its valid sets to paired load/rep extrema. Manual day completion
+does not invent exercise results. Program completion follows the shared resolved
+finite-workload lifecycle, not elapsed dates or an early End. Explicit skips use
+saved evidence; ambiguous old blank-to-skip serialization is not guessed.
+
+Details use large metric controls, actual saved completion dates and paired values
+from the same set. Canonical kilograms determine load extrema; deterministic ties
+use completion time, session ID, occurrence order and set order. One bottom Back
+returns to the correct parent with useful filters/scroll. Body weight does not
+render on analytics subpages. Navigation stays at one public address; refresh
+restores Progress's overview, not an unsaved editor or nested view.
+
+See [current calculations, verification and exact manual checks](docs/progress-redesign-verification.md).
+[Group 4's earlier verification](docs/group4-verification.md) remains a historical
+record; the controls and counting rules above supersede it. Database/backup/AI
+formats remain v5/v8/v3, and the same-context cross-build regression is retained.
+Release acceptance and publication remain separate.

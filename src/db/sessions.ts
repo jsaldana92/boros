@@ -45,7 +45,7 @@ export function sessionService(database: BorosDatabase) {
       return database.transaction('r', [...tables, database.plans, database.schedules], async () => {
         await owner(profileId)
         const timer = await database.restTimers.get('active'), runs = await database.schedules.where('profileId').equals(profileId).toArray()
-        return { schedules: runs, plans: (await database.plans.where('profileId').equals(profileId).toArray()).filter((plan) => !plan.archivedAt), drafts: (await database.drafts.where('profileId').equals(profileId).toArray()).filter((item) => !item.finalizedAt && !runs.some((run) => run.id === item.occurrence?.scheduleId && run.closedAt)), sessions: (await database.sessions.where('profileId').equals(profileId).toArray()).sort((a, b) => b.completedAt.localeCompare(a.completedAt)), timer: timer?.profileId === profileId ? timer : undefined }
+        return { schedules: runs, plans: await database.plans.where('profileId').equals(profileId).toArray(), drafts: (await database.drafts.where('profileId').equals(profileId).toArray()).filter((item) => !item.finalizedAt && !runs.some((run) => run.id === item.occurrence?.scheduleId && run.closedAt)), sessions: (await database.sessions.where('profileId').equals(profileId).toArray()).sort((a, b) => b.completedAt.localeCompare(a.completedAt)), timer: timer?.profileId === profileId ? timer : undefined }
       })
     },
     async hints(value: SessionDraft, unit: WeightUnit) {

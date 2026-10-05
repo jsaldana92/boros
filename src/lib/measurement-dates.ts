@@ -22,5 +22,14 @@ export function validateTimeContext(value: { measuredAt: string; measuredLocal?:
   if (local !== value.measuredLocal || Date.parse(`${local}Z`) + value.offsetMinutes * 60000 !== instant.getTime()) throw new Error('Measurement time does not match its saved zone and offset.')
 }
 export function measurementDateLabel(value: Measurement) {
-  return value.measuredLocal ? `${value.measuredLocal.slice(0, 16).replace('T', ' ')} · ${value.timeZone}` : `${value.measuredAt.slice(0, 16).replace('T', ' ')} (UTC)`
+  const local = value.measuredLocal ?? value.measuredAt
+  return `${local.slice(0, 10)} · ${local.slice(11, 16)}`
+}
+
+export interface MeasurementFilter { start: string; end: string }
+export const measurementDate = (value: Measurement) => (value.measuredLocal ?? value.measuredAt).slice(0, 10)
+export function filterMeasurements(entries: Measurement[], filter: MeasurementFilter) {
+  if ((filter.start && !validDate(filter.start)) || (filter.end && !validDate(filter.end))) throw new Error('Enter a valid date.')
+  if (filter.start && filter.end && filter.start > filter.end) throw new Error('End date must be on or after Start date.')
+  return entries.filter((entry) => (!filter.start || measurementDate(entry) >= filter.start) && (!filter.end || measurementDate(entry) <= filter.end))
 }

@@ -14,11 +14,10 @@ import { useWorkspace } from '../../app/workspace-context'
 import { PlanSelection } from './PlanSelection'
 import { PlanCard } from '../create/PlanCard'
 import { WeeklyPlan } from './WeeklyPlan'
-import { weekly } from '../../db/weekly'
 import { currentProgramLabel, programSummary } from '../../lib/program-display'
 import { planSubtitle } from '../create/plan-subtitle'
 import { useCurrentInstant } from '../../lib/use-current-instant'
-import { runLifecycle } from '../../lib/run-progress'
+import { activePlanRuns } from '../../db/active-plans'
 import { useScreenNavigation } from '../../app/navigation-context'
 import { sessions } from '../../db/sessions'
 import { assessSession, hasSessionInput, displayedLoad, numericResult, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
@@ -37,15 +36,16 @@ export function TrainPage() {
 function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUnit }) {
   const { snapshot } = useWorkspace(), { trainingEntry, returnScreen, openScreen } = useScreenNavigation()
   const [selecting, setSelecting] = useState(false), [history, setHistory] = useState(false)
-  const [attempt, setAttempt] = useState(0), [error, setError] = useState(''), [busy, setBusy] = useState(false), [planId, setPlan] = useState('')
+  const [attempt, setAttempt] = useState(0), [error, setError] = useState(''), [planId, setPlan] = useState('')
   const [opened, setOpened] = useState<SessionDraft>(), [review, setReview] = useState<CompletedSession>()
   const [programContext, setProgramContext] = useState<{ planId: string; runId: string; week?: string }>()
   const instant = useCurrentInstant()
   const result = useLiveQuery(async () => {
     try { return { data: await sessions.library(profileId), error: '' } } catch (error) { return { data: undefined, error: (error as Error).message } }
   }, [profileId, attempt])
-  const data = result?.data, selected = (snapshot.profile.selectedPlanIds ?? []).flatMap((id) => data?.plans.find((p) => p.id === id) ?? [])
-  const plan = selected.find((item) => item.id === planId)
+  const data = result?.data, activeRuns = activePlanRuns(data?.schedules ?? [], data?.sessions ?? [], instant), activeIds = new Set(activeRuns.map((run) => run.planId))
+  const selected = data?.plans.filter((plan) => activeIds.has(plan.id)) ?? []
+  const plan = data?.plans.find((item) => item.id === planId)
   const focus = () => requestAnimationFrame(() => document.getElementById('train-heading')?.focus())
   const open = (value: { draft?: SessionDraft; session?: CompletedSession }) => { const record = value.draft ?? value.session; if (record?.occurrence) setProgramContext({ planId: record.sourcePlanId, runId: record.occurrence.scheduleId, week: record.occurrence.scheduledWeek }); setOpened(value.draft); setReview(value.session); focus() }
   useEffect(() => {
@@ -61,7 +61,6 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
     }).catch((e: Error) => { if (alive) setError(e.message) })
     return () => { alive = false }
   }, [trainingEntry, profileId])
-  const act = async (work: () => Promise<void>) => { if (busy) return; setBusy(true); setError(''); try { await work() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   const selectedRun = data?.schedules.find((run) => run.id === programContext?.runId && run.planId === planId)
   return <><h1 id="train-heading" tabIndex={-1}>{!opened && !review && !history && plan ? selectedRun ? programSummary(selectedRun, localToday(selectedRun.timeZone, instant)).name : plan.name : 'Train'}</h1>
     {result?.error && <p role="alert">Could not refresh saved training data or timer. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry training</button></p>}
@@ -73,17 +72,14 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
             <button className="catalog-card add-plan-card" onClick={() => setSelecting(true)}>Add Plan</button>
             {!selected.length && <p className="train-empty">No active plan(s) selected.</p>}
             <div className="train-plan-cards">{selected.flatMap((item) => {
-              const candidates = data.schedules.filter((run) => run.planId === item.id && !run.closedAt)
-              const active = candidates.filter((run) => !runLifecycle(run, data.sessions, instant).previous)
-              const runs = active.length ? active : candidates.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 1)
-              if (!runs.length) return <PlanCard key={item.id} plan={item} disabled={busy} subtitle={<><span>Not started</span><span className="muted">{planSubtitle(item)}</span></>} onClick={() => void act(async () => { const opened = await weekly.activate(profileId, item.id); if (opened.length === 1) { setProgramContext({ planId: item.id, runId: opened[0].id }); setPlan(item.id) } setHistory(false); focus() })} />
+              const runs = activeRuns.filter((run) => run.planId === item.id)
               return runs.map((run) => { const summary = programSummary(run, localToday(run.timeZone, instant)); return <PlanCard key={run.id} plan={summary} subtitle={<><span className="current-program-week">{currentProgramLabel(run, data.sessions, instant)}</span><span className="muted">{planSubtitle(summary)}</span></>} onClick={() => { setProgramContext({ planId: item.id, runId: run.id }); setPlan(item.id); setHistory(false); focus() }} /> })
             })}</div>
           </>}
           {!!data.sessions.length && <button aria-expanded={history} onClick={() => setHistory(!history)}>Saved sessions ({data.sessions.length})</button>}
           {history && <section aria-label="Saved sessions"><h2>Saved sessions</h2>{data.sessions.map((session) => <article className="exercise-card" key={session.id} aria-label={'Session ' + session.planName + ' / ' + session.day.name}><h3>{session.planName} / {session.day.name}</h3><p>{session.partial ? 'Partial session' : 'Complete session'} / {displayDateTime(session.completedAt)}</p><button onClick={() => open({ session })}>Review session</button></article>)}</section>}
           {data.drafts.some((draft) => hasSessionInput(draft.input)) && <section aria-label="Unfinished sessions"><h2>Unfinished sessions</h2><div className="unfinished-cards">{data.drafts.filter((draft) => hasSessionInput(draft.input)).map((draft) => <button className="catalog-card unfinished-card" key={draft.id} aria-label={'Resume ' + draft.planName + ' / ' + draft.day.name + ' / ' + localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))} onClick={() => { setPlan(draft.sourcePlanId); open({ draft }) }}><span>{draft.planName} &middot; {localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))}</span><small>{draft.day.name}</small></button>)}</div></section>}
-          {selecting && <PlanSelection plans={data.plans} onClose={() => { setSelecting(false); setHistory(false) }} />}
+          {selecting && <PlanSelection plans={data.plans} activeIds={activeIds} onClose={() => { setSelecting(false); setHistory(false) }} />}
         </>}
       </>}
     {error && <p role="alert">{error}</p>}

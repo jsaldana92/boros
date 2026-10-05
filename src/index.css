@@ -278,7 +278,7 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .add-plan-list { overflow-y: auto; overscroll-behavior-y: contain; max-height: min(560px, 48svh, var(--list-space, 48svh)); margin-top: 16px; padding: 4px; scrollbar-gutter: stable; }
 .add-plan-list .plan-card { margin: 0; }
 .add-plan-list, .previous-plan-list { display: grid; gap: 12px; }
-.previous-plan-list { overflow-y: auto; overscroll-behavior-y: contain; max-height: min(var(--five-run-height, 1400px), 56svh, var(--list-space, 56svh)); padding: 4px; scrollbar-gutter: stable; }
+.previous-plan-list { overflow-y: auto; overscroll-behavior-y: contain; max-height: var(--five-run-height, 1400px); padding: 4px; scrollbar-gutter: stable; align-content: start; }
 .previous-plan-list .plan-card { margin: 0; }
 .plan-card .status-pill { display: inline-block; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: .85em; }
 .add-plans-page .field-grid { grid-template-columns: minmax(0, 1fr) minmax(120px, .8fr); gap: 12px; }
@@ -303,20 +303,47 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .calendar-day .calendar-event:focus-visible { outline-offset: 2px; }
 .calendar-view-day { grid-template-columns: 1fr; }
 .schedule-editor label { margin-top: 18px; }
-@media (max-width: 1050px) { .calendar-view-week { grid-template-columns: 1fr; } }
+.calendar-view-week { grid-template-columns: 1fr; }
 .calendar-week-section { border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 24px; }
 .calendar-week-section > h2 { text-align: center; font-size: 18px; }
-.calendar-week-dates { grid-template-columns: repeat(7, minmax(140px, 1fr)); overflow-x: auto; padding: 5px; scroll-padding: 5px; }
+.calendar-week-section > h2 button { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+.expanded-chevron { transform: rotate(180deg); }
 .calendar-event, .calendar-event.completed { border-inline-start: 4px solid var(--plan-color); background: color-mix(in srgb, var(--plan-color) 8%, var(--surface)); }
 .calendar-event .status-pill { background: var(--surface); color: var(--text); }
 .rest-day-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); }
 
-.weight-chart { margin: 26px 0; padding: 16px; border: 1px solid var(--border); border-radius: 6px; }
-.weight-chart svg { display: block; width: 100%; height: auto; color: var(--text); overflow: visible; }
+.weight-chart { display: flex; margin: 20px 0; min-width: 0; width: 100%; }
+.weight-chart svg { display: block; color: var(--text); }
+.weight-axis { flex: 0 0 76px; }
+.weight-chart .axis-label { fill: var(--text); font: 12px system-ui, sans-serif; }
+.weight-plot-scroll { min-width: 0; flex: 1; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 8px; }
+.weight-plot { position: relative; }
+.weight-point { position: absolute; width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; border-radius: 50%; display: grid; place-items: center; }
+.weight-point span { width: 11px; height: 11px; border-radius: 50%; background: var(--chart-0); border: 1px solid var(--text); }
+.weight-point:focus-visible span, .weight-point:hover span { width: 15px; height: 15px; }
+.body-weight-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.body-weight-heading h2 { margin: 0; }
+.current-weight { text-align: center; margin: 24px 0; }
+.current-weight strong, .current-weight time { display: block; }
+.current-weight strong, .weight-detail-value { font-size: 2rem; font-weight: 700; }
+.current-weight time { margin-top: 8px; }
+.weight-detail-value { margin: 8px 0; }
+.analytics-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; margin: 28px 0; }
+.analytics-metric { min-width: 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.metric-value { display: block; font-size: clamp(1.5rem, 5vw, 2.2rem); line-height: 1.3; padding: 4px; min-height: 44px; }
+button.metric-value { background: transparent; color: var(--text); border-color: transparent; text-decoration: underline; text-underline-offset: 5px; }
+.bounded-grid { overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 4px; margin: 16px 0; align-content: start; }
+.bounded-grid > .plan-card { margin: 0; }
+.plan-card.has-actions { position: relative; }
+.plan-card.has-actions > .catalog-card > strong { padding-right: 48px; }
+.plan-card-actions { position: absolute; right: 8px; top: 8px; padding: 8px; }
 .chart-dates { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 14px; }
 .weight-chart figcaption { font-weight: 600; }
 .measurement-editor label { margin-top: 20px; }
 .measurement-editor .actions { margin-bottom: 24px; }
+.weight-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.weight-input-row > span { padding-top: 42px; }
+.measurement-editor .weight-input-row > span { padding-top: 62px; }
 .progress-photo { display: block; max-width: 100%; max-height: 55dvh; width: auto; height: auto; margin: 16px auto; object-fit: contain; }
 .progress-photo-preview > .progress-photo { max-height: 240px; }
 .measurement-card time, .measurement-card details { overflow-wrap: anywhere; }
@@ -350,6 +377,10 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .editor-title:focus { outline: none; }
 .tag-scroll { display: grid; grid-auto-flow: column; grid-template-rows: repeat(3, minmax(44px, auto)); grid-auto-columns: max-content; gap: 8px; overflow-x: auto; max-width: 100%; padding: 6px 4px; margin-bottom: 16px; }
 .tag-scroll button { max-width: 260px; white-space: normal; overflow-wrap: anywhere; }
+.tag-scroll .tag-toggle { min-height: 44px; padding: 6px 2px; border: none; background: transparent; }
+.tag-scroll .tag-toggle span { display: block; border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; font-size: .8rem; background: var(--surface); }
+.tag-scroll .tag-toggle[aria-pressed='true'] span { color: var(--bg); background: var(--text); border-color: var(--text); }
+@media (max-width: 380px) { .workout-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .exercise-selection-row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--border); }
 .exercise-selection-row > label { flex: 1; min-width: 0; overflow-wrap: anywhere; min-height: 44px; }
 .exercise-selection-row > button { flex-shrink: 0; }

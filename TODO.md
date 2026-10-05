@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-05
-Status: Calendar/Train display refinements complete in available local verification. Build/typecheck/lint/diff pass; data 189/189, final affected static 120/120, Firefox 14/14 and retained-context updates 6/6 pass. Full static initially 488/496; obsolete assertions corrected and all affected cases rerun successfully. Earlier phase results stay historical; physical-device/AT gates and the deployment-persistence incident remain unresolved.
-Current scope: actual-date unscheduled Calendar activity, sectioned month weeks, stable plan colors, shared summaries, instance-bound Train weeks/rest rows, concise actions and protected direct editor Save. Preserve owner records, profile isolation and single-address navigation. No commit, push, deploy or hosting change.
+Status: Calendar/Create/Progress revision implemented and verified locally: build/type/lint pass, data 194/194, affected static 314/316 with both coordinate assertions corrected and measurement rerun 16/16; Firefox 16/16. Final same-context rebuild checks 6/6 pass. Physical-device/AT release gates and production persistence incident remain unresolved.
+Current scope: authoritative active instances across Calendar/Train, collapsible stacked Calendar weeks, shared Create/Progress browsing, weight graph/filter/dialogs and instance/Overall analytics. Preserve owner records and navigation. No commit, push, deploy or hosting change.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -697,6 +697,24 @@ Earlier verification records remain historical.
 - [x] Build/typecheck/lint/diff; final affected static 120/120, Firefox 14/14 and retained-context updates 6/6. Full static initially 488/496; corrected obsolete assertions passed in the final affected suite. See [verification record](docs/calendar-train-display-verification.md) for exact stages and intermediate results.
 - [ ] Physical phone/Safari/AT/keyboard, audio/vibration and live Ko-fi gates. Production deployment-loss cause remains unresolved; local tests are not a production fix.
 
+### Calendar, Create and Progress revision (2026-10-05)
+
+The owner's d60b4cdb request supersedes older horizontal Month rows, selected-plan
+ownership, measurement date editing/selectors and Group 4 cards/counting. Earlier
+phase/group and hash-routing handoffs remain historical.
+
+- [x] One authoritative active instance per profile/template across Calendar and Train. Atomic staged Calendar activation/link, concurrent service guards, missing-link display without record replacement, stable scheduling edits and preserved legacy duplicate resolution.
+- [x] Concise Calendar copy; exact No eligible plans; independent accessible stacked Month weeks, default/Today expansion and retained event colors/statuses.
+- [x] Plan / Exercise / AI action order; Plans then Exercises; shared filters and responsive two-row plan scrolling.
+- [x] Progress Body weight / Plans / Exercises, no main Saved sessions section and no body weight on analytics pages. Shared Previous Plans cards, rings, date ranges, filters, hidden state and guarded deletion.
+- [x] Latest measurement independent of filtering; concise date/minute, automatic device-zone submission with retry-stable IDs/time, timestamp-preserving Update Weight, selected-photo lazy loading, nested modal focus, exact Delete Weight confirmation and transactional recovery.
+- [x] Fixed Y axis and horizontally scrolling chronological point slots/X labels; repeated-date keyboard/touch targets, inclusive Apply/Clear/Cancel filter, initial nearest-point scroll and retained popup/parent position.
+- [x] One Overall card per library identity and actual creation date; occurrence-specific plan cards; shared search/sort/ANY tags/Clear and bounded three-row grids.
+- [x] Instance-scoped completed/resolved/skipped metrics, independent superset members, valid partial-set extrema, explicit skip evidence, deterministic ties, canonical-unit comparisons and paired extrema popups. Legacy unlinked history remains accessible through its plan.
+- [x] Data 194/194; build/typecheck/lint; broad desktop 125/126 then obsolete editor assertion corrected and passed in affected matrix. Affected static 314/316, followed by corrected coordinate-check measurement matrix 16/16; Firefox 16/16. Exact commands/results are in [verification](docs/progress-redesign-verification.md).
+- [x] Final-source retained-context two-rebuild regression 6/6 passed, 1.5m, preserving all records, active profile and photo bytes in Edge root desktop/project phone and Firefox desktop.
+- [ ] Physical phone/Safari/screen reader/keyboard, actual audio/vibration and live Ko-fi acceptance. Production deployment-loss cause still needs original-context evidence, not a presumed code fix.
+
 ## 6. Required test fixtures
 
 Build these fixtures as the relevant phase begins, using fictional people and tiny synthetic images.
@@ -837,15 +855,21 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-05 | Cosmetic profile/plan-ID palette preference; no schema change | Ten muted colors stay stable through list changes; localStorage affects appearance only, leaving IndexedDB and backups intact |
 | 2026-10-05 | Direct Edit Save uses an opening-time baseline | Keep transactional stale-write protection without a confirmation popup; invalid old mappings can open for repair, while submitted mappings must validate |
 
+| 2026-10-05 | Active instances supersede Train selection metadata | Shared lifecycle + serial transactions prevent Calendar/Train duplicates; read old missing links without rewriting histories |
+| 2026-10-05 | Shared measured browsing rows and Previous Plans | Create/Progress reuse filters, cards, hidden/delete semantics and responsive row bounds; Month reuses vertical Week cards |
+| 2026-10-05 | Weight timestamps capture on submission and remain immutable in Update | Device context and stable retry identity preserve chronology, units, photos and failure recovery without schema changes |
+| 2026-10-05 | Progress is instance-scoped; Overall uses explicit library provenance | Repeated/superset occurrences stay separate; full-set completion and explicit skip evidence replace any-set completion; ambiguous legacy history remains plan-accessible |
+| 2026-10-05 | Program completion follows the shared finite resolved-workload lifecycle | Explicit complete/skip outcomes can resolve a program; elapsed dates or early End alone cannot. Paired extrema use actual sets and deterministic chronological ties |
+
 ## 9. Current checkpoint
 
-- Calendar/Train display refinements are complete in available local verification. Physical-device/AT acceptance remains pending. Phase 10 stays **Verification pending**, Phase 11 **In progress**; earlier phase results remain historical.
-- Calendar now shows actual-date unscheduled completed activity alongside scheduled obligations. Month has separate complete week rows and stable plan accents. Train cards/details derive committed instance summaries and current progression; full weeks contain noninteractive Rest rows without generating dates or obligations.
-- Menus and confirmations use the requested concise copy. Edit saves directly with an opening-time baseline and transactional ownership/concurrency checks, including mapping repair. Earlier staged Add Plan, action scopes, pointer/focus repair, dirty/unload guards and single-address navigation remain.
-- Database **boros v5**, AI **v3**, backup **v8** and strict older readers remain unchanged. Colors are cosmetic local preferences. No owner-data clearing, dependencies, release/hosting/manifest changes.
-- Final build/typecheck/lint/diff pass. Data **189/189**, 7.820s; final affected static **120/120**, 2.5m; Firefox **14/14**, 2.0m; freshly rebuilt same-context updates **6/6**, 1.8m. Full static initially **488/496**, 10.4m; all eight obsolete-assertion failures are corrected and passed in the final affected suite. The full suite was not repeated afterward. Exact stages and limitations: [Calendar/Train display verification](docs/calendar-train-display-verification.md).
-- Physical-phone/Safari/AT/audio/vibration/live Ko-fi gates and the production deployment-persistence report remain unresolved. Local tests establish no production root cause/fix.
-- Next: perform the exact disposable-profile phone/Safari/AT checks in the verification record. Production persistence investigation still needs read-only before/after evidence at a separately authorized deployment.
+- Calendar/Create/Progress revision is complete in available local verification. Physical acceptance remains pending. Phase 10 remains **Verification pending**, Phase 11 **In progress**. Earlier phase results remain historical.
+- Active instances are authoritative in both Calendar and Train; no new schema, destructive repair or duplicate workspace. Create/Calendar/Progress share browsing and run actions. New weight controls preserve exact historical time, canonical values, local photos and failed input.
+- Plan analytics uses run/day/exercise IDs; Overall uses reliable library provenance. Full exercises count separately from partial performance; explicit skips require evidence. Legacy unlinked logs remain plan-accessible. Definitions and conservative legacy limitations are documented.
+- Database **boros v5**, AI **v3**, backup **v8** and strict older readers remain. No dependencies, commit, deploy, hosting or manifest edits, and no owner data cleared.
+- Build/typecheck/lint pass; data **194/194**. Broad desktop **125/126**, obsolete UI assertion updated. Affected static **314/316**, two phone viewport-coordinate assertions corrected; complete measurement matrix rerun **16/16**. Firefox **16/16**. All affected test cases now have passing evidence; the full matrices were not repeated after test-only corrections. See [verification record](docs/progress-redesign-verification.md).
+- Final-source cross-build **6/6** passed (1.5m) with retained origin/context across four release stages. Physical phone/Safari/AT/audio/vibration/live Ko-fi and the production persistence investigation remain unverified/unresolved.
+- Next: exact disposable-profile device checks in the record; collect production read-only before/after persistence evidence only at a separately authorized deployment.
 
 ## 10. Handoff entry template
 
@@ -1643,3 +1667,13 @@ Fresh verification against the final build (isolated contexts/test databases):
 - Intermediate failures: initial data **187/188** (new fixture reused a unique key); initial affected static **96/112** (removed note subtitle); broader static **488/496** (old Create wording and removed Edit confirmation). Corrected fixtures/assertions passed their final reruns. Full 496-case suite was not repeated after the focused corrections. Exact commands/stages are documented.
 - Compatibility: database **boros v5**, AI **v3**, backup **v8** unchanged. Cosmetic localStorage color preferences are separate from backups/user records and tolerate unavailable storage. No dependency/manifest/hosting change, commit, push, deployment or owner-data clearing.
 - Next/manual: use a disposable profile on an actual phone/Safari to check week-row swiping, keyboard-safe controls, one-tap actions, actual-date full/partial/manual completions and retained dates after direct Edit. Check VoiceOver/TalkBack focus, action names and non-color cues. Exact steps and previous audio/vibration/Ko-fi/production-persistence gates remain in the verification record.
+
+### 2026-10-05 - Calendar/Create/Progress shared instances, browsing and analytics
+
+- Implemented: authoritative active instances and atomic Calendar/Train linking; independently collapsible vertical Month weeks; reordered Create and bounded shared lists; redesigned weight logging/filter/chart/details/update/delete; shared Previous Plans actions and per-instance/Overall analytics with selectable paired extrema.
+- Preservation: started clean at ea2c68d; retained installed configuration, stable database v5, backup v8/older readers, photos, snapshots, profile ownership, stale-save protection and single-address navigation. No dependency installation, commit, push, deployment, hosting or owner-data clearing.
+- Definitions: whole-program completion follows the shared resolved workload; full exercise occurrences count once; valid partial sets contribute extrema; manual completion creates no exercise results; explicit day/exercise skips deduplicate. Old blank/skip ambiguity is handled conservatively using retained finalized input where available. No name-based identity guessing.
+- Files: shared active-plan helper and activation services; Calendar/Create/Train integrations; Progress components and analytics/date/scale helpers; shared bounded grid/cards/filter styling; focused/adapted tests; README and this TODO. Full details: [verification record](docs/progress-redesign-verification.md).
+- Verification: build/typecheck/lint pass, data 194/194; initial focused root 4/4 + 6/6; broad root 125/126 with corrected obsolete editor assertion; affected root/project desktop/phone 314/316 with corrected coordinate assertions and final weight suite 16/16. Firefox 16/16. Final retained-context rebuild regression 6/6 passed (1.5m). No remaining known application failures in performed checks.
+- Remaining: physical phones/Safari/screen readers/software keyboards, audio/vibration, live Ko-fi and separately authorized production persistence capture. Earlier handoffs and their unverified gates remain historical, without new completion claims.
+- Next: carry out the exact disposable-profile manual checklist and the separately authorized production evidence capture. Do not publish without separate authorization.
