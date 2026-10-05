@@ -100,7 +100,7 @@ test('both themes: compact scrollable cards, keyboard dialogs, footer placement,
   await b(page, 'Create exercise').click(); await f(page, 'Exercise name').fill('Extra'); await f(page, 'Set 1 Reps minimum').fill('1'); await b(page, 'Save exercise').click()
   for (const theme of ['Dark', 'Light']) {
     await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Create').click()
-    await expect(planCard(page)).toContainText('2 training days · 5 rest days · 12 weeks')
+    await expect(planCard(page)).toContainText('12 weeks · 2 training days · 5 rest days')
     expect(await catalog.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true)
     await catalog.getByRole('button').last().focus()
     expect(await catalog.evaluate((node) => node.scrollTop)).toBeGreaterThan(0)
@@ -143,7 +143,7 @@ test('A20 B8 rounds expose one correct rest each, including final block and time
   await expect(rounds.first()).toContainText('20'); await expect(rounds.first()).toContainText('8')
   await b(page, 'REST Superset 1 after round 1').click(); await expect(page.getByRole('timer')).toContainText('1:15')
   await closeTimer(page); await b(page, 'REST Superset 1 after group').click(); await expect(page.getByRole('timer')).toContainText('3:00')
-  await page.reload(); await page.getByRole('button', { name: new RegExp("^Resume Existing AI / First") }).click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
+  await page.reload(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0); await startWeekly(page, 'Existing AI', 'First'); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
 })
 
 test('picker selection obeys filtered identities, sort order, Select All, single Add, cancel and repeated-click rules', async ({ page }) => {

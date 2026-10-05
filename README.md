@@ -5,11 +5,17 @@ local profiles/settings, photos, dated weights, and an exercise library with
 Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
-The latest local revision adds weekly Train programs, explicit day outcomes,
-reviewed program-week movement, and timer completion feedback. Existing profile
-records and session snapshots remain independent. Database v5 stays in place;
-backup v5 preserves weekly records and reads strict v1-v4 archives. See
-[Train redesign verification](docs/train-weekly-verification.md) for exact results
+The latest local revision adds staged multi-plan Calendar assignment, protected
+current-week reassignment, and run-scoped Reset/End/Hide/Delete. Existing records,
+profile isolation, and the preceding Calendar pointer/focus fix are preserved.
+See [Calendar refinements verification](docs/calendar-refinements-verification.md).
+
+The preceding revision adds read-only Create plan details and optional plan
+Instructions through editing, duplication, AI import, frozen training snapshots
+and backups. It preserves the uncommitted Train recovery/Cancel/Reset/Leave Plan
+refinements. Database v5 stays in place; AI v3 reads strict v1/v2 payloads, and
+backup v8 reads strict v1–v7 archives. See
+[plan-details verification](docs/plan-details-verification.md) for exact results
 and remaining device checks. The earlier [deployment-persistence investigation](docs/deployment-persistence-verification.md)
 is still unresolved. This candidate has not been published.
 
@@ -230,6 +236,29 @@ an upgrade, reload that tab; never delete its database as a workaround.
 
 ## Manual plans
 
+Select a Create plan card to read its saved details: title, duration (`No end
+date` for legacy unbounded plans), training/rest-day counts, and ordered days.
+Each exercise shows its saved set/rep/RIR targets, including explicit zero and
+accurate per-set details when targets vary. Repeated occurrences stay separate.
+Supersets use Train's execution order and one shared bordered member box beneath
+their saved Superset number; following standalone exercises remain outside it.
+
+Optional **Instructions** and **Plan note** are independent plain-text fields,
+each up to 20,000 characters. Details show nonblank Instructions and Note after
+the last day, preserving newlines. Nothing is inferred from exercise text or
+copied between fields. Both survive saves/duplicates; unsaved forms remain
+memory-only. Plan instructions freeze into new schedule revisions, outcomes,
+training drafts and completed sessions as `planInstructions`. Editing a plan
+leaves existing snapshots and library defaults unchanged; an explicit schedule
+refresh captures the new instructions only in its new revision.
+
+The details footer contains only **Close**. The top-right **Plan actions** menu
+shares the exercise-details controls and opens a second popup with Edit,
+Duplicate, Archive (Restore for archived plans), and Close. Archive retains its
+confirmation and keeps history/runs. Closing or pressing Escape dismisses only
+the top popup; keyboard focus returns to its opener. Long details scroll inside
+the dialog while the background stays locked.
+
 Create Plan builds 1-7 ordered training days and displays `7 - days` rest days.
 Day count is derived from the actual day array, never saved as a second number.
 Name each day and add at least one exercise before saving. Incomplete input may
@@ -326,10 +355,11 @@ strings is preserved. **Draft** is an unsaved preview bound to the profile that
 opened it. Applying a prescription only changes that preview; saving makes it
 appear in the real collections. Refresh does not recover unsaved editor input.
 
-The public v2 contract in `src/schemas/interchange.ts` is separate from database
-schema v5 and backup schema v5. Valid v1 payloads remain accepted; a v1 plan requires
+The public v3 contract in `src/schemas/interchange.ts` is separate from database
+schema v5 and backup schema v8. Valid v1/v2 payloads remain accepted with their
+original strict field sets and no invented plan instructions; a v1 plan requires
 the owner to supply duration in the editable preview. Nothing is inferred from its
-name. The v2 shape is:
+name. The v3 shape is:
 
 ```ts
 type Range = { min: number; max: number }
@@ -344,6 +374,7 @@ type Exercise = {
 }
 type Plan = {
   name: string
+  instructions?: string // plain text, max 20,000; missing remains absent
   durationWeeks: number // positive safe integer, required for new plans
   trainingDaysPerWeek: number
   days: {
@@ -353,8 +384,8 @@ type Plan = {
   }[]
 }
 type Interchange =
-  | { schemaVersion: 2; kind: 'plan'; plan: Plan }
-  | { schemaVersion: 2; kind: 'workout'; workout: Exercise }
+  | { schemaVersion: 3; kind: 'plan'; plan: Plan }
+  | { schemaVersion: 3; kind: 'workout'; workout: Exercise }
 ```
 
 Exactly one matching payload is required. No IDs, ownership fields, revisions,
@@ -375,13 +406,14 @@ Rest uses seconds. Instructions allow 20,000 characters, and tags allow up to
 rules described above.
 
 Omitted `rir`, either rest field, or `youtubeUrl` defaults to `null`; omitted
-`instructions` defaults to `""`; omitted `tags` defaults to `[]`. Null instructions
+exercise `instructions` defaults to `""`; omitted `tags` defaults to `[]`. Optional
+plan `instructions` stays absent when omitted. Null instructions
 or tags are invalid. Missing RIR/rest remains unspecified internally; explicit
 zero survives unchanged. Numeric strings, missing range bounds, and empty sets
 are errors, not repaired values. Example minimal workout using these defaults:
 
 ```json
-{"schemaVersion":2,"kind":"workout","workout":{"name":"Example","sets":[{"reps":{"min":5,"max":8}}]}}
+{"schemaVersion":3,"kind":"workout","workout":{"name":"Example","sets":[{"reps":{"min":5,"max":8}}]}}
 ```
 
 Only a fully valid payload opens an **unsaved import preview** using the existing
@@ -412,27 +444,40 @@ exhaustion, and large-data performance still need the checks recorded in TODO.md
 
 Train's **Add Plan** card opens the same plan cards used in Create. One click
 appends immediately and closes the popup; duplicate additions are harmless. Cards
-remain visible with one selection and show the saved plan note truncated to one
-line. **Remove from Train** removes only the selection. Plans, runs and history
-remain. An archived selected ID stays remembered for restoration.
+remain visible with one selection. Beneath the name, they show the current program
+week, then `3 weeks · 3 training days · 4 rest days` using the committed instance.
+Upcoming, Paused and Ended boundaries do not invent a week number. Excluded weeks
+delay progression; browsing another week does not change this main-card label.
+Cards use one column on phones and two on wider screens. Add Plan and the
+empty message are centered. An archived selected ID stays remembered for restoration.
 
-Opening a plan shows its full note, a Monday-Sunday week range and vertical day
+Opening a plan shows its title, a Monday-Sunday week range, **Week N** and vertical day
 cards. Arrow buttons change weeks; the date-range button opens a date picker.
 Scheduled cards show weekday and Pending, Due Today, Past Due, Completed or Skipped
 using the schedule's saved time zone. Unscheduled weekly programs show Pending,
-Completed or Skipped without assigned weekdays. Their first activation saves the
+Completed or Skipped. Training days use saved order as a visual Monday-onward
+layout, with noninteractive Rest rows for other weekdays. This does not assign
+Calendar dates. Scheduled weeks keep actual weekdays, including separate retained
+occurrences that coincide on one date. Empty/excluded/inactive weeks never gain
+new pending days; Rest rows never count toward progress. Their first activation saves the
 profile-local Monday and time zone, duration and independent prescription snapshot.
 Old unscheduled sessions remain available under history/unfinished sessions with
-no inferred week. Separate runs have an explicit context selector and short ID;
-their occurrences are never combined in the Train detail view.
+no inferred week. Each card opens its specific instance without a context selector
+or internal ID. If that instance disappears, the page reports it unavailable instead
+of selecting another. The summary says Scheduled or Unscheduled without a timezone
+annotation; saved zones and timestamp precision remain intact internally.
 
 **Start** resumes an occurrence's existing draft. **Skip** and **Mark as Complete**
 write explicit outcome markers, not sessions or invented exercise results. A
 marked day stays reviewable and can be corrected to Pending. A saved session is
-review-only; an unfinished draft must be resumed or explicitly discarded before
-choosing a marker. The discard confirmation is separate from draft Clear.
-Calendar uses the same outcomes. Unassigned weekly work has its own weekly section,
-not an invented assigned weekday. Progress counts manual completions as completed
+review-only; an unfinished draft shows **Incomplete**, with **Resume** and confirmed
+**Discard Progress** before choosing a marker. Discard removes only its draft,
+notes and timer, preserving completed history. **Reset** confirms deletion of one
+occurrence's saved session, draft, notes, timer and explicit marker. Train, Calendar
+and Progress derive its underlying status again; other weeks/runs and measurements
+stay intact. Reset rechecks the preview and run revision in one transaction.
+Calendar uses the same outcomes. Unassigned weekly runs appear in Current/Previous Plans,
+not on an invented assigned weekday in the date grid. Progress counts manual completions as completed
 days and explicit skips as skipped days; exercise statistics still use recorded
 sets only. Excluded weeks do not count as skipped or completed.
 
@@ -443,7 +488,20 @@ Week appears only when safe: it can reuse the preceding excluded week or the fre
 week before the program's start. Saved sessions, any occurrence markers (including
 corrected markers) and drafts anywhere in the affected remainder block movement.
 Moves recheck revisions and conflicts atomically, preserve actual timestamps and
-leave independent runs alone. No destructive weekly reset exists.
+leave independent runs alone. Reset is per occurrence, never an entire week.
+
+**Back to Plans** returns without modifying the run. **Leave Plan** confirms the
+number of unfinished sessions and any future Calendar cutoff. One transaction
+records `closedAt`, stops future scheduling, removes every unfinished draft in that
+run and its timer, and removes its active selection. Completed history, markers
+and reusable templates remain. Another independent run of the same template stays
+selectable. Once all its runs have closed, adding the template creates a fresh run
+at Week 1 without inherited progress or hints. Failed/stale actions roll back.
+
+Startup/profile selection and reviewed restore remove unfinished drafts only when
+the exact profile/run/template has an explicit valid closure record. The old
+Remove from Train action did not record one: deselection, archiving, a name match
+or Stop Scheduling alone is insufficient. Ambiguous legacy drafts remain recoverable.
 
 Each start copies the complete training-day prescription: names, order, set
 targets, rest, instructions, tutorial, tags, notes, and source references. Later
@@ -460,8 +518,10 @@ numbers, bounded by safe numeric representation. Partial/invalid input can be
 retained in a draft with field errors, but cannot become completed results.
 Either correct an incompatible partly entered set or explicitly mark it skipped.
 No results are fabricated. Session and exercise Note icons open editable dialogs;
-Apply places the note in the autosaved draft. The information icon shows plain-text
-instructions and an optional validated external tutorial link. There are no inline
+Apply places the note in the autosaved draft. The information icon shows optional
+Instructions, Note and a trusted HTTPS YouTube embed from the frozen snapshot.
+Only opening information loads the player; Close disposes it. Empty sections and
+extra dividers are omitted. Historical review uses the same popup. There are no inline
 instructions/tag chips or unit selectors in Train.
 
 Weight units belong in Settings. A draft keeps each load's original input/unit;
@@ -471,6 +531,17 @@ Editing a load records that new value in the current preferred unit. Completed
 sets store both canonical kilograms and the explicitly recorded load/unit, and
 history displays the recording unit even if Settings later changes. Different sets
 may have different recording units without changing their meaning.
+
+Empty result fields can show muted previous-result placeholders, never saved or
+validated as input. Match the exact profile, plan run, day, exercise occurrence
+and set. Earlier program weeks completed no later than this session's start are
+ordered by completion timestamp, logged timestamp, then UUID descending. Each
+hint comes from one actual, non-skipped set; missing RIR stays missing and zero
+remains zero. Superset members and repeated exercises stay separate. Since sets
+have no IDs, changed target/count arrays or occurrence provenance do not match.
+Loads convert to the current unit without rewriting history. Reset removes the
+deleted session from hints. Session headers show only plan name and started date;
+stored timestamps and schedule zones retain their full precision.
 
 ### Autosave and concurrent tabs
 
@@ -482,13 +553,22 @@ protected by discard/unload prompts, but is not persisted until Apply and a
 successful autosave. Abrupt termination can lose input inside this window.
 
 The draft controller in `src/features/train/draft-controller.ts` serializes
-autosaves, Save, Clear, and timer actions for one immutable profile/draft identity.
+autosaves, Save, Clear, discard, and timer actions for one immutable profile/draft identity.
 Save incorporates the latest current input even before debounce expires. Clear
 waits for already queued work and resets the current draft; old autosaves cannot
-recreate cleared values. Navigation with unpersisted input requires confirmation.
-Confirmed departure cancels scheduled work; a transaction already in flight may
-finish, always for its original owner/draft. No delayed write can follow the
-currently selected profile into a different workspace.
+recreate cleared values. **Cancel** and other deliberate in-app departures from
+entered sessions ask **Leaving this session?** (Stay/Leave). Confirmed Leave waits
+for in-flight work then deletes even committed draft input and its timer; failures
+keep the editor/input. Empty cancellation deletes its empty artifacts without a
+prompt. Clear confirms separately and keeps the session open. Missing or closed-run
+drafts reject writes; stale tabs cannot resurrect them.
+
+Unexpected reload, browser close/backgrounding or unmount never deletes recovery
+data. Only drafts with actual entered values, skips or applied notes appear under
+Unfinished sessions. Zero counts; timers and placeholders do not. Cards contain
+only plan/date and day name, in up to three columns. This recovery covers committed
+autosaves, not the last 400 ms or an unapplied note. No delayed write can follow
+the currently selected profile into a different workspace.
 
 Every result update/Clear compares the draft revision inside its write transaction.
 Stale tabs keep their input and report the conflict. Copy any needed edits, choose
@@ -565,28 +645,80 @@ Calendar opens to the current named month with complete Monday–Sunday weeks,
 dim adjacent-month dates and actionable events. Previous/Next advances calendar
 months. Day/week views retain their own navigation, with Today and a date input.
 There is no rolling history cutoff. Scheduled dates use the visible date range.
-Unassigned programs appear separately for the containing weeks, including every
-unassigned day when Calendar is in day view; no assigned weekday is implied.
-Wide screens show seven columns; narrow screens use chronological cards with
-reachable controls above the bottom navigation. Completed events stay actionable,
-greyed and struck through with explicit Completed/Partial text. Past uncompleted
+Unscheduled programs create no dated pending/draft/skip obligations. Saved full or
+partial sessions and explicit completion markers appear on their actual completion
+date in the frozen occurrence zone (legacy sessions without a zone use the profile
+zone). A corrected manual marker uses its latest completion action time. These
+entries retain their original occurrence identity and are shown once.
+Month is divided into complete Monday–Sunday sections labeled Week 1, Week 2, etc.
+These are calendar rows, not program weeks. Each row has seven aligned columns;
+on narrow screens the row scrolls horizontally. Day/Week remain single periods.
+Completed events stay actionable,
+greyed and struck through. Cards show only plan name, smaller training-day name,
+and a status pill. Partial logs and drafts show Incomplete; full sessions and explicit
+completion markers show Completed. Past uncompleted
 events show Due Today or Past Due in their own schedule time zone. Clear in Train resets input, never calendar
-history. All screens still use the same public address and static-hosting rules.
+history. Ten muted accents distinguish plans using stable plan IDs. A profile-scoped
+localStorage display preference keeps assignments across refresh and plan-list
+changes, preferring unused colors and reusing them beyond ten plans. Colors are
+cosmetic, are not included in backups, and fall back to memory if preference storage
+is unavailable. Records remain in IndexedDB. All screens still use the same public
+address and static-hosting rules.
 
-**Add Plan** selects an active plan, a Monday start date, and one distinct weekday
-per stable training-day ID. A preview lists training/rest days and the inclusive
-start/end dates before saving. New plans require duration in weeks. A two-week plan
-starting Monday 2024-12-30 ends Sunday 2025-01-12; no next-week occurrences are
-generated. Civil-date arithmetic respects the schedule's recorded zone. Legacy
-records without duration remain unbounded; a duration in a plan name has no effect.
-Schedules freeze their effective duration/end date. Editing a plan or refreshing
-its prescriptions does not change an existing schedule's duration. **Review plan
-duration** explicitly previews that change, anchored to the original start week
-and applied only from a selected Monday. Earlier missed dates stay incomplete;
-started/completed sessions remain on their original dates with frozen prescriptions.
-Multiple schedules can use the same plan, with independent IDs and completions.
-When schedules coexist, event labels show their short schedule IDs and saved zones.
-Calendar schedules existing plans only; create plans in Create.
+**Add Plan** reuses Create's Search, Sort and plan cards. Cards show weeks,
+training days and rest days in that order; legacy unbounded durations stay explicit.
+Archived plans and templates with any active scheduled or unscheduled run are
+excluded. The selected Calendar date supplies the starting Monday; otherwise the
+saved profile zone supplies today's Monday. This context stays fixed while browsing.
+
+A card opens blank weekday selections. Every day needs one distinct weekday.
+Popup Save only stages a selection and shows a Scheduled pill; the page explains
+that nothing is persisted until its own Save. Staged cards offer Edit/Leave/Cancel.
+Canceling an edit keeps its previous configuration; page Cancel discards all pending
+selections without a browser warning or write. Other navigation/unload warnings
+remain active. Search/Sort stay above a bounded scrolling list, with Cancel/Save
+below it and space reserved above the fixed navigation.
+
+Page Save creates the entire batch in one transaction, rechecking active runs,
+plan revisions and mappings. A failure retains every pending selection and creates
+no partial batch. Stable operation IDs make exact retries idempotent; concurrent
+Train activation or Calendar assignment cannot produce another active run.
+History and preexisting duplicate assignments are preserved, never merged or deleted.
+A historical template can begin a new independent run. Plans are created in Create.
+
+**Current Plans** cards keep Plan/Completed/Skipped rings and show Scheduled or
+Non-Scheduled. The rings use shared blue/green/amber theme tokens. Action popups
+contain only Edit/Reset/End or Hide/Unhide/Delete and Cancel, with an accessible name.
+Edit schedules the existing run, preserving its start, duration, progression and
+snapshots. Save commits directly, checking the records captured when Edit opened
+inside the transaction. Concurrent changes keep the form open with an error; a
+mapping needing repair can still open for correction. Reset confirms deletion of this run's progress/drafts/
+timers and restarts Week 1 on the current Monday in its saved zone, retaining its
+prescription, duration and mapping. It creates no historical copy. End confirms
+permanent closure, keeps saved history, deletes every unfinished session across
+weeks, and permits a new independent run. Both operations reject stale previews
+and commit atomically. Run actions never delete templates, exercises or body photos.
+
+**Previous Plans** includes ended, stopped and fully resolved runs of both types.
+A run that had Calendar assignments remains Scheduled after closure. Start/final
+dates come from stored lifecycle data, including actual closure or final recorded
+completion; missing dates read Date unavailable. Search/Sort and Show hidden plans
+operate on runs. At most five cards fit before internal scrolling; Cancel returns
+the prior Calendar view/date/scroll/focus. Hide/Unhide persists on the selected run
+without changing statistics or backups. Delete explicitly confirms permanent
+removal of that run and its results/notes/outcomes, leaving other runs and templates.
+
+For T prescribed days, C full sessions or explicit completions and S explicit skips,
+Plan/Completed/Skipped rings show (C+S)/T, C/T and S/T. For 20/8/2: 50%, 40%, 10%.
+Partial logs retain actual results but are not full completions. Drafts/missed days
+add no completion; gaps add no prescribed or skipped days. Totals use committed
+run revisions/duration, including recorded exceptions. Unbounded runs show counts
+and No fixed total. Hidden history still contributes; deleted/reset results do not.
+
+Calendar uses the surface token for in-month/Day/Week cells and the main-background
+token for outside-month cells, in both themes. Today borders, selected-date inset
+and keyboard focus remain distinct. The preceding pointer fix still prevents
+scrolling a button between pointer-down/up. All navigation retains one public URL.
 
 ### Dates and time zones
 
@@ -616,57 +748,32 @@ or FullCalendar dependency was needed for these all-day views.
 
 ### Occurrences, history, and schedule changes
 
-Occurrences are generated only for the requested range. Their identity is the
-schedule UUID + stable training-day UUID + scheduled local date, scoped to the
-profile. Drafts/logs also retain scheduled week, stored zone, and schedule revision
-ID. Calendar opens/resumes that exact draft or opens its saved details in Train.
-Unscheduled drafts and logs are never adopted by a schedule. Completion comes
-only from a committed log; partial completion counts, and a late save keeps its
-original scheduled date alongside the actual completion timestamp. A new week
-has new identities and does not reset or erase anything.
+Date-based schedule keys and program-week keys keep their existing meaning. Editing
+preserves previous weeks. This week's saved/completed days, explicit skips/manual
+completions and active drafts keep their original date and identity. Only untouched
+pending days move. Future weeks use the new mapping; already recorded future work
+also stays frozen. Exceptions can share a date with another day without merging.
+Moving an untouched day into the past yields Past Due, never automatic completion.
 
-Database v5 preserves all existing records and adds `schedules` plus optional
-unique `[profileId+occurrenceKey]` indexes on drafts and sessions. Missing keys
-leave legacy unscheduled data separate. Start and completion transactions enforce
-one draft/log per occurrence across retries and competing tabs. Existing revision
-checks, autosave, timers, snapshots, error recovery, and profile boundaries remain.
-The populated v4 migration test compares all ten old stores and photo bytes.
+Assigning an existing unscheduled run marks old revisions as unscheduled and keeps
+old result references intact. Those results remain visible in Train and history;
+they never silently become scheduled Calendar completions. A corrected pending
+marker follows its newly generated mapping when the day is still untouched.
 
-Schedule revisions retain a complete plan/day/mapping snapshot, effective start,
-exclusive end, source plan revision, creation timestamp, and stable revision ID.
-**Edit mapping / refresh plan** explicitly copies current prescriptions and defaults
-to the next Monday in the schedule's zone (or its later start week). Future
-revisions may supersede pending revisions, but their metadata is retained.
-Ordinary plan edits do not automatically change scheduled prescriptions; use this
-action to apply them to future dates. Archiving a source plan does not stop an
-existing schedule; use **Stop Scheduling** separately.
+Edit Save previews the affected week and retained exceptions before confirmation.
+The transaction rechecks the run, all its recorded sessions/drafts and the current
+week, rejecting stale intent while preserving input. It retains the run's frozen
+prescription and committed duration; template edits alone do not update them.
+Older explicit duration/remap/stop records remain supported by persistence/backup
+services. The former separate management actions are replaced by Edit/Reset/End.
 
-Changing plan day IDs/count atomically adds a needs-repair segment from the next
-schedule-local Monday. Affected future dates show a mapping warning until explicitly
-remapped; earlier missed/history dates remain reconstructable. A later repair date
-intentionally leaves the intervening period blocked, rather than guessing mappings.
-Started drafts and saved sessions always retain their original prescriptions.
+Schedule and staged forms remain memory-only, with navigation/unload protection;
+refresh does not recover them. Their explicit Cancel releases only their own dirty
+state. IndexedDB stays v5; optional hidden/exception/classification fields use strict
+backup v8 with older v1-v7 compatibility and unchanged checksum validation.
 
-**Stop Scheduling** previews an inclusive cutoff (default next local Monday;
-Today or a later date may be chosen). It removes future unstarted events without
-deleting earlier occurrences, drafts, or logs. Remap/stop previews list affected
-unfinished drafts and require checking **Keep these sessions on their original
-dates, with all entered data**. Those retained exceptions remain visible, resumable,
-and completable, including after their original day is removed. Cancel leaves all
-input untouched; there is no implicit draft deletion or reassignment.
-
-Preview-to-save checks cover schedule revision, source plan revision, and affected
-draft IDs/revisions in one transaction. A conflict rejects the save and keeps form
-input. Cancel the preview and preview again for changed drafts/plans; when the
-schedule itself changed, copy needed choices, cancel the editor, and reopen it.
-Creation reuses one UUID across retries. Failed writes keep the preview open;
-success is shown only after commit. Schedule-editor input remains memory-only,
-protected by navigation/unload warnings; refresh is not editor recovery.
-
-Calendar tests use isolated contexts/databases: dates, DST, device-zone changes,
-v4 preservation, remap/repair/stop history, concurrent start/save, rollback,
-overlapping schedules, partial/late completion, reload, and profile isolation.
-See TODO.md for exact run results and physical-device/browser checks still pending.
+See [Calendar refinement verification](docs/calendar-refinements-verification.md)
+for actual test results and remaining physical-device checks.
 
 ## Progress weights and photos (Phase 7)
 
@@ -750,8 +857,8 @@ or password-protected. The app reports **Download started**; check your browser'
 downloads to confirm the file was saved. Filenames include a sanitized profile
 name and UTC export timestamp.
 
-Backup schema **4** (strict v1/v2/v3 reading retained) is separate from AI interchange and database schema **5**.
-The archive contains `manifest.json`, authoritative `data.json`, 24 linked CSVs,
+Backup schema **7** (strict v1–v6 reading retained) is separate from AI interchange and database schema **5**.
+The archive contains `manifest.json`, authoritative `data.json`, 29 linked CSVs,
 and original photo files. App version comes from the actual package.json value,
 currently `0.0.0`. See [the backup contract](docs/backup-format.md) for the full
 layout, fields, units, joins, timestamp meanings, and Phase 9 compatibility rules.
@@ -920,7 +1027,7 @@ the old address, then import its original ZIP at the new one, preferably under a
 new name. Verify reload, plans/sessions/photos and another profile before retiring
 the source. Follow the [cross-origin procedure](docs/backup-format.md#moving-between-website-addresses).
 
-Restore supports original **backup schemas 1 and 2 / database schema 5** exports, not CSV
+Restore supports original **backup schemas 1–8 / database schema 5** exports, not CSV
 reconstruction, future schemas or arbitrary repackaged ZIPs. The size/entry/photo
 limits and whole-family merge behavior above remain in force. An export can exceed
 restore limits; keep the original ZIP. Memory/device limits, physical phone/AT and
@@ -994,10 +1101,11 @@ The behavior above adds optional `timeZone` and `selectedPlanIds` profile fields
 IndexedDB remains **v5**, with no store migration. Both preference writes share
 the profile revision check, so a concurrent Settings/selection save is rejected
 and keeps recoverable input. Stored dates, timestamps and units remain intact.
-Group 3 introduced **backup v3** (now superseded by v5 above), retaining strict v1/v2 reading and checksum/asset
+Group 3 introduced **backup v3** (now superseded by v8 above), retaining strict v1/v2 reading and checksum/asset
 verification. Selected plan IDs follow independent ownership and plan-root merge
 remapping; the chosen whole-profile merge precedence also chooses preferences.
-Clear Data clears selections and retains the time zone and units. AI remains v2.
+Clear Data clears selections and retains the time zone and units. AI remained v2
+for Group 3; the current v3 format adds optional plan instructions.
 
 See [Group 3 verification](docs/group3-verification.md) for actual checks and the
 remaining owner checklist. Group 4 is described below. HTTPS remains
@@ -1012,8 +1120,9 @@ alphabetical Workouts grid shows the same statistics across all plans. Names wra
 in three columns, with two columns below 341px. Back controls remain inside the
 single public address. Refresh returns to Progress's overview, not its drill-down.
 
-Training-day totals count distinct completed scheduled occurrences or unscheduled
-sessions; partial sessions count and retain their marker. Exercise totals count
+Training-day totals count distinct fully completed occurrences/sessions and explicit
+Mark as Complete outcomes. Partial sessions retain their results and marker but do
+not count as fully completed days. Exercise totals count
 each performed occurrence with at least one recorded set. Superset members count
 separately, without counting the group again. Drafts and skipped work do not count.
 Statistics use saved actual results and completion instants, not today's targets,

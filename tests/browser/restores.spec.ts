@@ -1,3 +1,4 @@
+import { runPage } from './calendar-actions'
 import { waitForDraft, closeTimer } from './train-actions'
 import 'fake-indexeddb/auto'
 import { expect, test, type Page } from '@playwright/test'
@@ -68,7 +69,7 @@ test('new profile and rename restore recover photos, null fields, saved drafts/h
   await page.reload(); await expect(page.getByLabel('Active profile')).toHaveValue(id)
   await button(page, 'Train').click(); await page.getByRole('button', { name: /Resume Plan.*Day 3/ }).click(); await waitForDraft(page)
   await expect(page.getByRole('textbox', { name: /set 1 Weight/ }).first()).toHaveValue('12.')
-  await button(page, 'Calendar').click(); await expect(page.getByRole('article', { name: /^Schedule/ }).first()).toContainText('America/New_York')
+  await page.reload(); await button(page, 'Calendar').click(); await runPage(page); await page.getByRole('article', { name: /^Run/ }).first().getByRole('button').click(); await expect(page.getByRole('dialog')).not.toContainText('America/New_York'); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await button(page, 'Progress').click(); await page.getByRole('combobox', { name: 'Select measurement', exact: true }).selectOption({ index: 0 }); await expect(button(page, 'View progress photo').first()).toBeVisible(); await button(page, 'View progress photo').first().click(); await expect(page.getByRole('dialog').getByRole('img')).toBeVisible(); await button(page, 'Close photo').click()
   await button(page, 'Settings').click(); await button(page, 'Light').click(); await upload(page, f.bytes)
   await page.getByLabel('Import choice').selectOption('new'); await page.getByLabel('Imported profile name').fill('Renamed copy'); await preview(page)
@@ -115,7 +116,7 @@ test('invalid ZIP and failed image decoding remain recoverable; cancel/navigatio
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'bad.zip', mimeType: 'application/zip', buffer: Buffer.from('not zip') }); await expect(page.getByRole('alert')).toContainText('Invalid ZIP'); expect(await records(page)).toEqual(before)
   const zip = await JSZip.loadAsync(f.bytes), manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = 99; zip.file('manifest.json', JSON.stringify(manifest))
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'future.zip', mimeType: 'application/zip', buffer: await zip.generateAsync({ type: 'nodebuffer' }) }); await expect(page.getByRole('alert')).toContainText('Update Boros')
-  manifest.backupSchemaVersion = 5
+  manifest.backupSchemaVersion = 8
   const data = JSON.parse(await zip.file('data.json')!.async('string')); data.assets[0].width = 2; manifest.assets.find((a) => a.id === data.assets[0].id).width = 2
   const payload = new TextEncoder().encode(JSON.stringify(data)), entry = manifest.inventory.find((i) => i.path === 'data.json'); entry.bytes = payload.length; entry.sha256 = await sha256(payload)
   zip.file('data.json', payload); zip.file('manifest.json', JSON.stringify(manifest))

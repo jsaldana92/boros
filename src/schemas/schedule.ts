@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { positiveInteger, type TrainingDay } from './plan.ts'
+import { planInstructionsSnapshot, positiveInteger, type TrainingDay } from './plan.ts'
 import { addDays, dateRange, monday, validDate, validZone, weekday } from '../lib/calendar-dates.ts'
 
 export const dateSchema = z.string().refine(validDate, 'Enter a valid calendar date.')
@@ -9,11 +9,11 @@ export const mappingSchema = z.array(z.object({ dayId: z.string().uuid(), weekda
 export const scheduleInputSchema = z.object({ planId: z.string().uuid(), planRevision: z.number().int().positive(), startWeek: dateSchema.refine((date) => validDate(date) && monday(date) === date, 'Choose a Monday for the starting week.'), timeZone: z.string().refine(validZone, 'Choose a supported IANA time zone.'), mapping: mappingSchema }).strict()
 export type Mapping = z.infer<typeof mappingSchema>
 export type ScheduleInput = z.infer<typeof scheduleInputSchema>
-export interface ScheduleRevision { id: string; effectiveFrom: string; effectiveUntil?: string; createdAt: string; planRevision: number; planName: string; days: TrainingDay[]; mapping: Mapping; needsRepair?: boolean }
+export interface ScheduleRevision { id: string; effectiveFrom: string; effectiveUntil?: string; createdAt: string; planRevision: number; planName: string; planInstructions?: string; days: TrainingDay[]; mapping: Mapping; needsRepair?: boolean; unscheduled?: true }
 export interface DurationChange { id: string; effectiveFrom: string; durationWeeks?: number; endDate?: string }
-export interface OccurrenceOutcome { id: string; ref: OccurrenceRef; day: TrainingDay; planName: string; status: 'skipped' | 'completed' | 'pending'; recordedAt: string; updatedAt: string; revision: number }
+export interface OccurrenceOutcome { id: string; ref: OccurrenceRef; day: TrainingDay; planName: string; planInstructions?: string; status: 'skipped' | 'completed' | 'pending'; recordedAt: string; updatedAt: string; revision: number }
 export interface WeekMove { id: string; fromWeek: string; direction: 1 | -1; recordedAt: string }
-export interface Schedule { id: string; profileId: string; planId: string; revision: number; timeZone: string; startWeek: string; createdAt: string; updatedAt: string; stoppedFrom?: string; durationWeeks?: number; endDate?: string; durationChanges?: DurationChange[]; revisions: ScheduleRevision[]; kind?: 'unscheduled'; identity?: 'program-week'; excludedWeeks?: string[]; outcomes?: OccurrenceOutcome[]; weekMoves?: WeekMove[] }
+export interface Schedule { id: string; profileId: string; planId: string; revision: number; timeZone: string; startWeek: string; createdAt: string; updatedAt: string; closedAt?: string; hiddenAt?: string; stoppedFrom?: string; durationWeeks?: number; endDate?: string; durationChanges?: DurationChange[]; revisions: ScheduleRevision[]; kind?: 'unscheduled'; identity?: 'program-week'; excludedWeeks?: string[]; outcomes?: OccurrenceOutcome[]; weekMoves?: WeekMove[]; occurrenceExceptions?: OccurrenceRef[] }
 export function scheduleEnd(startWeek: string, durationWeeks?: number) {
   if (durationWeeks === undefined) return undefined
   positiveInteger.parse(durationWeeks)
@@ -26,7 +26,7 @@ export function scheduleActiveOn(schedule: Schedule, date: string) {
   return date >= schedule.startWeek && !schedule.excludedWeeks?.includes(monday(date)) && (!schedule.stoppedFrom || date < schedule.stoppedFrom) && (!boundary.endDate || date <= boundary.endDate)
 }
 export interface OccurrenceRef { key: string; scheduleId: string; dayId: string; scheduledDate: string; scheduledWeek: string; timeZone: string; scheduleRevisionId: string; programWeek?: number; unscheduled?: true }
-export interface Occurrence { ref: OccurrenceRef; planId: string; planName: string; day: TrainingDay }
+export interface Occurrence { ref: OccurrenceRef; planId: string; planName: string; planInstructions?: string; day: TrainingDay }
 export const occurrenceKey = (scheduleId: string, dayId: string, date: string, programWeek?: number) => `${scheduleId}:${dayId}:${programWeek === undefined ? date : `week-${programWeek}`}`
 export function programWeek(schedule: Schedule, week: string) {
   // Both operands are civil Monday labels carried in UTC, never local instants.
@@ -43,14 +43,22 @@ export function validateMapping(mapping: Mapping, days: TrainingDay[]) {
 }
 export function revisionAt(schedule: Schedule, date: string) { return schedule.revisions.findLast((item) => item.effectiveFrom <= date && (!item.effectiveUntil || date < item.effectiveUntil)) }
 export function occurrences(schedule: Schedule, start: string, end: string): Occurrence[] {
-  return dateRange(start, end).flatMap((date) => {
+  const generated = dateRange(start, end).flatMap((date) => {
     if (!scheduleActiveOn(schedule, date)) return []
     const revision = revisionAt(schedule, date)
     if (!revision || revision.needsRepair) return []
     const assignment = revision.mapping.find((item) => item.weekday === weekday(date)), day = revision.days.find((item) => item.id === assignment?.dayId)
     const week = schedule.identity ? programWeek(schedule, monday(date)) : undefined
-    return day ? [{ planId: schedule.planId, planName: revision.planName, day, ref: { key: occurrenceKey(schedule.id, day.id, date, week), scheduleId: schedule.id, dayId: day.id, scheduledDate: date, scheduledWeek: monday(date), timeZone: schedule.timeZone, scheduleRevisionId: revision.id, ...(week === undefined ? {} : { programWeek: week }), ...(schedule.kind === 'unscheduled' ? { unscheduled: true as const } : {}) } }] : []
+    if (day && schedule.occurrenceExceptions?.some((ref) => ref.dayId === day.id && ref.scheduledWeek === monday(date))) return []
+    return day ? [{ planId: schedule.planId, planName: revision.planName, ...planInstructionsSnapshot(revision.planInstructions), day, ref: { key: occurrenceKey(schedule.id, day.id, date, week), scheduleId: schedule.id, dayId: day.id, scheduledDate: date, scheduledWeek: monday(date), timeZone: schedule.timeZone, scheduleRevisionId: revision.id, ...(week === undefined ? {} : { programWeek: week }), ...(schedule.kind === 'unscheduled' || revision.unscheduled ? { unscheduled: true as const } : {}) } }] : []
   })
+  // Frozen exceptions replace one day in its week, even when two dates coincide.
+  const retained = (schedule.occurrenceExceptions ?? []).flatMap((ref) => {
+    if (ref.scheduledDate < start || ref.scheduledDate > end || !scheduleActiveOn(schedule, ref.scheduledDate)) return []
+    const revision = schedule.revisions.find((item) => item.id === ref.scheduleRevisionId), day = revision?.days.find((item) => item.id === ref.dayId)
+    return revision && day ? [{ ref, day, planId: schedule.planId, planName: revision.planName, ...planInstructionsSnapshot(revision.planInstructions) }] : []
+  })
+  return [...generated, ...retained].sort((a, b) => a.ref.scheduledDate.localeCompare(b.ref.scheduledDate))
 }
 // Close superseded segments without deleting their metadata, including pending revisions.
 export function appendRevision(schedule: Schedule, revision: ScheduleRevision) {

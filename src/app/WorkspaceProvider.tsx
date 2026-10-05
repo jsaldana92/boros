@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { profiles, type ProfileSnapshot } from '../db/profiles'
 import type { Profile, WorkspaceSettings } from '../schemas/profile'
@@ -10,6 +10,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [initError, setInitError] = useState<Error>()
   const [attempt, setAttempt] = useState(0)
   const [dirty, setDirty] = useState(false)
+  const leaveGuard = useRef<(() => Promise<boolean>) | undefined>(undefined)
+  const registerLeaveGuard = useCallback((guard: () => Promise<boolean>) => { leaveGuard.current = guard; return () => { if (leaveGuard.current === guard) leaveGuard.current = undefined } }, [])
   const [dataNotice, setDataNotice] = useState('')
   const cached = useRef<{ snapshot: ProfileSnapshot; profileList: Profile[]; settings: WorkspaceSettings } | undefined>(undefined)
   useEffect(() => {
@@ -38,13 +40,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', prevent)
   }, [dirty])
   const allowLeave = () => !dirty || window.confirm('Discard your unsaved changes?')
+  const requestLeave = async () => leaveGuard.current ? leaveGuard.current() : allowLeave()
   const error = initError || result?.error
   const incompatible = error instanceof BrowserCompatibilityError
   if (error && !available?.data) return <main className="startup"><h1>{incompatible ? 'Browser compatibility issue' : 'Browser storage unavailable'}</h1><p role="alert">{error.message}</p>{!incompatible && <p>Check browser storage permissions and available space, then retry. A profile restored or cleared in another tab must be reopened.</p>}<button onClick={() => { setInitError(undefined); setAttempt((value) => value + 1) }}>{incompatible ? 'Retry opening workspace' : 'Retry storage'}</button></main>
   if (!available?.data || available.data.snapshot.profile.id !== activeId) return <main className="startup" role="status">Opening your local workspace...</main>
   const { snapshot, profileList, settings } = available.data
-  return <WorkspaceContext.Provider value={{ snapshot, profileList, theme, sound: settings.sound ?? false, noticeAccepted: settings.noticeAccepted, dirty, setDirty, allowLeave, dataNotice,
-    select: async (id) => { if (!allowLeave()) return; await profiles.select(id); setDirty(false); setDataNotice(''); setActiveId(id) },
+  return <WorkspaceContext.Provider value={{ snapshot, profileList, theme, sound: settings.sound ?? false, noticeAccepted: settings.noticeAccepted, dirty, setDirty, allowLeave, requestLeave, registerLeaveGuard, dataNotice,
+    select: async (id) => { if (!await requestLeave()) return; await profiles.select(id); setDirty(false); setDataNotice(''); setActiveId(id) },
     useCreated: (id, notice = '') => { setDirty(false); setDataNotice(notice); setActiveId(id) },
   }}>{globalThis.isSecureContext === false && <aside className="storage-notice" role="alert"><p>This connection is not secure. Open Boros with valid HTTPS. Backups require a secure connection; existing data stays at this website address.</p></aside>}{error && <aside className="storage-notice" role="alert"><p>{incompatible ? error.message : 'This workspace is unavailable or was restored/cleared in another tab. Old edits cannot be saved into the replacement. Copy any unsaved input before reopening.'}</p><button onClick={() => { if (!allowLeave()) return; setDirty(false); setInitError(undefined); setAttempt((value) => value + 1) }}>Reopen workspace</button></aside>}{children}</WorkspaceContext.Provider>
 }

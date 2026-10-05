@@ -16,14 +16,14 @@ const ProgressPage = lazy(() => import('../features/progress/ProgressPage').then
 function NavigationProvider({ children }: { children: ReactNode }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { allowLeave } = useWorkspace()
+  const { requestLeave } = useWorkspace()
   const candidate = location.pathname.slice(1)
   const screen = isScreen(candidate) ? candidate : 'train'
   const previous = location.state?.returnScreen
   const returnScreen = isScreen(previous) && previous !== 'settings' ? previous : 'train'
   return <NavigationContext.Provider value={{ screen, returnScreen, trainingEntry: location.state?.trainingEntry, openScreen: (destination, trainingEntry) => {
-    if (!isScreen(destination) || destination === screen || !allowLeave()) return
-    navigate(`/${destination}`, { replace: true, state: destination === 'settings' ? { returnScreen: screen } : trainingEntry ? { trainingEntry } : null })
+    if (!isScreen(destination) || destination === screen) return
+    void requestLeave().then((allowed) => { if (allowed) navigate(`/${destination}`, { replace: true, state: destination === 'settings' ? { returnScreen: screen } : trainingEntry ? { trainingEntry, returnScreen: screen } : null }) })
   } }}>{children}</NavigationContext.Provider>
 }
 

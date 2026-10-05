@@ -11,17 +11,19 @@ export type SessionInput = z.infer<typeof sessionInputSchema>
 export interface SessionDraft {
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; profileId: string; revision: number; sourcePlanId: string; sourceDayId: string; activeSourceKey?: string
-  planName: string; day: TrainingDay; input: SessionInput; startedAt: string; updatedAt: string; finalizedAt?: string
+  planName: string; planInstructions?: string; day: TrainingDay; input: SessionInput; startedAt: string; updatedAt: string; finalizedAt?: string
 }
 export type RecordedSet = { skipped: true } | { skipped: false; weightKg: number; load: number; unit: WeightUnit; reps: number; rir?: number }
 export interface CompletedSession {
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; draftId: string; profileId: string; revision: number; sourcePlanId: string; sourceDayId: string
-  planName: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
+  planName: string; planInstructions?: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
   partial: boolean; startedAt: string; completedAt: string; loggedAt: string
 }
 export interface RestTimer { id: 'active'; token: string; profileId: string; draftId: string; label: string; durationSeconds: number; endAt: string; alertedAt?: string }
 export const blankSession = (day: TrainingDay, unit: WeightUnit): SessionInput => ({ notes: '', exercises: day.exercises.map((exercise) => ({ id: exercise.id, notes: '', sets: exercise.prescription.sets.map(() => ({ load: '', reps: '', rir: '', unit, skipped: false })) })) })
+// Deliberate zero and explicit skips count; timer state and visual hints never do.
+export const hasSessionInput = (input: SessionInput) => !!input.notes || input.exercises.some((exercise) => !!exercise.notes || exercise.sets.some((set) => set.load !== '' || set.reps !== '' || set.rir !== '' || set.skipped))
 export function validateDraftInput(raw: SessionInput, day: TrainingDay) {
   const input = sessionInputSchema.parse(raw)
   if (input.exercises.length !== day.exercises.length || input.exercises.some((exercise, index) => exercise.id !== day.exercises[index].id || exercise.sets.length !== day.exercises[index].prescription.sets.length)) throw new Error('Results must match the saved prescription. Nothing was saved.')

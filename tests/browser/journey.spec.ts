@@ -1,3 +1,4 @@
+import { addCalendarPlan } from './calendar-actions'
 import { waitForDraft } from './train-actions'
 import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
@@ -16,12 +17,7 @@ async function download(p: Page) {
   return { bytes, zip, data: JSON.parse(await zip.file('data.json')!.async('string')) }
 }
 async function schedule(p: Page, name: string) {
-  await button(p, 'Calendar').click(); await button(p, 'Week').click(); await button(p, 'Add Plan').click()
-  await field(p, 'Schedule plan').selectOption({ label: name })
-  await field(p, 'Starting week (Monday)').fill('2025-01-06')
-  await button(p, 'Preview schedule').click(); await button(p, 'Confirm schedule').click()
-  await expect(p.getByRole('article', { name: `Schedule ${name}`, exact: true })).toBeVisible()
-  await field(p, 'Calendar date').fill('2025-01-06')
+  await button(p, 'Calendar').click(); await button(p, 'Week').click(); await addCalendarPlan(p, '2025-01-06', name)
 }
 async function note(p: Page, name: string, text: string) {
   await button(p, name).click(); await field(p, 'Note').fill(text); await button(p, 'Apply note').click()
@@ -69,16 +65,13 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   }
   await button(page, 'Save plan').click(); await expect(planCard(page, 'Manual four')).toBeVisible()
   await schedule(page, 'Manual four')
-  await page.locator('.calendar-event').filter({ hasText: 'Manual four / Day 1' }).click()
+  await page.locator('.calendar-event').filter({ hasText: /Manual four.*Day 1/ }).click()
   await note(page, 'Session Note', 'Session <script>inert</script> note')
   await note(page, 'Note for Journey squat', 'Knee felt good')
   await button(page, 'Information for Journey squat').click()
   await expect(page.getByRole('dialog')).toContainText('<b>Plain instructions</b>')
-  await expect(page.getByRole('link', { name: 'Open YouTube tutorial' })).toHaveAttribute('href', 'https://youtu.be/abcdefghijk')
-  // Intercept only an explicitly opened external tab; no real third-party request.
-  await context.route('https://youtu.be/**', (route) => route.fulfill({ contentType: 'text/html', body: '<title>Explicit tutorial</title>' }))
-  expect(requests.every((url) => new URL(url).origin === new URL(address).origin)).toBe(true)
-  const popup = page.waitForEvent('popup'); await page.getByRole('link', { name: 'Open YouTube tutorial' }).click(); await (await popup).close()
+  await expect(page.locator('iframe')).toHaveAttribute('src', /youtube.com\/embed\/abcdefghijk/)
+  expect(requests.every((url) => new URL(url).origin === new URL(address).origin || url.startsWith('https://www.youtube.com/embed/'))).toBe(true)
   await button(page, 'Close').click()
   for (let i = 1; i <= 3; i++) {
     await field(page, `Journey squat set ${i} Weight (lb)`).fill(String((i - 1) * 50))
@@ -105,15 +98,15 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit')
   await field(page, 'Set 1 Reps minimum').fill('9'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
   await expect(planCard(page, 'AI plan')).toBeVisible(); await schedule(page, 'AI plan')
-  await page.locator('.calendar-event').filter({ hasText: 'AI plan / AI day' }).click()
+  await page.locator('.calendar-event').filter({ hasText: /AI plan.*AI day/ }).click()
   await field(page, 'AI row set 1 Weight (lb)').fill('50'); await field(page, 'AI row set 1 Repetitions').fill('10')
   await note(page, 'Session Note', 'AI uses the shared history'); await button(page, 'Save').click()
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('AI uses the shared history')
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-06')
-  await page.locator('.calendar-event').filter({ hasText: 'Manual four / Day 3' }).click()
+  await page.locator('.calendar-event').filter({ hasText: /Manual four.*Day 3/ }).click()
   await field(page, 'Journey squat set 1 Weight (lb)').fill('12.')
   await note(page, 'Session Note', 'Resume me after restore')
-  await waitForDraft(page)
+  await waitForDraft(page); await page.reload()
   await button(page, 'Progress').click(); await button(page, 'Add measurement').click()
   await field(page, 'Weight (lb)').fill('150'); await field(page, 'Measurement date/time').fill('2025-01-08T10:00')
   const photo = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 640; c.height = 480; c.getContext('2d')!.fillRect(0, 0, 640, 480); return c.toDataURL('image/jpeg').split(',')[1] })
@@ -137,7 +130,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await button(page, 'Train').click(); await page.getByRole('button', { name: /Resume Manual four \/ Day 3/ }).click()
   await expect(field(page, 'Journey squat set 1 Weight (lb)')).toHaveValue('12.')
   await button(page, 'Session Note').click(); await expect(field(page, 'Note')).toHaveValue('Resume me after restore'); await page.keyboard.press('Escape')
-  await button(page, 'Progress').click(); await button(page, 'View progress photo').click(); await expect(page.getByAltText('Saved progress photo')).toBeVisible()
+  await page.reload(); await button(page, 'Progress').click(); await button(page, 'View progress photo').click(); await expect(page.getByAltText('Saved progress photo')).toBeVisible()
   await page.keyboard.press('Escape'); await expect(button(page, 'View progress photo')).toBeFocused()
   await page.setViewportSize({ width: 320, height: 740 }); await page.addStyleTag({ content: 'html { font-size: 24px; }' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -155,6 +148,6 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   expect((await download(page)).data).toEqual(other.data)
   expect(page.url()).toBe(address); expect(errors).toEqual([])
   const external = requests.filter((url) => new URL(url).origin !== new URL(address).origin)
-  expect(external.filter((url) => !url.startsWith('https://www.youtube.com/embed/'))).toEqual(['https://youtu.be/abcdefghijk'])
+  expect(external.filter((url) => !url.startsWith('https://www.youtube.com/embed/'))).toEqual([])
   expect(external.filter((url) => url.startsWith('https://www.youtube.com/embed/')).every((url) => url === 'https://www.youtube.com/embed/abcdefghijk?autoplay=0&controls=1&playsinline=1&fs=1')).toBe(true)
 })

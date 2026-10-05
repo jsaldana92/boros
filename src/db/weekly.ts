@@ -1,3 +1,6 @@
+import { planInstructionsSnapshot } from '../schemas/plan.ts'
+import { assertCalendarAssignment } from './calendar-assignment.ts'
+import { runLifecycle } from '../lib/run-progress.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { addDays, browserZone, localToday, monday } from '../lib/calendar-dates.ts'
@@ -18,16 +21,18 @@ export function weeklyService(database: BorosDatabase) {
     const profile = await owner(profileId), plan = await database.plans.get([profileId, planId])
     if (!plan || plan.archivedAt) throw new Error('Choose an active plan.')
     const existing = await database.schedules.where('[profileId+planId]').equals([profileId, planId]).toArray()
-    if (existing.length) return existing
+    const logs = await database.sessions.where('profileId').equals(profileId).toArray()
+    const open = existing.filter((run) => !runLifecycle(run, logs).previous)
+    if (open.length) return open
     const timeZone = profile.timeZone ?? browserZone(), startWeek = monday(localToday(timeZone)), now = new Date().toISOString()
-    const value: Schedule = { id: createId(), profileId, planId, revision: 1, kind: 'unscheduled', identity: 'program-week', timeZone, startWeek, createdAt: now, updatedAt: now, ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks, endDate: programEnd(startWeek, plan.durationWeeks) }), revisions: [{ id: createId(), effectiveFrom: startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, days: structuredClone(plan.days), mapping: plan.days.map((day, weekday) => ({ dayId: day.id, weekday })) }] }
+    const value: Schedule = { id: createId(), profileId, planId, revision: 1, kind: 'unscheduled', identity: 'program-week', timeZone, startWeek, createdAt: now, updatedAt: now, ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks, endDate: programEnd(startWeek, plan.durationWeeks) }), revisions: [{ id: createId(), effectiveFrom: startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), mapping: plan.days.map((day, weekday) => ({ dayId: day.id, weekday })) }] }
     await database.schedules.add(value); return [value]
   }
   const preview = async (profileId: string, id: string, revision: number, week: string, direction: 1 | -1): Promise<MovePreview> => {
     dateSchema.parse(week)
     if (monday(week) !== week || ![1, -1].includes(direction)) throw new Error('Choose a program week and move direction.')
     const value = await run(profileId, id, revision)
-    if (value.stoppedFrom) throw new Error('A stopped program cannot be moved.')
+    if (value.closedAt || value.stoppedFrom) throw new Error('A stopped program cannot be moved.')
     if (!occurrences(value, week, addDays(week, 6)).length) throw new Error('Choose an active program week. Excluded weeks have no training to move.')
     const previous = addDays(week, -7), gaps = value.excludedWeeks ?? []
     if (direction === -1 && previous >= value.startWeek && !gaps.includes(previous)) throw new Error('The previous week is not free. Only an excluded gap or the week before the program starts can be reused.')
@@ -63,7 +68,9 @@ export function weeklyService(database: BorosDatabase) {
     async outcome(profileId: string, ref: OccurrenceRef, revision: number, status: 'skipped' | 'completed' | 'pending') {
       return database.transaction('rw', tables, async () => {
         if (!['skipped', 'completed', 'pending'].includes(status)) throw new Error('Choose a supported outcome.')
-        const value = await run(profileId, ref.scheduleId), prior = value.outcomes?.find((item) => item.ref.key === ref.key)
+        const value = await run(profileId, ref.scheduleId)
+        if (value.closedAt) throw new Error('This plan run was left; its outcomes are historical.')
+        const prior = value.outcomes?.find((item) => item.ref.key === ref.key)
         // A retry of the exact committed state is harmless; other stale intent fails.
         if (prior?.status === status && value.revision === revision + 1) return value
         if (value.revision !== revision) throw new Error('This program changed. Close and reopen the day before changing its status.')
@@ -74,7 +81,8 @@ export function weeklyService(database: BorosDatabase) {
         const event = occurrences(value, ref.scheduledDate, ref.scheduledDate).find((item) => item.ref.key === ref.key)
         if (!event && !prior) throw new Error('This occurrence changed. Reopen the program week.')
         const now = new Date().toISOString()
-        const outcome = { id: prior?.id ?? createId(), ref: structuredClone(prior?.ref ?? event!.ref), day: structuredClone(prior?.day ?? event!.day), planName: prior?.planName ?? event!.planName, status, recordedAt: prior?.recordedAt ?? now, updatedAt: now, revision: (prior?.revision ?? 0) + 1 }
+        const source = prior?.status === 'pending' ? event ?? prior : prior ?? event!
+        const outcome = { id: prior?.id ?? createId(), ref: structuredClone(source.ref), day: structuredClone(source.day), planName: source.planName, ...planInstructionsSnapshot(source.planInstructions), status, recordedAt: prior?.recordedAt ?? now, updatedAt: now, revision: (prior?.revision ?? 0) + 1 }
         const next = { ...value, outcomes: [...(value.outcomes ?? []).filter((item) => item.ref.key !== ref.key), outcome], revision: value.revision + 1, updatedAt: now }
         await database.schedules.put(next); return next
       })
@@ -95,6 +103,7 @@ export function weeklyService(database: BorosDatabase) {
         const fresh = await preview(profileId, proposed.scheduleId, proposed.revision, proposed.week, proposed.direction)
         if (fresh.fingerprint !== proposed.fingerprint) throw new Error('The program changed after preview. Preview again.')
         const now = new Date().toISOString(), next = { ...fresh.next, revision: fresh.revision + 1, updatedAt: now, weekMoves: [...(fresh.next.weekMoves ?? []), { id: createId(), fromWeek: fresh.week, direction: fresh.direction, recordedAt: now }] }
+        await assertCalendarAssignment(database, next)
         await database.schedules.put(next); return next
       })
     },

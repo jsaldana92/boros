@@ -7,7 +7,7 @@ import { planService } from '../../src/db/plans.ts'
 import { weeklyService } from '../../src/db/weekly.ts'
 import { scheduleService } from '../../src/db/schedules.ts'
 import { sessionService } from '../../src/db/sessions.ts'
-import { copyExercise, newDay } from '../../src/schemas/plan.ts'
+import { copyExercise, newDay, planToInput } from '../../src/schemas/plan.ts'
 import { occurrences, programWeek } from '../../src/schemas/schedule.ts'
 import { addDays } from '../../src/lib/calendar-dates.ts'
 import { dayStatus, weekLabel } from '../../src/lib/weekly-status.ts'
@@ -70,7 +70,8 @@ test('weekly outcomes are explicit, idempotent, stale-protected and do not fabri
 test('forward gap and reversal preserve program identity, finite endings and independent schedules', async (t) => {
   const { db, id, plan, weekly, calendar } = await setup(t)
   const run = await calendar.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: '2026-12-21', timeZone: 'America/New_York', mapping: [{ dayId: plan.days[0].id, weekday: 0 }] })
-  const independent = await calendar.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: '2026-12-21', timeZone: 'Asia/Tokyo', mapping: [{ dayId: plan.days[0].id, weekday: 1 }] })
+  const otherPlan = await planService(db).save(id, { ...planToInput(plan), name: 'Independent plan' })
+  const independent = await calendar.create(id, { planId: otherPlan.id, planRevision: plan.revision, startWeek: '2026-12-21', timeZone: 'Asia/Tokyo', mapping: [{ dayId: plan.days[0].id, weekday: 1 }] })
   const preview = await weekly.previewMove(id, run.id, run.revision, '2026-12-28', 1)
   assert.equal(preview.next.endDate, '2027-01-24')
   const moved = await weekly.move(id, preview)
@@ -120,7 +121,7 @@ test('weekly gaps, outcomes, saved results, notes and statistics survive ZIP and
   assert.equal(stats.daysCompleted, 1); assert.equal(stats.daysSkipped, 1); assert.equal(stats.exercisesCompleted, 0)
   assert.equal(dayStatus((await calendar.events(id, secondWeek, addDays(secondWeek, 6)))[0]), 'Skipped')
   const snapshot = await captureProfile(id, db), backup = await readBackup((await generateBackup(snapshot, 'weekly-test')).bytes)
-  assert.equal(backup.data.backupSchemaVersion, 5); assert.deepEqual(backup.data.schedules, snapshot.schedules)
+  assert.equal(backup.data.backupSchemaVersion, 8); assert.deepEqual(backup.data.schedules, snapshot.schedules)
   for (const choice of ['new', 'replace', 'device', 'import'] as const) {
     const restored = await buildRestorePlan(backup, choice === 'new' ? undefined : snapshot, choice, crypto.randomUUID(), snapshot.profile.name, new Date().toISOString())
     assert.deepEqual(restored.result.schedules.map(({ profileId: _id, ...row }) => row), snapshot.schedules.map(({ profileId: _id, ...row }) => row))

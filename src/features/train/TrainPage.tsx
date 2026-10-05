@@ -1,3 +1,6 @@
+import { ExerciseInformation } from './ExerciseInformation'
+import { browserZone, localToday } from '../../lib/calendar-dates'
+import type { ResultHints } from '../../lib/previous-results'
 import { TimerDisplay } from './TimerDisplay'
 import { TimerFeedback } from './timer-feedback'
 import { RestInput } from '../../components/ui/RestInput'
@@ -12,12 +15,15 @@ import { PlanSelection } from './PlanSelection'
 import { PlanCard } from '../create/PlanCard'
 import { WeeklyPlan } from './WeeklyPlan'
 import { weekly } from '../../db/weekly'
+import { currentProgramLabel, programSummary } from '../../lib/program-display'
+import { planSubtitle } from '../create/plan-subtitle'
+import { useCurrentInstant } from '../../lib/use-current-instant'
+import { runLifecycle } from '../../lib/run-progress'
 import { useScreenNavigation } from '../../app/navigation-context'
 import { sessions } from '../../db/sessions'
-import { assessSession, displayedLoad, numericResult, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
+import { assessSession, hasSessionInput, displayedLoad, numericResult, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
 import type { WeightUnit } from '../../schemas/profile'
 import type { ExerciseInput } from '../../schemas/exercise'
-import { isYouTubeUrl } from '../../schemas/exercise'
 import { roundCount, trainingBlocks, type PlanExercise } from '../../schemas/plan'
 import { DraftController } from './draft-controller'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -29,17 +35,19 @@ export function TrainPage() {
   return <TrainWorkspace key={snapshot.profile.id} profileId={snapshot.profile.id} unit={snapshot.profile.weightUnit} />
 }
 function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUnit }) {
-  const { snapshot } = useWorkspace(), { trainingEntry } = useScreenNavigation()
+  const { snapshot } = useWorkspace(), { trainingEntry, returnScreen, openScreen } = useScreenNavigation()
   const [selecting, setSelecting] = useState(false), [history, setHistory] = useState(false)
   const [attempt, setAttempt] = useState(0), [error, setError] = useState(''), [busy, setBusy] = useState(false), [planId, setPlan] = useState('')
   const [opened, setOpened] = useState<SessionDraft>(), [review, setReview] = useState<CompletedSession>()
+  const [programContext, setProgramContext] = useState<{ planId: string; runId: string; week?: string }>()
+  const instant = useCurrentInstant()
   const result = useLiveQuery(async () => {
     try { return { data: await sessions.library(profileId), error: '' } } catch (error) { return { data: undefined, error: (error as Error).message } }
   }, [profileId, attempt])
   const data = result?.data, selected = (snapshot.profile.selectedPlanIds ?? []).flatMap((id) => data?.plans.find((p) => p.id === id) ?? [])
   const plan = selected.find((item) => item.id === planId)
   const focus = () => requestAnimationFrame(() => document.getElementById('train-heading')?.focus())
-  const open = (value: { draft?: SessionDraft; session?: CompletedSession }) => { setOpened(value.draft); setReview(value.session); focus() }
+  const open = (value: { draft?: SessionDraft; session?: CompletedSession }) => { const record = value.draft ?? value.session; if (record?.occurrence) setProgramContext({ planId: record.sourcePlanId, runId: record.occurrence.scheduleId, week: record.occurrence.scheduledWeek }); setOpened(value.draft); setReview(value.session); focus() }
   useEffect(() => {
     if (!trainingEntry || trainingEntry.profileId !== profileId) return
     let alive = true
@@ -54,20 +62,27 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
     return () => { alive = false }
   }, [trainingEntry, profileId])
   const act = async (work: () => Promise<void>) => { if (busy) return; setBusy(true); setError(''); try { await work() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
-  return <><h1 id="train-heading" tabIndex={-1}>{!opened && !review && !history && plan ? plan.name : 'Train'}</h1>
+  const selectedRun = data?.schedules.find((run) => run.id === programContext?.runId && run.planId === planId)
+  return <><h1 id="train-heading" tabIndex={-1}>{!opened && !review && !history && plan ? selectedRun ? programSummary(selectedRun, localToday(selectedRun.timeZone, instant)).name : plan.name : 'Train'}</h1>
     {result?.error && <p role="alert">Could not refresh saved training data or timer. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry training</button></p>}
-    {opened ? <SessionEditor key={opened.id} initial={opened} unit={unit} timer={data?.timer?.draftId === opened.id ? data.timer : undefined} onClose={() => { setOpened(undefined); focus() }} onCompleted={(session) => { setOpened(undefined); setReview(session); focus() }} />
+    {opened ? <SessionEditor key={opened.id} initial={opened} unit={unit} timer={data?.timer?.draftId === opened.id ? data.timer : undefined} onClose={() => { setOpened(undefined); if (trainingEntry && returnScreen !== 'train') openScreen(returnScreen); else focus() }} onCompleted={(session) => { setOpened(undefined); setReview(session); focus() }} />
       : review ? <SessionReview session={review} onClose={() => { setReview(undefined); focus() }} /> : <>
         {!result && <p role="status">Loading training days...</p>}
         {data && <>
-          {plan && !history ? <><WeeklyPlan key={plan.id} plan={plan} runs={data.schedules.filter((run) => run.planId === plan.id)} onOpened={open} /><div className="actions"><button onClick={() => { setPlan(''); focus() }}>Back to plans</button><button disabled={busy} onClick={() => void act(async () => { await weekly.removePlan(profileId, plan.id); setPlan(''); focus() })}>Remove from Train</button></div></> : <>
+          {plan && !history ? <WeeklyPlan key={programContext?.runId ?? plan.id} plan={plan} runId={programContext?.planId === plan.id ? programContext.runId : ''} initialWeek={programContext?.planId === plan.id ? programContext.week : undefined} runs={data.schedules.filter((run) => run.planId === plan.id)} onOpened={open} onBack={() => { setPlan(''); focus() }} onLeft={() => { setPlan(''); setProgramContext(undefined); focus() }} /> : <>
             <button className="catalog-card add-plan-card" onClick={() => setSelecting(true)}>Add Plan</button>
-            {!selected.length && <p>No active plan(s) selected.</p>}
-            <div className="train-plan-cards">{selected.map((item) => <PlanCard key={item.id} plan={item} note disabled={busy} onClick={() => void act(async () => { await weekly.activate(profileId, item.id); setPlan(item.id); setHistory(false); focus() })} />)}</div>
+            {!selected.length && <p className="train-empty">No active plan(s) selected.</p>}
+            <div className="train-plan-cards">{selected.flatMap((item) => {
+              const candidates = data.schedules.filter((run) => run.planId === item.id && !run.closedAt)
+              const active = candidates.filter((run) => !runLifecycle(run, data.sessions, instant).previous)
+              const runs = active.length ? active : candidates.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 1)
+              if (!runs.length) return <PlanCard key={item.id} plan={item} disabled={busy} subtitle={<><span>Not started</span><span className="muted">{planSubtitle(item)}</span></>} onClick={() => void act(async () => { const opened = await weekly.activate(profileId, item.id); if (opened.length === 1) { setProgramContext({ planId: item.id, runId: opened[0].id }); setPlan(item.id) } setHistory(false); focus() })} />
+              return runs.map((run) => { const summary = programSummary(run, localToday(run.timeZone, instant)); return <PlanCard key={run.id} plan={summary} subtitle={<><span className="current-program-week">{currentProgramLabel(run, data.sessions, instant)}</span><span className="muted">{planSubtitle(summary)}</span></>} onClick={() => { setProgramContext({ planId: item.id, runId: run.id }); setPlan(item.id); setHistory(false); focus() }} /> })
+            })}</div>
           </>}
           {!!data.sessions.length && <button aria-expanded={history} onClick={() => setHistory(!history)}>Saved sessions ({data.sessions.length})</button>}
           {history && <section aria-label="Saved sessions"><h2>Saved sessions</h2>{data.sessions.map((session) => <article className="exercise-card" key={session.id} aria-label={'Session ' + session.planName + ' / ' + session.day.name}><h3>{session.planName} / {session.day.name}</h3><p>{session.partial ? 'Partial session' : 'Complete session'} / {displayDateTime(session.completedAt)}</p><button onClick={() => open({ session })}>Review session</button></article>)}</section>}
-          {data.drafts.length > 0 && <section aria-label="Unfinished sessions"><h2>Unfinished sessions</h2>{data.drafts.map((draft) => <p key={draft.id}><button onClick={() => { setPlan(draft.sourcePlanId); open({ draft }) }}>Resume {draft.planName} / {draft.day.name}{draft.occurrence ? ' / Week of ' + draft.occurrence.scheduledWeek + ' / ' + draft.occurrence.timeZone : ' / Legacy session (week unassigned)'}</button></p>)}</section>}
+          {data.drafts.some((draft) => hasSessionInput(draft.input)) && <section aria-label="Unfinished sessions"><h2>Unfinished sessions</h2><div className="unfinished-cards">{data.drafts.filter((draft) => hasSessionInput(draft.input)).map((draft) => <button className="catalog-card unfinished-card" key={draft.id} aria-label={'Resume ' + draft.planName + ' / ' + draft.day.name + ' / ' + localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))} onClick={() => { setPlan(draft.sourcePlanId); open({ draft }) }}><span>{draft.planName} &middot; {localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))}</span><small>{draft.day.name}</small></button>)}</div></section>}
           {selecting && <PlanSelection plans={data.plans} onClose={() => { setSelecting(false); setHistory(false) }} />}
         </>}
       </>}
@@ -75,12 +90,13 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
   </>
 }
 function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial: SessionDraft; unit: WeightUnit; timer?: RestTimer; onClose: () => void; onCompleted: (session: CompletedSession) => void }) {
-  const { setDirty, sound } = useWorkspace()
+  const { setDirty, sound, registerLeaveGuard, snapshot } = useWorkspace()
   const [controller] = useState(() => new DraftController(initial)), [, render] = useState(0)
   const [note, setNote] = useState<{ index?: number; value: string }>(), [noteDirty, setNoteDirty] = useState(false)
   const [info, setInfo] = useState<ExerciseInput>(), [confirm, setConfirm] = useState<'clear' | 'partial' | 'reload' | 'leave'>()
   const [error, setError] = useState(''), [timerBusy, setTimerBusy] = useState(false)
-  const [leaving, setLeaving] = useState(false)
+  const [leaving, setLeaving] = useState(false), leaveBusy = useRef(false), leaveReply = useRef<((allowed: boolean) => void) | undefined>(undefined)
+  const hints = useLiveQuery(async () => { try { return { values: await sessions.hints(initial, unit) } } catch { return { values: {} as ResultHints, error: 'Previous results could not load. You can still enter this session.' } } }, [initial.id, unit])
   const [feedback] = useState(() => new TimerFeedback(() => new Audio(new URL(import.meta.env.BASE_URL + 'rest-complete.mp3', document.baseURI).href), (milliseconds) => { navigator.vibrate?.(milliseconds) }, setError))
   useEffect(() => () => feedback.cancel(), [feedback, sound])
   const heading = useRef<HTMLHeadingElement>(null)
@@ -93,8 +109,21 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
   const unsaved = controller.status !== 'saved' || controller.busy || noteDirty
   useEffect(() => { setDirty(unsaved) }, [unsaved, setDirty])
   const assessed = assessSession(controller.input)
-  const entered = !!controller.input.notes || controller.input.exercises.some((exercise) => !!exercise.notes || exercise.sets.some((set) => !!set.load || !!set.reps || !!set.rir || set.skipped))
-  const leave = async () => { if (leaving) return; setLeaving(true); setError(''); try { await controller.flush(); feedback.cancel(); setDirty(false); onClose() } catch (e) { setError((e as Error).message) } finally { setLeaving(false) } }
+  const discard = async (reply: (allowed: boolean) => void) => {
+    if (leaveBusy.current) { reply(false); return }
+    leaveBusy.current = true; setLeaving(true); setError('')
+    try { await controller.discard(); feedback.cancel(); setDirty(false); reply(true) }
+    catch (e) { setError((e as Error).message); reply(false) }
+    finally { leaveBusy.current = false; setLeaving(false); leaveReply.current = undefined }
+  }
+  const requestSessionLeave = () => new Promise<boolean>((resolve) => {
+    if (leaveReply.current || leaveBusy.current) { resolve(false); return }
+    if (controller.record.finalizedAt || controller.discarded) { resolve(true); return }
+    if (hasSessionInput(controller.input) || noteDirty) { leaveReply.current = resolve; setConfirm('leave') }
+    else void discard(resolve)
+  })
+  useEffect(() => registerLeaveGuard(requestSessionLeave))
+  useEffect(() => () => { leaveReply.current?.(false) }, [])
   const act = async (work: () => Promise<unknown>) => { setError(''); try { await work() } catch (error) { setError((error as Error).message) } }
   const timerAction = async (work: () => Promise<unknown>) => { if (timerBusy) return; setTimerBusy(true); await act(work); setTimerBusy(false) }
   const save = () => {
@@ -112,18 +141,20 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
   const setFields = (exercise: PlanExercise, s: number) => {
     const e = initial.day.exercises.findIndex((item) => item.id === exercise.id), prescribed = exercise.prescription.sets[s]
     if (!prescribed) return null
+    const hint = hints?.values[exercise.id]?.[s]
     const set = controller.input.exercises[e].sets[s], prefix = `${e}.${s}`, label = `${memberLabel(exercise)} set ${s + 1}`
     const update = (field: 'load' | 'reps' | 'rir' | 'skipped', value: string | boolean) => { const input = structuredClone(controller.input); Object.assign(input.exercises[e].sets[s], { [field]: value }, field === 'load' ? { unit } : {}); controller.change(input) }
-    return <div className="training-set" key={exercise.id} data-occurrence-id={exercise.id}><h4>{exercise.groupId ? memberLabel(exercise) : `Set ${s + 1}`}</h4><p>Target: {target(prescribed.reps)} reps · {target(prescribed.rir)} RIR</p><div className="training-fields">
-      <Field label={`Weight (${unit})`} aria-label={`${label} Weight (${unit})`} inputMode="decimal" maxLength={64} disabled={set.skipped} value={displayedLoad(set, unit)} error={assessed.errors[`${prefix}.load`]} onChange={(event) => update('load', event.target.value)} />
-      <Field label="Reps" aria-label={`${label} Repetitions`} inputMode="numeric" maxLength={64} disabled={set.skipped} value={set.reps} error={assessed.errors[`${prefix}.reps`]} onChange={(event) => update('reps', event.target.value)} />
-      <Field label="RIR (optional)" aria-label={`${label} Actual RIR (optional)`} inputMode="numeric" maxLength={64} disabled={set.skipped} value={set.rir} error={assessed.errors[`${prefix}.rir`]} onChange={(event) => update('rir', event.target.value)} />
-    </div>{set.unit !== unit && set.load && numericResult(set.load) === undefined && <p className="field-error">Invalid saved load in {set.unit}; replace it with a valid {unit} value.</p>}<label className="check-label"><input type="checkbox" checked={set.skipped} onChange={(event) => update('skipped', event.target.checked)} />Skip {label}</label></div>
+    return <div className="training-set" key={exercise.id} data-occurrence-id={exercise.id}><h4 className="set-heading">{exercise.groupId ? memberLabel(exercise) : `Set ${s + 1}`}</h4><p className="set-target">{target(prescribed.reps)} reps{prescribed.rir && <> · {target(prescribed.rir)} RIR</>}</p><div className="training-fields">
+      <Field label={`Weight (${unit})`} aria-label={`${label} Weight (${unit})`} inputMode="decimal" maxLength={64} disabled={set.skipped} placeholder={hint?.load} aria-describedby={hint ? `previous-${exercise.id}-${s}` : undefined} value={displayedLoad(set, unit)} error={assessed.errors[`${prefix}.load`]} onChange={(event) => update('load', event.target.value)} />
+      <Field label="Reps" aria-label={`${label} Repetitions`} inputMode="numeric" maxLength={64} disabled={set.skipped} placeholder={hint?.reps} aria-describedby={hint ? `previous-${exercise.id}-${s}` : undefined} value={set.reps} error={assessed.errors[`${prefix}.reps`]} onChange={(event) => update('reps', event.target.value)} />
+      <Field label="RIR (optional)" aria-label={`${label} Actual RIR (optional)`} inputMode="numeric" maxLength={64} disabled={set.skipped} placeholder={hint?.rir} aria-describedby={hint?.rir !== undefined ? `previous-${exercise.id}-${s}` : undefined} value={set.rir} error={assessed.errors[`${prefix}.rir`]} onChange={(event) => update('rir', event.target.value)} />
+    </div>{hint && <span className="sr-only" id={`previous-${exercise.id}-${s}`}>Placeholders show previous results, not entered values.</span>}{set.unit !== unit && set.load && numericResult(set.load) === undefined && <p className="field-error">Invalid saved load in {set.unit}; replace it with a valid {unit} value.</p>}<label className="check-label"><input type="checkbox" checked={set.skipped} onChange={(event) => update('skipped', event.target.checked)} />Skip {label}</label></div>
   }
   return <section className="training-session" aria-label="Training session">
     <div className="training-heading"><h2 ref={heading} tabIndex={-1}>{initial.day.name}</h2><button aria-label="Session Note" disabled={controller.busy || !!controller.record.finalizedAt} onClick={() => setNote({ value: controller.input.notes })}><NotebookPen aria-hidden="true" size={20} /></button></div>
-    <p className="muted">{initial.planName} · Weight ({unit}) · Change units in Settings.</p>
-    {initial.occurrence && <p>{initial.occurrence.unscheduled ? 'Weekly program' : 'Scheduled: ' + initial.occurrence.scheduledDate} · Week of {initial.occurrence.scheduledWeek} · {initial.occurrence.timeZone} · In progress</p>}
+    <p className="muted">{initial.planName}</p>
+    <p>Started: {localToday(initial.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(initial.startedAt))}</p>
+    {hints?.error && <p role="alert">{hints.error}</p>}
     {controller.status !== 'saved' && <p role="status">{controller.status === 'failed' ? 'Draft not saved. Your input is kept.' : 'Saving…'}</p>}
     {controller.error && <p role="alert">{controller.error}</p>}
     {controller.status === 'failed' && <div className="actions"><button disabled={controller.busy} onClick={() => void act(() => controller.flush())}>Retry draft save</button><button disabled={controller.busy} onClick={() => setConfirm('reload')}>Reload saved draft</button></div>}
@@ -142,16 +173,16 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
       </section>)}
     </fieldset>
     {error && error !== controller.error && <p role="alert">{error}</p>}
-    <div className="session-actions"><button className="primary" disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={save}>{controller.busy ? 'Working...' : 'Save'}</button><div className="session-secondary"><button disabled={leaving || controller.busy || timerBusy} onClick={() => entered ? setConfirm('leave') : void leave()}>Back</button><button disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={() => setConfirm('clear')}>Clear</button></div></div>
+    <div className="session-actions"><button className="primary" disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={save}>{controller.busy ? 'Working...' : 'Save'}</button><div className="session-secondary"><button disabled={leaving || controller.busy || timerBusy} onClick={() => void requestSessionLeave().then((allowed) => { if (allowed) onClose() })}>Cancel</button><button disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={() => hasSessionInput(controller.input) ? setConfirm('clear') : void act(() => controller.clear())}>Clear</button></div></div>
     {note && <NoteDialog value={note.value} title={note.index === undefined ? 'Session note' : `Note: ${initial.day.exercises[note.index].prescription.name}`} onDirty={setNoteDirty} onClose={() => { setNote(undefined); setNoteDirty(false) }} onApply={(value) => { const input = structuredClone(controller.input); if (note.index === undefined) input.notes = value; else input.exercises[note.index].notes = value; controller.change(input); setNote(undefined); setNoteDirty(false) }} />}
-    {info && <ConfirmDialog title={info.name} confirmLabel="Close" onCancel={() => setInfo(undefined)} onConfirm={() => setInfo(undefined)}><p className="plain-text">{info.instructions || 'No instructions.'}</p><p className="plain-text">Prescription note: {info.notes || 'None'}</p>{info.tutorialUrl && isYouTubeUrl(info.tutorialUrl) && <a className="tutorial-link" href={info.tutorialUrl} target="_blank" rel="noopener noreferrer">Open YouTube tutorial</a>}</ConfirmDialog>}
-    {confirm && <ConfirmDialog title={confirm === 'clear' ? 'Clear entered results and notes?' : confirm === 'leave' ? 'Leave this session?' : confirm === 'partial' ? 'Save partial session?' : 'Reload saved draft?'} confirmLabel={confirm === 'clear' ? 'Clear draft' : confirm === 'leave' ? 'Leave session' : confirm === 'partial' ? 'Save partial session' : 'Reload draft'} onCancel={() => setConfirm(undefined)} onConfirm={() => {
+    {info && <ExerciseInformation exercise={info} onClose={() => setInfo(undefined)} />}
+    {confirm && <ConfirmDialog title={confirm === 'clear' ? 'Clear entered results?' : confirm === 'leave' ? 'Leaving this session?' : confirm === 'partial' ? 'Save partial session?' : 'Reload saved draft?'} confirmLabel={confirm === 'clear' ? 'Clear' : confirm === 'leave' ? 'Leave' : confirm === 'partial' ? 'Save partial session' : 'Reload draft'} busy={leaving || controller.busy} destructive={confirm === 'clear' || confirm === 'leave'} cancelLabel={confirm === 'leave' ? 'Stay' : 'Cancel'} onCancel={() => { if (confirm === 'leave') { leaveReply.current?.(false); leaveReply.current = undefined } setConfirm(undefined) }} onConfirm={() => {
       const action = confirm; setConfirm(undefined)
-      if (action === 'leave') void leave()
+      if (action === 'leave') { const reply = leaveReply.current; if (reply) void discard(reply) }
       else if (action === 'partial') void finish(true)
       else if (action === 'clear') { feedback.cancel(); void act(() => controller.clear()) }
       else void act(async () => { await controller.reload(); requestAnimationFrame(() => heading.current?.focus()) })
-    }}><p>{confirm === 'leave' ? 'Leave this session? Your saved draft will be kept. Pending changes must finish saving before leaving.' : confirm === 'clear' ? 'Reset only this draft’s entered results, session/exercise notes, and timer. Its prescription and all saved sessions and plans are kept.' : confirm === 'partial' ? `${assessed.skipped} omitted sets will be marked skipped. ${assessed.recorded} recorded sets will be saved. Cancel keeps all input.` : 'Copy any input you need first. Load the latest saved version and discard your unpersisted edits.'}</p></ConfirmDialog>}
+    }}><p>{confirm === 'leave' ? 'Leaving without saving will delete the results and notes entered in this session.' : confirm === 'clear' ? 'This will clear all entered results and notes.' : confirm === 'partial' ? `${assessed.skipped} omitted sets will be marked skipped. ${assessed.recorded} recorded sets will be saved. Cancel keeps all input.` : 'Copy any input you need first. Load the latest saved version and discard your unpersisted edits.'}</p></ConfirmDialog>}
   </section>
 }
 function NoteDialog({ value, title, onDirty, onApply, onClose }: { value: string; title: string; onDirty: (value: boolean) => void; onApply: (value: string) => void; onClose: () => void }) {

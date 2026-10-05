@@ -36,7 +36,7 @@ test('actual dates, every repeated starting/latest set, zero/mixed units, skippe
   assert.equal(all.maximum!.result.weightKg, 61); assert.equal(all.maximum!.result.reps, 7)
   assert.equal(scoped.maximum!.result.weightKg, toKg(100, 'lb')); assert.equal(scoped.maximum!.performance.session.id, first.id)
   assert.equal(all.minimum!.result.weightKg, 0); assert.equal(all.minimum!.result.reps, 5)
-  assert.equal(data.plans.find((p) => p.id === alpha.id)!.daysCompleted, 2)
+  assert.equal(data.plans.find((p) => p.id === alpha.id)!.daysCompleted, 0) // Both fixture sessions are partial.
   assert.equal(data.plans.find((p) => p.id === alpha.id)!.exercisesCompleted, 7)
 })
 test('profile-scoped service and defensive selectors exclude foreign sessions; deletion/replacement recomputes', async (t) => {
@@ -54,6 +54,7 @@ test('profile-scoped service and defensive selectors exclude foreign sessions; d
 test('scheduled counts deduplicate occurrence, equal-time session ties use stable IDs, group order/multiplicity stay distinct', async (t) => {
   const { db, id, first, alpha, press } = await setup(t)
   const one = structuredClone(first), two = structuredClone(first)
+  one.partial = false // One fully completed log and one partial for the same occurrence.
   one.id = '00000000-0000-4000-8000-000000000001'; two.id = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
   one.occurrence = two.occurrence = { key: 'schedule:day:date', scheduleId: crypto.randomUUID(), dayId: one.sourceDayId, scheduledDate: '2024-12-30', scheduledWeek: '2024-12-30', timeZone: 'Pacific/Honolulu', scheduleRevisionId: crypto.randomUUID() }
   const data = deriveProgress(id, [alpha], await db.exercises.toArray(), [two, one])
@@ -88,5 +89,5 @@ test('export, new/replace/both-merge restoration preserve underlying results, me
     assert.equal(stableJSON(result.measurements.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.measurements.map(({ profileId: _owner, ...entry }) => entry)))
     assert.equal(stableJSON(result.sessions.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.sessions.map(({ profileId: _owner, ...entry }) => entry)))
   }
-  assert.equal(db.verno, 5); assert.equal(backup.manifest.backupSchemaVersion, 5)
+  assert.equal(db.verno, 5); assert.equal(backup.manifest.backupSchemaVersion, 8)
 })

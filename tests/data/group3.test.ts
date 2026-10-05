@@ -121,7 +121,7 @@ test('v3 preferences round-trip; independent ownership, replacement, both merge 
   const { db, id, profiles, plan } = await setup(t)
   const p = await profiles.getProfile(id), zoned = await profiles.save(id, p.revision, profileInput(p, 'Asia/Tokyo')); await profiles.selectPlans(id, zoned.revision, [plan.id])
   const snapshot = await captureProfile(id, db), backup = await readBackup((await generateBackup(snapshot, 'test')).bytes)
-  assert.equal(backup.manifest.backupSchemaVersion, 5); assert.equal(backup.data.profile.timeZone, 'Asia/Tokyo'); assert.deepEqual(backup.data.profile.selectedPlanIds, [plan.id])
+  assert.equal(backup.manifest.backupSchemaVersion, 8); assert.equal(backup.data.profile.timeZone, 'Asia/Tokyo'); assert.deepEqual(backup.data.profile.selectedPlanIds, [plan.id])
   const otherRoot = crypto.randomUUID(), local = structuredClone(snapshot); local.plans[0].id = otherRoot; local.profile.selectedPlanIds = []; local.profile.timeZone = 'UTC'
   for (const choice of ['new', 'replace', 'device', 'import'] as const) {
     const result = (await buildRestorePlan(backup, choice === 'new' ? undefined : local, choice, crypto.randomUUID(), choice === 'new' ? 'Copy' : 'Guest', new Date().toISOString())).result
@@ -158,7 +158,7 @@ test('strict v2 backup bytes/CSV/checksums remain supported; preferences are not
   const manifest = { ...generated.manifest, backupSchemaVersion: 2, counts: recordCounts(data), csvRows: Object.fromEntries(csvTables(data).map((table) => [table.path, table.rows])), inventory: await Promise.all(payload.map(async ([path, text]) => ({ path, bytes: new TextEncoder().encode(text).length, sha256: await sha256(new TextEncoder().encode(text)), mediaType: path.endsWith('json') ? 'application/json' : 'text/csv; charset=utf-8' }))) }
   for (const [path, text] of payload) zip.file(path, text, { createFolders: false }); zip.file('manifest.json', JSON.stringify(manifest))
   const bytes = await zip.generateAsync({ type: 'uint8array' }), hash = await sha256(bytes), read = await readBackup(bytes)
-  assert.equal(read.manifest.backupSchemaVersion, 2); assert.equal(read.data.backupSchemaVersion, 5); assert.equal(read.data.profile.timeZone, undefined); assert.equal(await sha256(bytes), hash)
+  assert.equal(read.manifest.backupSchemaVersion, 2); assert.equal(read.data.backupSchemaVersion, 8); assert.equal(read.data.profile.timeZone, undefined); assert.equal(await sha256(bytes), hash)
   assert.deepEqual(read.data.plans, JSON.parse(JSON.stringify(data.plans)))
   data.profile.timeZone = 'UTC'; assert.throws(() => validateBackupData(data), /Unrecognized key/)
 })

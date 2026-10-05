@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { exerciseInputSchema, range } from './exercise.ts'
-import { daySchema, positiveInteger } from './plan.ts'
+import { daySchema, planInstructionsSchema, positiveInteger } from './plan.ts'
 
 // Public data deliberately has no IDs, profile ownership, revisions or provenance.
 export const interchangeExerciseSchema = z.object({
@@ -35,11 +35,19 @@ const groupedDay = z.object({ name: daySchema.shape.name, exercises: z.array(int
   })
   day.exercises.forEach((item, i) => { if (item.superset !== null && !numbers.has(item.superset)) context.addIssue({ code: 'custom', path: ['exercises', i, 'superset'], message: 'Declare this group in the day supersets array.' }) })
 })
-export const currentInterchangeSchema = z.discriminatedUnion('kind', [
+const groupedPlan = z.object({ name: daySchema.shape.name, durationWeeks: positiveInteger, trainingDaysPerWeek: z.number().int().min(1).max(7), days: z.array(groupedDay).min(1).max(7) }).strict()
+const validateDayCount = (plan: { days: unknown[]; trainingDaysPerWeek: number }, context: z.RefinementCtx) => {
+  if (plan.days.length !== plan.trainingDaysPerWeek) context.addIssue({ code: 'custom', path: ['days'], message: 'Day count must equal trainingDaysPerWeek.' })
+}
+export const v2InterchangeSchema = z.discriminatedUnion('kind', [
   z.object({ schemaVersion: z.literal(2), kind: z.literal('workout'), workout: interchangeExerciseSchema }).strict(),
-  z.object({ schemaVersion: z.literal(2), kind: z.literal('plan'), plan: z.object({ name: daySchema.shape.name, durationWeeks: positiveInteger, trainingDaysPerWeek: z.number().int().min(1).max(7), days: z.array(groupedDay).min(1).max(7) }).strict().superRefine((plan, context) => { if (plan.days.length !== plan.trainingDaysPerWeek) context.addIssue({ code: 'custom', path: ['days'], message: 'Day count must equal trainingDaysPerWeek.' }) }) }).strict(),
+  z.object({ schemaVersion: z.literal(2), kind: z.literal('plan'), plan: groupedPlan.superRefine(validateDayCount) }).strict(),
 ])
-export const interchangeSchema = z.union([currentInterchangeSchema, legacyInterchangeSchema])
+export const currentInterchangeSchema = z.discriminatedUnion('kind', [
+  z.object({ schemaVersion: z.literal(3), kind: z.literal('workout'), workout: interchangeExerciseSchema }).strict(),
+  z.object({ schemaVersion: z.literal(3), kind: z.literal('plan'), plan: groupedPlan.extend({ instructions: planInstructionsSchema }).superRefine(validateDayCount) }).strict(),
+])
+export const interchangeSchema = z.union([currentInterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
 export type Interchange = z.infer<typeof interchangeSchema>
 export type InterchangeExercise = z.infer<typeof interchangeExerciseSchema>
 export type ImportKind = Interchange['kind']
@@ -47,5 +55,5 @@ export type ImportKind = Interchange['kind']
 // Both visible instructions and tests consume these schema-checked examples.
 export function interchangeExample(kind: ImportKind): Interchange {
   const exercise = { name: 'Example exercise', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 }, rir: null }], restBetweenSetsSeconds: 0, restAfterExerciseSeconds: null, instructions: 'Illustrative instructions only.', youtubeUrl: null, tags: ['Example tag'] }
-  return interchangeSchema.parse(kind === 'workout' ? { schemaVersion: 2, kind, workout: exercise } : { schemaVersion: 2, kind, plan: { name: 'Example plan', durationWeeks: 2, trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [{ ...exercise, superset: null }, { ...exercise, superset: 1 }, { ...exercise, name: 'Second example', superset: 1 }], supersets: [{ number: 1, restBetweenRoundsSeconds: 0, restAfterGroupSeconds: null }] }] } })
+  return interchangeSchema.parse(kind === 'workout' ? { schemaVersion: 3, kind, workout: exercise } : { schemaVersion: 3, kind, plan: { name: 'Example plan', instructions: 'Illustrative plan instructions only.', durationWeeks: 2, trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [{ ...exercise, superset: null }, { ...exercise, superset: 1 }, { ...exercise, name: 'Second example', superset: 1 }], supersets: [{ number: 1, restBetweenRoundsSeconds: 0, restAfterGroupSeconds: null }] }] } })
 }

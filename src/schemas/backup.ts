@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { exerciseInputSchema, setSchema } from './exercise.ts'
-import { daySchema as originalDaySchema, occurrenceSchema, sourceSchema, planInputSchema, positiveInteger } from './plan.ts'
+import { daySchema as originalDaySchema, occurrenceSchema, sourceSchema, planInputSchema, planInstructionsSchema, positiveInteger } from './plan.ts'
 import { heightUnitSchema, measurementSchema, selectedPlanIdsSchema, timeZoneSchema, weightUnitSchema, type Measurement, type PhotoAsset, type Profile } from './profile.ts'
 import type { Exercise, Tag } from './exercise.ts'
 import type { Plan } from './plan.ts'
@@ -9,7 +9,7 @@ import { assessSession, sessionInputSchema, validateDraftInput, type CompletedSe
 import { monday, validZone } from '../lib/calendar-dates.ts'
 import { validateTimeContext } from '../lib/measurement-dates.ts'
 
-export const BACKUP_VERSION = 5
+export const BACKUP_VERSION = 8
 const LEGACY_SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Wait for Draft saved locally in every training tab before exporting.'
 export const SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Apply notes and wait until Saving disappears without an error in every training tab before exporting.'
 export interface ProfileSnapshot {
@@ -28,7 +28,7 @@ const number = z.number().finite().nonnegative(), integer = number.int().max(Num
 const recorded = z.discriminatedUnion('skipped', [z.object({ skipped: z.literal(true) }).strict(), z.object({ skipped: z.literal(false), weightKg: number, load: number, unit: weightUnitSchema, reps: integer, rir: integer.optional() }).strict()])
 export const assetSchema = z.object({ ...owned, createdAt: time, role: z.enum(['avatar', 'progress']), width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), bytes: z.number().int().positive().max(5 * 1024 * 1024), path: z.string().regex(/^photos\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/i) }).strict()
 export type BackupAsset = z.infer<typeof assetSchema>
-export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5; assets: BackupAsset[] }
+export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; assets: BackupAsset[] }
 // Validation never replaces the original records with Zod's parsed/transformed output.
 // The JSON payload retains saved text, optional-field presence, array order and snapshots.
 export const v4BackupDataSchema = z.object({
@@ -64,8 +64,8 @@ export const legacyBackupDataSchema = v2BackupDataSchema.extend({
   sessions: z.array(v4BackupDataSchema.shape.sessions.element.extend({ day: legacyDay })),
 })
 const weeklyOccurrence = occurrence.extend({ programWeek: positiveInteger.optional(), unscheduled: z.literal(true).optional() })
-export const backupDataSchema = v4BackupDataSchema.extend({
-  backupSchemaVersion: z.literal(BACKUP_VERSION),
+export const v5BackupDataSchema = v4BackupDataSchema.extend({
+  backupSchemaVersion: z.literal(5),
   plans: z.array(v4BackupDataSchema.shape.plans.element.extend({ notes: z.string().max(20000).optional() })),
   schedules: z.array(v4BackupDataSchema.shape.schedules.element.extend({
     kind: z.literal('unscheduled').optional(), identity: z.literal('program-week').optional(),
@@ -76,9 +76,31 @@ export const backupDataSchema = v4BackupDataSchema.extend({
   drafts: z.array(v4BackupDataSchema.shape.drafts.element.extend({ occurrence: weeklyOccurrence.optional() })),
   sessions: z.array(v4BackupDataSchema.shape.sessions.element.extend({ occurrence: weeklyOccurrence.optional() })),
 })
+export const v6BackupDataSchema = v5BackupDataSchema.extend({
+  backupSchemaVersion: z.literal(6),
+  schedules: z.array(v5BackupDataSchema.shape.schedules.element.extend({ closedAt: time.optional() })),
+})
+// New optional text has its own strict wire version; old allowed fields/CSV stay frozen.
+export const v7BackupDataSchema = v6BackupDataSchema.extend({
+  backupSchemaVersion: z.literal(7),
+  plans: z.array(v6BackupDataSchema.shape.plans.element.extend({ instructions: planInstructionsSchema })),
+  schedules: z.array(v6BackupDataSchema.shape.schedules.element.extend({
+    revisions: z.array(v6BackupDataSchema.shape.schedules.element.shape.revisions.element.extend({ planInstructions: planInstructionsSchema })).min(1),
+    outcomes: z.array(v5BackupDataSchema.shape.schedules.element.shape.outcomes.unwrap().element.extend({ planInstructions: planInstructionsSchema })).optional(),
+  })),
+  drafts: z.array(v6BackupDataSchema.shape.drafts.element.extend({ planInstructions: planInstructionsSchema })),
+  sessions: z.array(v6BackupDataSchema.shape.sessions.element.extend({ planInstructions: planInstructionsSchema })),
+})
+export const backupDataSchema = v7BackupDataSchema.extend({
+  backupSchemaVersion: z.literal(BACKUP_VERSION),
+  schedules: z.array(v7BackupDataSchema.shape.schedules.element.extend({
+    hiddenAt: time.optional(), occurrenceExceptions: z.array(weeklyOccurrence).optional(),
+    revisions: z.array(v7BackupDataSchema.shape.schedules.element.shape.revisions.element.extend({ unscheduled: z.literal(true).optional() })).min(1),
+  })),
+})
 export const inventorySchema = z.object({ path: z.string(), bytes: z.number().int().nonnegative(), sha256: z.string().regex(/^[0-9a-f]{64}$/), mediaType: z.string() }).strict()
 export const manifestSchema = z.object({
-  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]), databaseSchemaVersion: z.literal(5),
+  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8)]), databaseSchemaVersion: z.literal(5),
   app: z.object({ name: z.literal('boros'), version: z.string().min(1) }).strict(), exportedAt: time, snapshotAt: time,
   profile: z.object({ id, name: z.string(), kind: z.enum(['guest', 'named']) }).strict(), snapshotPolicy: z.union([z.literal(LEGACY_SNAPSHOT_POLICY), z.literal(SNAPSHOT_POLICY)]),
   counts: z.record(z.number().int().nonnegative()), csvRows: z.record(z.number().int().nonnegative()),
@@ -100,7 +122,7 @@ function equalRecord(a: unknown, b: unknown): boolean {
 }
 export function validateBackupData(data: BackupData) {
   const fail = (message: string): never => { throw new Error(`Backup cannot be completed: ${message}. Reopen the affected record and repair it before retrying; source data was not changed.`) }
-  const validation = (data.backupSchemaVersion === 1 ? legacyBackupDataSchema : data.backupSchemaVersion === 2 ? v2BackupDataSchema : data.backupSchemaVersion === 3 ? v3BackupDataSchema : data.backupSchemaVersion === 4 ? v4BackupDataSchema : backupDataSchema).safeParse(data)
+  const validation = (data.backupSchemaVersion === 1 ? legacyBackupDataSchema : data.backupSchemaVersion === 2 ? v2BackupDataSchema : data.backupSchemaVersion === 3 ? v3BackupDataSchema : data.backupSchemaVersion === 4 ? v4BackupDataSchema : data.backupSchemaVersion === 5 ? v5BackupDataSchema : data.backupSchemaVersion === 6 ? v6BackupDataSchema : data.backupSchemaVersion === 7 ? v7BackupDataSchema : backupDataSchema).safeParse(data)
   if (!validation.success) { const issue = validation.error.issues[0]; fail(`invalid saved ${issue.path.join('.')}: ${issue.message}`) }
   const index = <T extends { id: string; profileId: string }>(records: T[], label: string) => {
     const map = new Map<string, T>()
@@ -113,6 +135,7 @@ export function validateBackupData(data: BackupData) {
   for (const exercise of data.exercises) for (const tag of exercise.tagIds) if (!tags.has(tag)) fail(`exercise ${exercise.id} requires missing tag ${tag}`)
   for (const plan of data.plans) { planInputSchema.parse(plan); for (const day of plan.days) for (const item of day.exercises) if (item.templateId && !templates.has(item.templateId)) fail(`plan ${plan.id} requires missing template ${item.templateId}`) }
   for (const schedule of data.schedules) {
+    if (schedule.closedAt && !schedule.stoppedFrom) fail('closed run requires a schedule cutoff')
     if (schedule.kind === 'unscheduled' && schedule.identity !== 'program-week') fail('weekly program is missing its stable identity mode')
     if (!plans.has(schedule.planId)) fail(`schedule ${schedule.id} requires missing plan ${schedule.planId}`)
     if (monday(schedule.startWeek) !== schedule.startWeek) fail(`schedule ${schedule.id} has invalid start week`)
@@ -122,7 +145,7 @@ export function validateBackupData(data: BackupData) {
     const outcomeKeys = new Set<string>(), outcomeIds = new Set<string>()
     for (const outcome of schedule.outcomes ?? []) {
       const ref = outcome.ref, segment = schedule.revisions.find((item) => item.id === ref.scheduleRevisionId)
-      if (ref.unscheduled !== (schedule.kind === 'unscheduled' ? true : undefined) || ref.programWeek !== (schedule.identity ? programWeek(schedule, ref.scheduledWeek) : undefined) || schedule.excludedWeeks?.includes(ref.scheduledWeek)) fail('outcome has inconsistent program week')
+      if (ref.unscheduled !== (schedule.kind === 'unscheduled' || segment?.unscheduled ? true : undefined) || ref.programWeek !== (schedule.identity ? programWeek(schedule, ref.scheduledWeek) : undefined) || schedule.excludedWeeks?.includes(ref.scheduledWeek)) fail('outcome has inconsistent program week')
       if (outcomeKeys.has(ref.key) || outcomeIds.has(outcome.id) || ref.scheduleId !== schedule.id || ref.dayId !== outcome.day.id || !segment?.days.some((day) => day.id === ref.dayId) || ref.timeZone !== schedule.timeZone || ref.scheduledWeek !== monday(ref.scheduledDate) || ref.key !== occurrenceKey(schedule.id, ref.dayId, ref.scheduledDate, ref.programWeek)) fail('inconsistent occurrence outcome')
       if (outcome.status !== 'pending' && [...data.drafts, ...data.sessions].some((item) => item.occurrenceKey === ref.key)) fail('outcome overlaps session or draft')
       outcomeKeys.add(ref.key); outcomeIds.add(outcome.id)
@@ -135,6 +158,12 @@ export function validateBackupData(data: BackupData) {
     })
     const ids = new Set<string>()
     for (const item of schedule.revisions) { if (ids.has(item.id)) fail(`schedule ${schedule.id} has duplicate revision ${item.id}`); ids.add(item.id); validateMapping(item.mapping, item.days); planInputSchema.parse({ name: item.planName, days: item.days }); if (item.effectiveUntil && item.effectiveUntil < item.effectiveFrom) fail(`schedule ${schedule.id} has reversed revision dates`) }
+    const exceptions = new Set<string>()
+    for (const ref of schedule.occurrenceExceptions ?? []) {
+      const segment = schedule.revisions.find((r) => r.id === ref.scheduleRevisionId), key = `${ref.scheduledWeek}/${ref.dayId}`
+      if (exceptions.has(key) || ref.scheduleId !== schedule.id || !segment?.days.some((d) => d.id === ref.dayId) || ref.scheduledWeek !== monday(ref.scheduledDate) || ref.timeZone !== schedule.timeZone || ref.key !== occurrenceKey(schedule.id, ref.dayId, ref.scheduledDate, ref.programWeek) || ref.programWeek !== (schedule.identity ? programWeek(schedule, ref.scheduledWeek) : undefined) || ref.unscheduled !== (schedule.kind === 'unscheduled' || segment?.unscheduled ? true : undefined) || schedule.excludedWeeks?.includes(ref.scheduledWeek)) fail('invalid occurrence exception')
+      exceptions.add(key)
+    }
   }
   for (const item of [...data.drafts, ...data.sessions]) {
     if (!plans.has(item.sourcePlanId)) fail(`session/draft ${item.id} requires missing plan ${item.sourcePlanId}`)
@@ -143,14 +172,14 @@ export function validateBackupData(data: BackupData) {
     if (!!item.occurrence !== !!item.occurrenceKey) fail(`session/draft ${item.id} has incomplete occurrence metadata`)
     if (item.occurrence) {
       const ref = item.occurrence, schedule = schedules.get(ref.scheduleId), revision = schedule?.revisions.find((r) => r.id === ref.scheduleRevisionId)
-      if (schedule && (ref.unscheduled !== (schedule.kind === 'unscheduled' ? true : undefined) || ref.programWeek !== (schedule.identity ? programWeek(schedule, ref.scheduledWeek) : undefined) || schedule.excludedWeeks?.includes(ref.scheduledWeek))) fail('session has inconsistent program week')
+      if (schedule && (ref.unscheduled !== (schedule.kind === 'unscheduled' || revision?.unscheduled ? true : undefined) || ref.programWeek !== (schedule.identity ? programWeek(schedule, ref.scheduledWeek) : undefined) || schedule.excludedWeeks?.includes(ref.scheduledWeek))) fail('session has inconsistent program week')
       if (!schedule || schedule.planId !== item.sourcePlanId || !revision || !revision.days.some((day) => day.id === ref.dayId) || ref.dayId !== item.sourceDayId || ref.timeZone !== schedule.timeZone || ref.scheduledWeek !== monday(ref.scheduledDate) || ref.key !== occurrenceKey(ref.scheduleId, ref.dayId, ref.scheduledDate, ref.programWeek) || item.occurrenceKey !== ref.key) fail(`session/draft ${item.id} has inconsistent schedule references`)
     }
   }
   for (const draft of data.drafts) { validateDraftInput(draft.input, draft.day); if (draft.finalizedAt && !sessions.has(draft.id)) fail(`finalized draft ${draft.id} requires a completed session`) }
   for (const session of data.sessions) {
     const draft = drafts.get(session.draftId)
-    if (!draft || draft.id !== session.id || draft.finalizedAt !== session.completedAt || draft.sourcePlanId !== session.sourcePlanId || draft.occurrenceKey !== session.occurrenceKey || !equalRecord(draft.day, session.day)) fail(`session ${session.id} has an inconsistent finalized draft`)
+    if (!draft || draft.id !== session.id || draft.finalizedAt !== session.completedAt || draft.sourcePlanId !== session.sourcePlanId || draft.occurrenceKey !== session.occurrenceKey || draft.planInstructions !== session.planInstructions || !equalRecord(draft.day, session.day)) fail(`session ${session.id} has an inconsistent finalized draft`)
     if (session.exercises.length !== session.day.exercises.length || session.exercises.some((e, i) => e.id !== session.day.exercises[i].id || e.sets.length !== session.day.exercises[i].prescription.sets.length)) fail(`session ${session.id} results do not match its snapshot`)
     const assessed = assessSession(draft!.input)
     if (Object.keys(assessed.errors).length || !assessed.recorded || session.partial !== (assessed.skipped > 0) || session.notes !== draft!.input.notes || !equalRecord(assessed.exercises, session.exercises) || session.completedAt < session.startedAt) fail(`session ${session.id} results disagree with its finalized draft`)

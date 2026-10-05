@@ -37,17 +37,19 @@ test('civil arithmetic: Sunday/Monday, leap days, month/year, DST and differing 
 })
 
 test('validation, stable IDs, overlapping schedules, range-only generation and profile isolation', async (t) => {
-  const { db, profiles, id, plan, service, schedule, input, sessions } = await setup(t)
+  const { db, profiles, id, plans, plan, service, schedule, input, sessions } = await setup(t)
   for (const invalid of [{ ...input, startWeek: '2025-01-07' }, { ...input, startWeek: '2025-02-30' }, { ...input, timeZone: 'Invalid/Zone' }, { ...input, mapping: input.mapping.map((item) => ({ ...item, weekday: 0 })) }]) assert.equal(scheduleInputSchema.safeParse(invalid).success, false)
   await assert.rejects(service.create(id, { ...input, mapping: input.mapping.slice(1) }), /every current/)
-  const another = await service.create(id, input); assert.notEqual(another.id, schedule.id)
+  await assert.rejects(service.create(id, input), /Already in Calendar/)
+  const different = await plans.save(id, { ...planToInput(plan), name: 'Different template', durationWeeks: 104 })
+  const another = await service.create(id, { ...input, planId: different.id, planRevision: different.revision }); assert.notEqual(another.id, schedule.id)
   const events = await service.events(id, '2024-12-30', '2025-01-05', input.timeZone)
   assert.equal(events.length, 8); assert.equal(new Set(events.map((event) => event.ref.key)).size, 8)
   assert.deepEqual(events, await service.events(id, '2024-12-30', '2025-01-05', input.timeZone))
   assert.equal(occurrences(schedule, '2040-01-02', '2040-01-08').length, 4); assert.equal(await db.drafts.count(), 0)
   const other = await profiles.create('Other'); assert.deepEqual(await service.events(other.id, '2024-12-30', '2025-01-05', input.timeZone), [])
   await assert.rejects(service.get(other.id, schedule.id), /unavailable/); await assert.rejects(service.create(other.id, input), /active plan/)
-  await assert.rejects(sessions.openOccurrence(other.id, schedule.id, plan.days[0].id, '2024-12-30'), /changed/)
+  await assert.rejects(sessions.openOccurrence(other.id, schedule.id, plan.days[0].id, '2024-12-30'), /unavailable/)
 })
 
 test('partial/late completion affects only one occurrence, keeps missed history, and excludes unscheduled logs', async (t) => {
@@ -156,8 +158,8 @@ test('schedule writes are owner/revision bound, create retries are idempotent, a
   await assert.rejects(service.preview(other.id, change), /unavailable/)
   const preview = await service.preview(id, change)
   await assert.rejects(service.commit(other.id, preview, true), /unavailable/)
-  const creation = crypto.randomUUID(), created = await service.create(id, input, creation)
-  assert.equal((await service.create(id, input, creation)).id, created.id); assert.equal(await db.schedules.count(), 2)
+  const creation = schedule.id, created = await service.create(id, input, creation)
+  assert.equal((await service.create(id, input, creation)).id, created.id); assert.equal(await db.schedules.count(), 1)
   const fail = () => { throw new Error('schedule storage failed') }; db.schedules.hook('updating', fail)
   await assert.rejects(service.commit(id, preview, true), /schedule storage failed/)
   assert.deepEqual(await service.get(id, schedule.id), schedule)
@@ -170,8 +172,9 @@ test('schedule writes are owner/revision bound, create retries are idempotent, a
 })
 
 test('weekly identity remains civil across both DST transitions and completion on a second schedule stays separate', async (t) => {
-  const { id, plan, sessions, service, input, schedule } = await setup(t)
-  const other = await service.create(id, input)
+  const { db, id, plan, sessions, service, input, schedule } = await setup(t)
+  const other = { ...structuredClone(schedule), id: crypto.randomUUID() }
+  await db.schedules.add(other) // Legacy duplicate history remains readable.
   for (const [first, second] of [['2025-03-03', '2025-03-10'], ['2025-10-27', '2025-11-03']]) {
     const before = occurrences(schedule, first, addDays(first, 6)), after = occurrences(schedule, second, addDays(second, 6))
     assert.equal(before.length, 4); assert.equal(after.length, 4)

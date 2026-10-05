@@ -8,6 +8,7 @@ export class DraftController {
   status: 'saved' | 'pending' | 'saving' | 'failed' = 'saved'
   error = ''
   busy = false
+  discarded = false
   private service: ReturnType<typeof sessionService>
   private listeners = new Set<() => void>()
   private tail: Promise<unknown> = Promise.resolve()
@@ -56,6 +57,14 @@ export class DraftController {
     return this.command(async () => {
       this.record = await this.service.clear(this.record.profileId, this.record.id, this.record.revision)
       this.input = structuredClone(this.record.input); this.sequence++; this.persisted = this.sequence; this.status = 'saved'; return this.record
+    })
+  }
+  discard() {
+    // Wait behind a running write, cancel debounce/queued future writes, then
+    // delete by the latest committed revision. Failure keeps recoverable input.
+    return this.command(async () => {
+      await this.service.discard(this.record.profileId, this.record.id, this.record.revision)
+      this.disposed = true; this.discarded = true; clearTimeout(this.timeout); this.persisted = this.sequence; this.status = 'saved'
     })
   }
   complete(allowPartial: boolean) {

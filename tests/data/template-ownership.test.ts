@@ -124,7 +124,7 @@ test('repair failures and ambiguous dangling identities roll back; archived plan
 test('strict schema 1–3 backups repair only through validated restore; v4 links round trip and repeated merge stays idempotent', async (t) => {
   const { db, id, plans } = await setup(t), original = await plans.save(id, input())
   const snapshot = await captureProfile(id, db), generated = await generateBackup(snapshot, 'ownership-test')
-  for (const version of [1, 2, 3, 4] as const) {
+  for (const version of [1, 2, 3, 4, 5, 6] as const) {
     const zip = await JSZip.loadAsync(generated.bytes), data = JSON.parse(await zip.file('data.json')!.async('string'))
     data.backupSchemaVersion = version
     if (version < 3) { delete data.profile.timeZone; delete data.profile.selectedPlanIds }
@@ -143,7 +143,7 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
     assert.equal(templateReference(restored.plans[0].days[0].exercises[0]), original.days[0].exercises[0].id)
     assert.equal(restored.plans[0].createdAt, original.createdAt); assert.equal(restored.plans[0].updatedAt, original.updatedAt)
     const round = await readBackup((await generateBackup(restored, 'test')).bytes)
-    assert.equal(round.manifest.backupSchemaVersion, 5); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
+    assert.equal(round.manifest.backupSchemaVersion, 8); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
     // Merge the original old backup again into its matching original profile.
     let target = id
     for (let repeat = 0; repeat < 2; repeat++) { const merge = await service.preview(backup, 'import'); target = await service.commit(merge, true); assert.equal((await captureProfile(target, db)).exercises.length, 2) }

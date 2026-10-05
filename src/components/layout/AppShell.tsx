@@ -12,6 +12,7 @@ export function AppShell() {
   const pathname = `/${screen}`;
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(pathname);
+  const pointerFocus = useRef(false);
   const workspace = useWorkspace();
   useEffect(() => {
     document.title = `${pathname === "/settings" ? "Settings" : (pages.find((page) => page.path === pathname)?.label ?? "Page not found")} | Boros`;
@@ -24,6 +25,8 @@ export function AppShell() {
   return (
     <div
       className="app-shell"
+      onPointerDownCapture={() => { pointerFocus.current = true; }}
+      onKeyDownCapture={() => { pointerFocus.current = false; }}
       onClickCapture={(event) => {
         // WebKit does not focus pointer-clicked buttons by default. Give dialogs
         // the actual invoking control to restore, rather than a previous input.
@@ -87,6 +90,9 @@ export function AppShell() {
             control.closest("dialog, .session-actions")
           )
             return;
+          // Moving a pointer-focused button between down/up loses its click.
+          // Fields still need keyboard clearance; keyboard-focused buttons do too.
+          if (control.matches("button") && pointerFocus.current) return;
           // Native focus scrolling does not consistently honor scroll-margin in
           // every engine. Keep focused fields above the fixed actions/navigation.
           requestAnimationFrame(() => {

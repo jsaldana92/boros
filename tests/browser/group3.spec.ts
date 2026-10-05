@@ -1,3 +1,4 @@
+import { manageRun, returnCalendar, stagePlan } from './calendar-actions'
 import { waitForDraft, startWeekly } from './train-actions'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -25,9 +26,10 @@ async function select(p: Page, names: string[]) {
 }
 async function schedule(p: Page, name: string, date: string) {
   await button(p, 'Calendar').click(); await expect(button(p, 'Month')).toHaveAttribute('aria-pressed', 'true')
-  await expect(button(p, 'Create a plan')).toHaveCount(0); await expect(field(p, 'Displayed time zone')).toHaveCount(0)
-  await button(p, 'Add Plan').click(); await field(p, 'Schedule plan').selectOption({ label: name }); await field(p, 'Starting week (Monday)').fill(date)
-  await button(p, 'Preview schedule').click(); await expect(p.getByRole('dialog')).toContainText('Monday: Workout'); await button(p, 'Confirm schedule').click()
+  await field(p, 'Calendar date').fill(date); await button(p, 'Add Plan').click()
+  const candidate = p.getByRole('article', { name: 'Plan ' + name, exact: true })
+  if (await candidate.count()) { await stagePlan(p, name); await button(p, 'Save').click() }
+  else { await button(p, 'Cancel').click(); await manageRun(p, 'Edit', name); await field(p, 'Workout weekday').selectOption('0'); await button(p, 'Save').click(); await expect(p.getByRole('heading', { level: 1 })).toHaveText('Current Plans'); await returnCalendar(p) }
 }
 async function records(p: Page) {
   return p.evaluate(async () => {
@@ -37,18 +39,20 @@ async function records(p: Page) {
   })
 }
 
-test('immediate multi-plan selection, exact unselected calendar occurrence, profile isolation and both themes', async ({ page }, info) => {
+test('immediate multi-plan selection, scheduling existing run, exact calendar occurrence, isolation and both themes', async ({ page }, info) => {
   await page.clock.setFixedTime(new Date('2025-03-01T12:00:00Z')); await start(page); const address = page.url()
   await zone(page, 'UTC'); await importPlan(page, 'Alpha'); await importPlan(page, 'Beta'); await select(page, ['Alpha', 'Beta'])
   await expect(card(page, 'Alpha')).toBeVisible(); await expect(card(page, 'Beta')).toBeVisible()
   await card(page, 'Alpha').getByRole('button').focus(); await page.keyboard.press('Enter'); await expect(page.getByRole('heading', { level: 1 })).toHaveText('Alpha')
-  await button(page, 'Back to plans').click(); await expect(page.getByRole('heading', { name: 'Train', exact: true })).toBeFocused()
+  await button(page, 'Back to Plans').click(); await expect(page.getByRole('heading', { name: 'Train', exact: true })).toBeFocused()
   await schedule(page, 'Alpha', '2025-02-24'); await button(page, 'Today').click(); await expect(page.locator('.calendar-range')).toHaveText('March 2025')
   const adjacent = page.getByRole('region', { name: '2025-02-24', exact: true }); await expect(adjacent).toHaveClass(/adjacent-month/)
   await button(page, 'Train').click(); await card(page, 'Alpha').getByRole('button').click()
-  await expect(field(page, 'Program context')).toBeVisible(); await button(page, 'Remove from Train').click()
+  await expect(field(page, 'Program context')).toHaveCount(0)
+  const subtitle = page.getByRole('region', { name: 'Program week', exact: true }).locator(':scope > p.muted')
+  await expect(subtitle).toContainText('Scheduled')
   const selected = (await records(page)).profiles[0].selectedPlanIds
-  await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').click(); await expect(page.getByRole('region', { name: 'Training session', exact: true })).toContainText('Scheduled: 2025-02-24')
+  await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').click(); await expect(page.getByRole('region', { name: 'Training session', exact: true })).toContainText('Alpha')
   await field(page, 'Press set 1 Weight (kg)').fill('42'); await field(page, 'Press set 1 Repetitions').fill('6'); await waitForDraft(page)
   const draft = (await records(page)).drafts[0]; await page.reload(); await page.getByRole('button', { name: /^Resume Alpha/ }).click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('42')
   await button(page, 'Save').click(); await button(page, 'Save partial session').click(); expect((await records(page)).sessions[0].occurrenceKey).toBe(draft.occurrenceKey); expect((await records(page)).profiles[0].selectedPlanIds).toEqual(selected)
@@ -64,15 +68,15 @@ test('concurrent Add Plan appends safely; failed selection and draft writes reta
   const second = await context.newPage(); await second.goto('./'); await button(second, 'Train').click(); await button(second, 'Add Plan').click()
   await Promise.all([page.getByRole('dialog').getByRole('article', { name: 'Plan Alpha', exact: true }).getByRole('button').click(), second.getByRole('dialog').getByRole('article', { name: 'Plan Beta', exact: true }).getByRole('button').click()])
   await expect(card(page, 'Alpha')).toBeVisible(); await expect(card(page, 'Beta')).toBeVisible(); expect((await records(page)).profiles[0].selectedPlanIds).toHaveLength(2)
-  await card(page, 'Beta').getByRole('button').click(); await button(page, 'Remove from Train').click()
+  await card(page, 'Beta').getByRole('button').click(); await button(page, 'Leave Plan').click(); await page.getByRole('dialog', { name: 'Ending a Plan?' }).getByRole('button', { name: 'End', exact: true }).click()
   await button(page, 'Add Plan').click(); await page.evaluate(() => { const put = IDBObjectStore.prototype.put; (window as any).recoverPrefs = () => { IDBObjectStore.prototype.put = put }; IDBObjectStore.prototype.put = function (...args) { if (this.name === 'profiles') throw new DOMException('Preference disk full', 'QuotaExceededError'); return put.apply(this, args) } })
   await page.getByRole('dialog').getByRole('article', { name: 'Plan Beta', exact: true }).getByRole('button').click(); await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Preference disk full')
   expect((await records(page)).profiles[0].selectedPlanIds).toHaveLength(1)
   await page.evaluate(() => (window as any).recoverPrefs()); await page.getByRole('dialog').getByRole('article', { name: 'Plan Beta', exact: true }).getByRole('button').click(); await expect(page.getByRole('dialog')).toHaveCount(0)
   await startWeekly(page, 'Alpha', 'Workout'); await page.evaluate(() => { const put = IDBObjectStore.prototype.put; (window as any).recover = () => { IDBObjectStore.prototype.put = put }; IDBObjectStore.prototype.put = function (...args) { if (this.name === 'drafts') throw new DOMException('Draft disk full', 'QuotaExceededError'); return put.apply(this, args) } })
   await field(page, 'Press set 1 Weight (kg)').fill('12.'); await expect(page.getByRole('alert')).toContainText('Draft disk full')
-  page.once('dialog', d => d.dismiss()); await button(page, 'Settings').click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
-  await button(page, 'Back').click(); await button(page, 'Cancel').click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
+  await button(page, 'Settings').click(); await button(page, 'Stay').click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
+  await button(page, 'Cancel').click(); await button(page, 'Stay').click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
   await page.evaluate(() => (window as any).recover()); await button(page, 'Retry draft save').click(); await waitForDraft(page); await second.close()
 })
 
@@ -83,5 +87,5 @@ test('schedule-local status refreshes at midnight and old runs retain their save
   await page.clock.setSystemTime(new Date('2025-01-07T00:00:01Z')); await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await expect(page.locator('.training-day-card')).toContainText('Past Due')
   const original = (await records(page)).schedules[0]; await zone(page, 'Pacific/Honolulu'); await page.reload(); await expect(field(page, 'Time zone')).toHaveValue('Pacific/Honolulu')
   await button(page, 'Calendar').click(); await button(page, 'Today').click(); await expect(field(page, 'Calendar date')).toHaveValue('2025-01-06'); expect((await records(page)).schedules[0]).toEqual(original)
-  await schedule(page, 'Alpha', '2025-01-06'); const all = (await records(page)).schedules; expect(all).toHaveLength(2); expect(all.find(s => s.id !== original.id).timeZone).toBe('Pacific/Honolulu')
+  await manageRun(page, 'End'); await page.getByRole('dialog', { name: 'Ending a Plan?' }).getByRole('button', { name: 'End', exact: true }).click(); await returnCalendar(page); await button(page, 'Train').click(); await schedule(page, 'Alpha', '2025-01-06'); const all = (await records(page)).schedules; expect(all).toHaveLength(2); expect(all.find(s => s.id !== original.id).timeZone).toBe('Pacific/Honolulu')
 })

@@ -5,6 +5,7 @@ import { browserZone } from '../lib/calendar-dates.ts'
 import { appendSettingsWeight, latestMeasurement } from './measurements.ts'
 import { removeUnusedPhoto } from './photos.ts'
 import { repairProfileTemplates } from './template-repair.ts'
+import { repairClosedRunDrafts } from './closed-run-repair.ts'
 import type { PreparedPhoto, Profile, ProfileInput, Theme } from '../schemas/profile.ts'
 
 export class ConflictError extends Error {
@@ -42,6 +43,7 @@ export function profileService(database: BorosDatabase) {
           workspaceSettingsSchema.parse(settings)
           await initializeTimeZone(await getProfile(settings.activeProfileId))
           await repairProfileTemplates(database, settings.activeProfileId)
+          await repairClosedRunDrafts(database, settings.activeProfileId)
           return settings
         }
         if ((await Promise.all(database.tables.map((table) => table.count()))).some(Boolean)) {
@@ -68,9 +70,10 @@ export function profileService(database: BorosDatabase) {
       })
     },
     async select(profileId: string) {
-      await database.transaction('rw', database.profiles, database.settings, database.plans, database.exercises, database.tags, async () => {
+      await database.transaction('rw', [database.profiles, database.settings, database.plans, database.exercises, database.tags, database.schedules, database.drafts, database.sessions, database.restTimers], async () => {
         await initializeTimeZone(await getProfile(profileId))
         await repairProfileTemplates(database, profileId)
+        await repairClosedRunDrafts(database, profileId)
         if (!await database.settings.update('workspace', { activeProfileId: profileId })) throw new Error('Workspace settings are unavailable.')
       })
     },

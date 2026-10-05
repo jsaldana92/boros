@@ -70,8 +70,9 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       <Field label="Duration (weeks)" required={!original || original.durationWeeks !== undefined} inputMode="numeric" value={duration} error={errors.durationWeeks} onChange={(e) => { setDuration(e.target.value); setDirty(true); setErrors({}) }} />
       {original?.durationWeeks === undefined && original && <p className="muted">Legacy plan: blank keeps its unbounded duration. Enter weeks to set a duration for new schedules. Existing schedules change only through their duration preview.</p>}
       <label>Training days per week<select value={form.days.length} onChange={(e) => count(Number(e.target.value))}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+      <TextareaField label="Instructions" maxLength={20000} value={form.instructions ?? ''} error={errors.instructions} onChange={(e) => change((current) => ({ ...current, instructions: e.target.value }))} />
       <TextareaField label="Plan note (optional)" maxLength={20000} value={form.notes ?? ''} onChange={(e) => change((current) => ({ ...current, notes: e.target.value }))} />
-      <p role="status">{form.days.length} training days; {7 - form.days.length} rest days per week.</p>
+      <p role="status">{form.days.length} training days · {7 - form.days.length} rest days</p>
       {form.days.map((day, index) => <section className="plan-day" key={day.id} aria-label={`Day ${index + 1}: ${day.name}`} data-day-id={day.id}>
         <h3>Training day {index + 1}</h3>
         <Field label={`Day ${index + 1} name`} required maxLength={120} value={day.name} error={errors[`days.${index}.name`]} onChange={(e) => days((items) => items.map((item) => item.id === day.id ? { ...item, name: e.target.value } : item))} />

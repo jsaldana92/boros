@@ -11,6 +11,8 @@ export interface Workspace {
   dirty: boolean
   setDirty: (value: boolean) => void
   allowLeave: () => boolean
+  requestLeave: () => Promise<boolean>
+  registerLeaveGuard: (guard: () => Promise<boolean>) => () => void
   select: (id: string) => Promise<void>
   dataNotice: string
   useCreated: (id: string, notice?: string) => void

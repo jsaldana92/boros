@@ -2,9 +2,24 @@
 
 The application generates the authoritative instructions from
 `src/features/create/interchange.ts` and schema-validated examples in
-`src/schemas/interchange.ts`. The public contract remains **AI v2**, with strict
-legacy v1 compatibility. Database v5 is unchanged. Backups now use schema 4 with
-strict schemas 1–3 reading.
+`src/schemas/interchange.ts`. The public contract is **AI v3**, with strict
+legacy v1/v2 compatibility. Database v5 is unchanged. Backups now use schema 7
+with strict schemas 1–6 reading.
+
+AI v3 adds optional `plan.instructions`: plain text, at most 20,000 characters;
+null is invalid. Omission stays absent, and blank is allowed. It is separate
+from exercise instructions, plan notes and session notes. Prompts forbid
+inventing it or combining/copying exercise instructions or notes. The editable
+plan preview labels this field **Instructions**. Saved plans, duplicates,
+new frozen training snapshots and JSON/CSV backups preserve it. Editing the
+plan does not rewrite historical snapshots. Notes remain outside this strict
+public format and may be added separately in the preview.
+
+Version 1 and 2 payloads retain their original allowed fields and do not accept
+plan instructions; use v3 when supplying that field. Older plans with no field
+continue to load without manufactured text. Version 1 still requires duration
+entry in the preview. The public workout shape is unchanged apart from the
+v3 envelope. Examples and both generated prompts use the current version.
 
 Both Plan and Exercise prompts use this initial-response instruction:
 
@@ -39,7 +54,7 @@ quote replacement or fragment extraction.
 
 Copy failure leaves selectable instructions visible. A validated **Draft** is
 editable but unsaved and remains bound to its original profile. Apply changes
-the in-memory preview; Save exercise / Save plan persists it. Failed saves retain
+to the in-memory preview; Save exercise / Save plan persists it. Failed saves retain
 the preview. Successful plan saves atomically create standalone templates, tags
 and independent plan snapshots. Valid identities win; otherwise an active normalized
 exercise name reuses its template without overwriting defaults. A new repeated name

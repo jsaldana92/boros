@@ -1,3 +1,5 @@
+import { planInstructionsSnapshot } from '../schemas/plan.ts'
+import { assertCalendarAssignment } from './calendar-assignment.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { db, type BorosDatabase } from './database.ts'
@@ -34,19 +36,20 @@ export function scheduleService(database: BorosDatabase) {
   }
   return {
     get,
-    async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return { schedules: await database.schedules.where('profileId').equals(profileId).toArray(), plans: await database.plans.where('profileId').equals(profileId).toArray() } }) },
+    async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return { schedules: await database.schedules.where('profileId').equals(profileId).toArray(), plans: await database.plans.where('profileId').equals(profileId).toArray(), sessions: await database.sessions.where('profileId').equals(profileId).toArray() } }) },
     async create(profileId: string, raw: ScheduleInput, id = createId()) {
       const input = scheduleInputSchema.parse(raw); z.string().uuid().parse(id)
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
-        const committed = await database.schedules.get([profileId, id]); if (committed) return committed
+        const committed = await database.schedules.get([profileId, id]); if (committed) { if (committed.planId !== input.planId) throw new Error('This save identity belongs to another plan. Reopen Add Plan.'); return committed }
         const plan = await database.plans.get([profileId, input.planId])
         if (!plan || plan.archivedAt) throw new Error('Choose an active plan.')
         if (plan.revision !== input.planRevision) throw new Error('The plan changed after your preview. Cancel and reopen Add Plan.')
         validateMapping(input.mapping, plan.days)
         const now = new Date().toISOString()
         const endDate = scheduleEnd(input.startWeek, plan.durationWeeks)
-        const schedule: Schedule = { id, profileId, planId: plan.id, revision: 1, startWeek: input.startWeek, ...(endDate ? { durationWeeks: plan.durationWeeks, endDate } : {}), timeZone: input.timeZone, createdAt: now, updatedAt: now, revisions: [{ id: createId(), effectiveFrom: input.startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, days: structuredClone(plan.days), mapping: input.mapping }] }
+        const schedule: Schedule = { id, profileId, planId: plan.id, revision: 1, startWeek: input.startWeek, ...(endDate ? { durationWeeks: plan.durationWeeks, endDate } : {}), timeZone: input.timeZone, createdAt: now, updatedAt: now, revisions: [{ id: createId(), effectiveFrom: input.startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), mapping: input.mapping }] }
+        await assertCalendarAssignment(database, schedule)
         await database.schedules.add(schedule); return schedule
       })
     },
@@ -62,8 +65,9 @@ export function scheduleService(database: BorosDatabase) {
         else if (change.kind === 'duration') result.durationChanges = [...(schedule.durationChanges ?? []).filter((item) => item.effectiveFrom < change.effectiveFrom), { id: createId(), effectiveFrom: change.effectiveFrom, ...(fresh.durationWeeks === undefined ? {} : { durationWeeks: fresh.durationWeeks, endDate: fresh.endDate }) }]
         else {
           const plan = (await database.plans.get([profileId, schedule.planId]))!
-          result = { ...result, revisions: appendRevision(schedule, { id: createId(), effectiveFrom: change.effectiveFrom, createdAt: now, planRevision: plan.revision, planName: plan.name, days: structuredClone(plan.days), mapping: change.mapping }) }
+          result = { ...result, revisions: appendRevision(schedule, { id: createId(), effectiveFrom: change.effectiveFrom, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), mapping: change.mapping }) }
         }
+        if (change.kind !== 'stop') await assertCalendarAssignment(database, result)
         await database.schedules.put(result); return result
       })
     },
@@ -76,12 +80,13 @@ export function scheduleService(database: BorosDatabase) {
         // Their internal occurrence date must not imply a weekday assignment.
         const weekStart = monday(start), weekEnd = addDays(monday(end), 6)
         const inRange = (date: string, unscheduled = false) => date >= (unscheduled ? weekStart : start) && date <= (unscheduled ? weekEnd : end)
-        const events = new Map<string, CalendarEvent>(schedules.flatMap((item) => occurrences(item, item.kind === 'unscheduled' ? weekStart : start, item.kind === 'unscheduled' ? weekEnd : end).map((event) => ({ ...event, unscheduled: item.kind === 'unscheduled' }))).map((item) => [item.ref.key, item]))
+        const events = new Map<string, CalendarEvent>(schedules.flatMap((item) => occurrences(item, weekStart, weekEnd).filter((event) => inRange(event.ref.scheduledDate, event.ref.unscheduled)).map((event) => ({ ...event, unscheduled: event.ref.unscheduled }))).map((item) => [item.ref.key, item]))
         for (const schedule of schedules) for (const outcome of schedule.outcomes ?? []) {
-          if (!inRange(outcome.ref.scheduledDate, schedule.kind === 'unscheduled')) continue
+          if (!inRange(outcome.ref.scheduledDate, outcome.ref.unscheduled)) continue
           const generated = events.get(outcome.ref.key)
           if (outcome.status === 'pending' && !generated) continue
-          events.set(outcome.ref.key, { ...generated, ref: outcome.ref, day: outcome.day, planName: outcome.planName, planId: schedule.planId, outcome, unscheduled: schedule.kind === 'unscheduled', retained: !generated })
+          if (outcome.status === 'pending' && generated) { events.set(outcome.ref.key, { ...generated, outcome: { ...outcome, ref: generated.ref } }); continue }
+          events.set(outcome.ref.key, { ...generated, ref: outcome.ref, day: outcome.day, planName: outcome.planName, planInstructions: outcome.planInstructions, planId: schedule.planId, outcome, unscheduled: outcome.ref.unscheduled, retained: !generated })
         }
         const drafts = await database.drafts.where('profileId').equals(profileId).toArray(), logs = await database.sessions.where('profileId').equals(profileId).toArray()
         // Started/completed snapshots remain visible even after a future remap or stop.
@@ -89,7 +94,7 @@ export function scheduleService(database: BorosDatabase) {
           const ref = record.occurrence
           if (!ref || (zone && ref.timeZone !== zone) || !inRange(ref.scheduledDate, ref.unscheduled)) continue
           const generated = events.get(ref.key)
-          events.set(ref.key, { ...generated, ref, planId: record.sourcePlanId, planName: record.planName, day: record.day, unscheduled: ref.unscheduled, retained: !generated || generated.ref.scheduleRevisionId !== ref.scheduleRevisionId, ...('completedAt' in record ? { session: record } : { draft: record }) })
+          events.set(ref.key, { ...generated, ref, planId: record.sourcePlanId, planName: record.planName, planInstructions: record.planInstructions, day: record.day, unscheduled: ref.unscheduled, retained: !generated || generated.ref.scheduleRevisionId !== ref.scheduleRevisionId, ...('completedAt' in record ? { session: record } : { draft: record }) })
         }
         return [...events.values()].sort((a, b) => a.ref.scheduledDate.localeCompare(b.ref.scheduledDate) || a.planName.localeCompare(b.planName))
       })

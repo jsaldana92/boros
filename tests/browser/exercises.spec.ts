@@ -19,7 +19,7 @@ async function add(page: Page, name: string, tag?: string) {
 test('three-set prescription, edit, duplicate, archive/restore and reload', async ({ page }, testInfo) => {
   const external: string[] = []
   await page.route('https://www.youtube.com/embed/**', (route) => route.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' }))
-  page.on('request', (request) => { if (/youtube|youtu\.be/.test(request.url())) external.push(request.url()) })
+  page.on('request', (request) => { if (/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(new URL(request.url()).hostname)) external.push(request.url()) })
   await openCreate(page)
   await page.getByRole('button', { name: 'Create exercise', exact: true }).click()
   await page.getByLabel('Exercise name', { exact: true }).fill('High Bar Squat')

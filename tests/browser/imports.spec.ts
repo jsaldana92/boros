@@ -81,7 +81,7 @@ test('invalid input and canceled previews write nothing; dirty navigation/unload
 
 test('four-day plan preview edits save independently and reopen in the manual editor and source picker', async ({ page }, testInfo) => {
   await open(page); const address = page.url(), external: string[] = []
-  page.on('request', (request) => { if (/youtube|youtu\.be/.test(request.url())) external.push(request.url()) })
+  page.on('request', (request) => { if (/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(new URL(request.url()).hostname)) external.push(request.url()) })
   await preview(page, planFixture(), true)
   expect((await counts(page)).plans).toBe(0); expect((await counts(page)).tags).toBe(0)
   await page.getByLabel('Plan name', { exact: true }).fill('Imported edited plan')

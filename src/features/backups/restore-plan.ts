@@ -1,3 +1,4 @@
+import { closedRunDraftIds } from '../../lib/closed-runs.ts'
 import { materializeTemplates } from '../../lib/template-ownership.ts'
 import { validateBackupData, type ProfileSnapshot } from '../../schemas/backup.ts'
 import { nameKey, type PhotoAsset, type Profile } from '../../schemas/profile.ts'
@@ -97,7 +98,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   const scheduleIds = await allocate('schedule', importedSchedules, localSchedules), draftIds = await allocate('draft', importedDrafts, [...localDrafts, ...localSessions])
   const remapDay = (day: TrainingDay) => { for (const exercise of day.exercises) { if (exercise.templateId) exercise.templateId = exerciseIds.get(exercise.templateId) ?? exercise.templateId; if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } } }
   for (const p of plans.imported) p.days.forEach(remapDay)
-  for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const revision of schedule.revisions) revision.days.forEach(remapDay); for (const outcome of schedule.outcomes ?? []) { outcome.ref.scheduleId = schedule.id; outcome.ref.key = occurrenceKey(schedule.id, outcome.ref.dayId, outcome.ref.scheduledDate, outcome.ref.programWeek); remapDay(outcome.day) } }
+  for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const ref of schedule.occurrenceExceptions ?? []) { ref.scheduleId = schedule.id; ref.key = occurrenceKey(schedule.id, ref.dayId, ref.scheduledDate, ref.programWeek) } for (const revision of schedule.revisions) revision.days.forEach(remapDay); for (const outcome of schedule.outcomes ?? []) { outcome.ref.scheduleId = schedule.id; outcome.ref.key = occurrenceKey(schedule.id, outcome.ref.dayId, outcome.ref.scheduledDate, outcome.ref.programWeek); remapDay(outcome.day) } }
   for (const item of [...importedDrafts, ...importedSessions]) {
     item.id = draftIds.get(item.id)!; item.sourcePlanId = planIds.get(item.sourcePlanId)!; remapDay(item.day)
     if (item.occurrence) { item.occurrence.scheduleId = scheduleIds.get(item.occurrence.scheduleId)!; item.occurrence.key = occurrenceKey(item.occurrence.scheduleId, item.occurrence.dayId, item.occurrence.scheduledDate, item.occurrence.programWeek); item.occurrenceKey = item.occurrence.key }
@@ -135,12 +136,22 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   counts.photos.added = result.photos.filter((p) => !local?.photos.some((old) => old.id === p.id)).length
   counts.photos.removed = (local?.photos ?? []).filter((p) => !result.photos.some((next) => next.id === p.id)).length
   if (local && !merging) for (const key of ownedStores) { counts[key].removed = local[key].length; counts[key].added = result[key].length }
+  const removesFamilies = !!(counts.drafts.removed || counts.sessions.removed || counts.schedules.removed)
   for (const key of ownedStores) result[key] = result[key].map((record) => ({ ...record, profileId: newId })) as never
+  const abandoned = closedRunDraftIds(result.schedules, result.drafts, result.sessions)
+  if (abandoned.length) {
+    result.drafts = result.drafts.filter((draft) => !abandoned.includes(draft.id))
+    const omitted = importedDrafts.filter((draft) => abandoned.includes(draft.id)).length
+    counts.drafts.removed += abandoned.length - omitted
+    counts.drafts.added -= omitted
+    counts.drafts.skipped += omitted
+    warnings.push('Closed-run compatibility cleanup: omit ' + abandoned.length + ' unfinished drafts from explicitly left runs. Completed history stays unchanged.')
+  }
   const repaired = materializeTemplates(newId, result, at)
   result.plans = repaired.plans; result.exercises = repaired.exercises; result.tags = repaired.tags
   counts.exercises.added += repaired.addedExercises.length; counts.tags.added += repaired.addedTags.length
   if (repaired.changedPlans.length || repaired.addedExercises.length) warnings.push(`Library compatibility repair: update links in ${repaired.changedPlans.length} plans and add ${repaired.addedExercises.length} independent templates using the earliest retained occurrence defaults. Existing templates and all historical snapshots stay unchanged. Original AI defaults may no longer be recoverable.`)
   validateBackupData(canonicalSnapshot(result)); validateRestoreRecords(canonicalSnapshot(result))
-  if (counts.drafts.removed || counts.sessions.removed || counts.schedules.removed) warnings.push('Removed plan families include all their history, schedules and saved drafts. Histories are not combined inside a conflicting family.')
+  if (removesFamilies) warnings.push('Removed plan families include all their history, schedules and saved drafts. Histories are not combined inside a conflicting family.')
   return plan
 }

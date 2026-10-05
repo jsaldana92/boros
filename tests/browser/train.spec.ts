@@ -35,8 +35,8 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   await open(page); const address = page.url()
   await expect(page.getByText('Hidden tag', { exact: true })).toHaveCount(0)
   await expect(page.getByText('<b>Plain instructions</b>', { exact: false })).toHaveCount(0)
-  await button(page, 'Information for Press').click(); await expect(page.getByRole('dialog')).toContainText('<b>Plain instructions</b>')
-  await expect(page.getByRole('link', { name: 'Open YouTube tutorial' })).toHaveAttribute('href', 'https://youtu.be/abcdefghijk'); await button(page, 'Close').click()
+  await page.route('https://www.youtube.com/embed/**', r => r.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' })); await button(page, 'Information for Press').click(); await expect(page.getByRole('dialog')).toContainText('<b>Plain instructions</b>')
+  await expect(page.locator('iframe')).toHaveAttribute('src', /youtube.com\/embed\/abcdefghijk/); await button(page, 'Close').click()
   await note(page, 'Session Note', 'Session\nplain <b>note</b>'); await note(page, 'Note for Press', 'Exercise note')
   await fillSet(page); await input(page, 'Press set 1 Actual RIR (optional)').fill('0'); await saved(page)
   await page.clock.install()
@@ -84,10 +84,10 @@ test('cancel Clear and partial Save preserve input; explicit skips and Clear aff
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Partial session'); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Skipped')
   await button(page, 'Back to training days').click(); await button(page, 'Next week').click(); await expect(page.locator('.training-day-card')).toContainText('Pending'); await page.locator('.training-day-card').click(); await button(page, 'Start').click(); await fillSet(page); await note(page, 'Note for Press', 'Remove me'); await saved(page)
   await button(page, 'REST Press after set 1').click(); await closeTimer(page); await input(page, 'Press set 2 Repetitions').fill('9')
-  await button(page, 'Clear').click(); await button(page, 'Clear draft').click(); await saved(page)
+  await button(page, 'Clear').click(); await page.getByRole('dialog').getByRole('button', { name: 'Clear', exact: true }).click(); await saved(page)
   await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue(''); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
   await button(page, 'Note for Press').click(); await expect(input(page, 'Note')).toHaveValue(''); await button(page, 'Apply note').click(); await saved(page)
-  await page.reload(); await resume(page); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); expect(await recordCounts(page)).toEqual([2, 1])
+  await page.reload(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0); await startWeekly(page, 'Training plan', 'Upper'); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); expect(await recordCounts(page)).toEqual([2, 1])
 })
 
 test('failed autosave and completion preserve input; pending Save commits once; unapplied notes guard unload', async ({ page }) => {
@@ -98,7 +98,7 @@ test('failed autosave and completion preserve input; pending Save commits once; 
     IDBObjectStore.prototype.put = function (...args) { if (this.name === 'drafts') throw new DOMException('Simulated draft quota', 'QuotaExceededError'); return original.apply(this, args) }
   })
   await fillSet(page); await expect(page.getByText('Draft not saved. Your input is kept.')).toBeVisible(); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
-  page.once('dialog', (dialog) => dialog.dismiss()); await button(page, 'Settings').click(); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
+  await button(page, 'Settings').click(); await button(page, 'Stay').click(); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
   await page.evaluate(() => (window as unknown as { restoreWrite: () => void }).restoreWrite()); await button(page, 'Retry draft save').click(); await saved(page)
   await button(page, 'Session Note').click(); await input(page, 'Note').fill('Unapplied')
   const unload = page.waitForEvent('dialog'); await page.evaluate(() => { setTimeout(() => window.location.reload(), 0) }); const warning = await unload; expect(warning.type()).toBe('beforeunload'); await warning.dismiss()
@@ -117,7 +117,7 @@ test('failed autosave and completion preserve input; pending Save commits once; 
 
 test('profile switching and unit changes recover canonical loads; light theme and archived-source draft resume', async ({ page }, testInfo) => {
   await open(page); await fillSet(page, 'Press', 1, '45.359237'); await saved(page); await button(page, 'REST Press after set 1').click()
-  await closeTimer(page); await saved(page); await button(page, 'Settings').click(); await button(page, 'Light').click()
+  await closeTimer(page); await saved(page); await page.reload(); await button(page, 'Settings').click(); await button(page, 'Light').click()
   await page.getByRole('combobox', { name: 'Weight unit', exact: true }).selectOption('lb'); await button(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
   await input(page, 'New profile name').fill('Other'); await button(page, 'Create profile').click(); await expect(page.locator('input[name="name"]')).toHaveValue('Other'); await button(page, 'Train').click()
   await expect(page.getByText('No active plan(s) selected.')).toBeVisible(); await expect(page.getByRole('button', { name: new RegExp("^Resume Training plan / Upper") })).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
@@ -125,7 +125,7 @@ test('profile switching and unit changes recover canonical loads; light theme an
   await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100'); await expect(page.getByRole('region', { name: 'Rest timer' })).toBeVisible()
   await expect(page.getByRole('combobox')).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('train-light.png'), fullPage: true })
-  await closeTimer(page); await button(page, 'Create').click(); const card = page.getByRole('article', { name: 'Plan Training plan', exact: true })
+  await closeTimer(page); await page.reload(); await button(page, 'Create').click(); const card = page.getByRole('article', { name: 'Plan Training plan', exact: true })
   await cardAction(page, card, 'Edit'); await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit'); await input(page, 'Exercise name').fill('Changed source'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
   await cardAction(page, card, 'Archive'); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
   await button(page, 'Train').click(); await resume(page); await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100')
@@ -133,7 +133,7 @@ test('profile switching and unit changes recover canonical loads; light theme an
 })
 
 test('stale tabs cannot overwrite drafts; reload conflict recovery and completion use one log', async ({ page, context }) => {
-  await open(page); const other = await context.newPage(); await other.goto('./'); await resume(other)
+  await open(page); await input(page, 'Press set 1 Actual RIR (optional)').fill('0'); await saved(page); const other = await context.newPage(); await other.goto('./'); await resume(other)
   await fillSet(page); await saved(page); await fillSet(other, 'Press', 1, '50')
   await expect(other.getByRole('alert')).toContainText('another tab'); await expect(input(other, 'Press set 1 Weight (kg)')).toHaveValue('50')
   await button(other, 'Reload saved draft').click(); await button(other, 'Reload draft').click(); await expect(input(other, 'Press set 1 Weight (kg)')).toHaveValue('0')

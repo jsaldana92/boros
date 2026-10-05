@@ -51,7 +51,7 @@ test('plan carousel, plan/all scopes, historical supersets, actual set selection
   await expect(page.locator('.workout-progress-grid')).toHaveCSS('grid-template-columns', /\S+ \S+ \S+/)
   await b(page, 'Next plan card').click(); await expect(page.locator('.progress-carousel button').last()).toBeFocused()
   await b(page, 'Previous plan card').click(); await page.keyboard.press('Enter'); await expect(page.getByRole('heading', { name: 'Alpha', exact: true })).toBeFocused()
-  await expect(page.locator('.progress-counts')).toContainText('2 Training days completed'); await expect(page.locator('.progress-counts')).toContainText('7 Exercise completions')
+  await expect(page.locator('.progress-counts')).toContainText('0 Training days completed'); await expect(page.locator('.progress-counts')).toContainText('7 Exercise completions')
   await selection(page, 'Renamed press').click(); await expect(page.getByRole('region', { name: 'Maximum recorded weight', exact: true })).toContainText('45.359237 kg × 7 reps')
   await expect(page.getByRole('region', { name: 'Starting performance', exact: true })).toContainText('0 kg × 5 reps')
   await expect(page.getByRole('region', { name: 'Starting performance', exact: true }).locator('.recorded-performance')).toHaveCount(2)

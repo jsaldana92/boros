@@ -1,4 +1,5 @@
 import type { Schedule } from '../schemas/schedule.ts'
+import { resolvedDays } from './run-progress.ts'
 import type { Exercise } from '../schemas/exercise.ts'
 import type { Plan, PlanExercise, TrainingDay } from '../schemas/plan.ts'
 import type { CompletedSession, RecordedSet } from '../schemas/session.ts'
@@ -70,10 +71,11 @@ export function deriveProgress(profileId: string, allPlans: Plan[], allExercises
   return { sessions, performances, items: sorted(catalog.values()), plans: Array.from(planIds).flatMap((id): ProgressPlan[] => {
     const plan = plans.find((p) => p.id === id), history = sessions.filter((s) => s.sourcePlanId === id)
     const markers = schedules.filter((run) => run.profileId === profileId && run.planId === id).flatMap((run) => run.outcomes ?? []).filter((outcome) => !history.some((session) => session.occurrenceKey === outcome.ref.key))
+    const resolved = resolvedDays(history, schedules.filter((run) => run.profileId === profileId && run.planId === id).flatMap((run) => run.outcomes ?? []))
     if (plan?.archivedAt && !history.length && !markers.some((m) => m.status !== 'pending')) return []
     return [{ id, name: plan?.name ?? history.at(-1)!.planName, archived: !!plan?.archivedAt, historical: !plan, sessions: history,
-      daysCompleted: new Set(history.map((s) => s.occurrence ? `scheduled:${s.occurrence.key}` : `session:${s.id}`)).size + markers.filter((m) => m.status === 'completed').length,
-      daysSkipped: markers.filter((m) => m.status === 'skipped').length, manualCompletions: markers.filter((m) => m.status === 'completed').length,
+      daysCompleted: resolved.completed.size,
+      daysSkipped: resolved.skipped.size, manualCompletions: resolved.manual.size,
       exercisesCompleted: performances.filter((p) => p.session.sourcePlanId === id).length, items: sorted(perPlan.get(id)?.values() ?? []) }]
   }).sort((a, b) => a.name.localeCompare(b.name) || compare(a.id, b.id)) }
 }

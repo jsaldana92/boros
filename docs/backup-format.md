@@ -1,9 +1,9 @@
-# Boros profile backup, schema 5 (schemas 1–4 supported)
+# Boros profile backup, schema 8 (schemas 1–7 supported)
 
 Export was implemented in Phase 8; reviewed restore and profile Clear Data are
 implemented in Phase 9. This remains separate from the external AI interchange
-format. Weekly training now writes backup schema 5; database version 5 stays unchanged. Strict
-schema 1–4/database v5 backups remain supported through the compatibility path below. An isolated
+format. Calendar run refinements now write backup schema 8; database version 5 stays unchanged. Strict
+schema 1–7/database v5 backups remain supported through the compatibility path below. An isolated
 export → import under a new name → export comparison verifies canonical records,
 relationships and original image bytes, with the identity exceptions below.
 
@@ -32,6 +32,63 @@ retain their date-based occurrence keys. New unassigned weekly runs use
 `scheduleId:dayId:week-N`; occurrence references retain `programWeek` and
 `unscheduled: true` as well as their week, zone and revision. Their internal date
 is a generation coordinate, not a claimed assigned weekday or performance date.
+
+Schema 6 adds optional `closedAt` (an ISO UTC timestamp) to schedules and a
+`closedAt` column to `csv/schedules.csv`. A closed run must also have `stoppedFrom`.
+It is distinct from Stop Scheduling: the latter preserves unfinished sessions.
+Closure permanently forbids resuming/writing that run while retaining completed
+sessions, finalized drafts and explicit historical outcomes. No database schema
+upgrade or historical-result rewrite is needed. Schema 1–5 fields/CSV inventories
+remain strict and unchanged; original CRC/SHA-256 verification happens before
+promotion to the current in-memory envelope.
+
+Schema 7 adds optional plain-text `instructions` to plans and optional
+`planInstructions` to schedule revisions, occurrence outcomes, training drafts
+and completed sessions. Each allows at most 20,000 characters. They preserve
+the distinction from plan notes, exercise instructions and session notes;
+omitted fields stay absent. Historical snapshots remain frozen when the plan
+changes. A finalized draft and its session must agree on plan instructions.
+Existing family-based new/replace/device/import restore choices preserve the
+winning snapshots, without merging text from another family.
+
+Readable `csv/plans.csv` adds `instructions`. `csv/schedule_revisions.csv`,
+`csv/occurrence_outcomes.csv`, `csv/drafts.csv` and `csv/sessions.csv` add
+`planInstructions`. The same 28 linked tables remain; string-only spreadsheet
+formula protection applies, while authoritative JSON retains exact text/newlines.
+Strict schema 1–6 field sets and CSV columns are frozen. Original CRC/SHA-256,
+CSV and asset validation precedes envelope promotion; no instructions are
+invented, no records reset, and the source archive is never rewritten.
+
+Schema 8 adds optional run `hiddenAt` (UTC timestamp), `occurrenceExceptions`
+(frozen occurrence references), and revision-level `unscheduled: true`.
+Hidden runs remain in statistics and exports; this flag never archives a template.
+When an unscheduled run gains a Calendar assignment, its old revisions retain
+their unscheduled classification. Old results/outcomes/drafts are not relabeled.
+The run-level kind describes its current or final association; closing a scheduled
+run retains that association for Previous Plans.
+
+Reassignment exceptions replace one training day in its saved week. Their original
+date, key, zone, program week, and revision/day references are validated, including
+uniqueness per run/day/week. They preserve recorded work while untouched days move.
+ID remapping during restore remaps exception schedule IDs and keys together.
+Reset removes the run's prior history/markers/exceptions/gaps and gives its retained
+prescription a fresh revision ID. End keeps closure/history; Delete removes the
+selected run family. These operations create no archive tombstones or timers.
+
+`csv/schedules.csv` adds `hiddenAt`, `csv/schedule_revisions.csv` adds `unscheduled`,
+and `csv/occurrence_exceptions.csv` adds a linked table, for **29 CSV tables**.
+Strict v1–v7 field sets and CSV layouts remain frozen; those versions reject
+v8-only fields. Absent optional fields stay absent. IndexedDB stays `boros` v5;
+no store, index, database name, eager migration, or reset is introduced.
+
+After merge precedence and identity remapping, restore removes only unfinished
+drafts whose exact profile/run/source-plan belongs to an explicitly closed run,
+and which are not linked to completed history. The preview reports this as
+**Closed-run compatibility cleanup**, with adjusted added/removed counts. Repeated
+restore cannot bring back resumable closed-run drafts. Selection, archiving, names
+and `stoppedFrom` alone never imply closure; ambiguous old drafts stay intact.
+Normal startup/profile selection applies the same idempotent rule transactionally,
+including any matching persisted timer. Backups still exclude timer state.
 
 An outcome has its own UUID, reference, frozen day/name, status (`skipped`,
 `completed`, or corrected `pending`), revision, `recordedAt` and `updatedAt`.
@@ -88,6 +145,7 @@ csv/supersets.csv
 csv/schedules.csv
 csv/program_runs.csv
 csv/occurrence_outcomes.csv
+csv/occurrence_exceptions.csv
 csv/excluded_weeks.csv
 csv/week_moves.csv
 csv/schedule_duration_changes.csv
@@ -114,7 +172,7 @@ fields rather than write null. Record timestamps/revisions are not regenerated.
 
 `src/schemas/backup.ts` defines the executable payload/manifest schema and required
 reference checks. Database version stays 5: exporting adds no tables, migrations,
-or writes. The manifest separately records backup schema `5`, database schema `5`,
+or writes. The manifest separately records backup schema `8`, database schema `5`,
 and the real `package.json` app name/version (`boros`, currently `0.0.0`). That
 package value is not an invented release number.
 
@@ -122,7 +180,7 @@ package value is not an invented release number.
 
 | Field | Meaning |
 | --- | --- |
-| `format`, `backupSchemaVersion` | `boros-profile-backup`, 5 for new exports; independent of AI/database versions |
+| `format`, `backupSchemaVersion` | `boros-profile-backup`, 8 for new exports; independent of AI/database versions |
 | `databaseSchemaVersion`, `app` | Actual supported source database version and package name/version |
 | `profile` | The captured profile's ID, name, and Guest/named kind; no active-profile selection reference |
 | `snapshotAt` | UTC timestamp at the end of the consistent read transaction |
@@ -152,7 +210,7 @@ or resizing. ZIP compression is STORE for images and DEFLATE for text.
 | `profile` | ID, kind, name/nameKey, optional age/heightCm/photoId/timeZone/selectedPlanIds, weightUnit/heightUnit, revision, createdAt/updatedAt. Current weight is derived, never a copied field. Train selections are unique UUID references to owned plans, including archived ones. |
 | `tags` | Profile-owned ID, name/nameKey, creation/update time, optional archivedAt. |
 | `exercises` | Profile-owned library ID, name keys, archive/revision/timestamps, ordered sets, tagIds, optional rest/instructions/notes/tutorial URL. |
-| `plans` | Profile-owned ID, name keys, archive/revision/timestamps, optional durationWeeks (absent means legacy unbounded), ordered days and exercise occurrences. Each occurrence has its own ID, complete prescription, optional provenance source and groupId. Days optionally contain groups with stable ID, positive day-local number and optional restBetweenRoundsSeconds/restAfterGroupSeconds. |
+| `plans` | Profile-owned ID, name keys, archive/revision/timestamps, optional instructions/notes and durationWeeks (absent means legacy unbounded), ordered days and exercise occurrences. Each occurrence has its own ID, complete prescription, optional provenance source and groupId. Days optionally contain groups with stable ID, positive day-local number and optional restBetweenRoundsSeconds/restAfterGroupSeconds. |
 | `schedules` | Profile-owned ID and planId, revision, stored IANA zone/startWeek, optional stoppedFrom, timestamps, ordered revision history; optional durationWeeks/inclusive endDate and ordered durationChanges. Each duration change has a stable ID, Monday effectiveFrom and optional durationWeeks/endDate. Each prescription revision retains ID, effectiveFrom/exclusive effectiveUntil, creation time, planRevision/name, complete days/groups, mapping and optional needsRepair. |
 | `drafts` | Profile-owned ID, sourcePlanId/sourceDayId, revision, activeSourceKey if unfinished, planName/day snapshot, raw input/results/applied notes, startedAt/updatedAt and optional finalizedAt/occurrence metadata. Finalized drafts are retained too. |
 | `sessions` | Profile-owned ID/draftId, source plan/day, revision, frozen day/prescription snapshot, actual exercise/set results and notes, partial flag, startedAt/completedAt/loggedAt, optional occurrence metadata. |
@@ -163,7 +221,9 @@ Every owned record's profileId equals the exported profile ID. Required tag,
 plan, schedule/revision, finalized-draft/session and photo references must resolve.
 Invalid/missing required records abort the entire export with a record-specific
 error; records are never silently dropped to produce an apparently complete ZIP.
-Session results must agree with their frozen prescription and finalized draft.
+Session results and optional planInstructions must agree with their frozen
+prescription and finalized draft. Schedule revisions, outcomes, drafts and
+sessions may contain optional planInstructions independent of the current plan.
 
 Array positions are meaningful, independent of IDs. A library exercise ID is not
 a plan/session exercise-occurrence ID. Copied prescriptions include ordered sets,
@@ -206,11 +266,12 @@ validated in increasing Monday order and select the applicable boundary without
 rewriting earlier occurrences. Started/completed exceptions remain valid beyond
 a later end date. Plan edits do not alter the frozen schedule boundary.
 
-Upload accepts versions 1, 2, 3 and 4 with matching manifest/data versions and database
+Upload accepts versions 1–8 with matching manifest/data versions and database
 v5. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
 before validating records against the version-specific strict field set, linked
 references, CSV inventory/counts and original assets. Only after all checks pass,
-v1/v2/v3/v4 canonical data is cloned with a v5 envelope; no group/duration/preference or historical week is inserted and
+v1–v7 canonical data is cloned with a v8 envelope; no group/duration/preference,
+historical week, closure, hidden flag, exception or plan instructions are invented and
 the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
 The returned manifest remains the original validated version for provenance.
 Checksums and photo decoding are never bypassed.
@@ -337,7 +398,7 @@ permissions and physical mobile save-sheet behavior still need manual checks.
 
 ## Upload validation and limits (Phase 9)
 
-Settings → Data → **Backup ZIP** accepts an original Boros schema 1, 2 or 3/database v5
+Settings → Data → **Backup ZIP** accepts an original Boros schema 1–8/database v5
 export. Unsupported versions explain that the user must update Boros or choose a
 supported export. Import never guesses at a future schema or reads AI interchange
 as a backup. Parsing, hashing, CSV row checks and image decoding run in a worker,
@@ -506,7 +567,7 @@ remove them. Do not delete the source to test a move.
    actual original ZIP is present/readable on disk; “Download started” cannot
    confirm filesystem success. Repeat separately for each desired profile.
 2. At the verified target address, use Settings → Data → Backup ZIP. Select the
-   original schema 1, 2 or 3/database v5 ZIP; do not unpack/repackage it or import CSVs.
+   original schema 1–8/database v5 ZIP; do not unpack/repackage it or import CSVs.
    Review validation and counts. Prefer **Import under a new name** with an unused
    name if a name conflict exists; merge/replace have the destructive whole-family
    semantics documented above. Review, acknowledge and Confirm and save.

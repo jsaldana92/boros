@@ -1,3 +1,4 @@
+import { addCalendarPlan, manageRun, returnCalendar } from './calendar-actions'
 import { waitForDraft, startWeekly } from './train-actions'
 import { cardAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
@@ -108,7 +109,7 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await button(page, 'Settings').click(); await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
   const pending = page.waitForEvent('download'); await button(page, 'Download data').click()
   const bytes = await readFile((await (await pending).path())!), zip = await JSZip.loadAsync(bytes)
-  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(5)
+  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(8)
   expect(zip.file('csv/supersets.csv')).toBeTruthy()
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'groups.zip', mimeType: 'application/zip', buffer: bytes })
   await expect(page.getByRole('region', { name: 'Backup selection' })).toBeVisible()
@@ -118,20 +119,19 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await expect(page.getByRole('article', { name: 'Session Two-week supersets / Mixed day', exact: true })).toHaveCount(2)
 })
 
-test('finite schedule preview freezes two-week boundary and explicit duration change preserves started/missed dates', async ({ page }) => {
+test('finite run freezes its duration and scheduling edits preserve started/missed dates after template change', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2025-01-02T12:00:00Z')); await importPlan(page)
-  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await button(page, 'Add Plan').click(); await field(page, 'Starting week (Monday)').fill('2024-12-30')
-  await button(page, 'Preview schedule').click(); await expect(page.getByRole('dialog')).toContainText('2025-01-12'); await button(page, 'Confirm schedule').click()
+  await button(page, 'Calendar').click(); await button(page, 'Week').click(); await addCalendarPlan(page, '2024-12-30')
+  expect((await records(page)).schedules[0].endDate).toBe('2025-01-12')
   await expect(page.locator('.calendar-event')).toHaveCount(1); await expect(page.locator('.calendar-event')).toContainText('Past Due')
   await field(page, 'Calendar date').fill('2025-01-06'); await page.locator('.calendar-event').click(); await field(page, 'Squat occurrence 2 set 1 Weight (kg)').fill('55'); await saved(page)
-  await button(page, 'Create').click(); await cardAction(page, card(page), 'Edit'); await field(page, 'Duration (weeks)').fill('1'); await button(page, 'Save plan').click()
+  await page.reload(); await button(page, 'Create').click(); await cardAction(page, card(page), 'Edit'); await field(page, 'Duration (weeks)').fill('1'); await button(page, 'Save plan').click()
   expect((await records(page)).schedules[0].endDate).toBe('2025-01-12')
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-13'); await expect(page.locator('.calendar-event')).toHaveCount(0)
-  await button(page, 'Review plan duration').click(); await field(page, 'Effective from').fill('2025-01-06'); await button(page, 'Preview schedule').click()
-  await expect(page.getByRole('dialog')).toContainText('2025-01-05'); await button(page, 'Confirm schedule').click(); await expect(page.getByRole('dialog')).toContainText('Confirm keeping')
-  await page.getByLabel('Keep these sessions on their original dates, with all entered data.').check(); await button(page, 'Confirm schedule').click()
-  await field(page, 'Calendar date').fill('2024-12-30'); await expect(page.locator('.calendar-event')).toContainText('Past Due')
-  await field(page, 'Calendar date').fill('2025-01-06'); await expect(page.locator('.calendar-event')).toContainText('Kept original session'); await page.locator('.calendar-event').click()
+  await manageRun(page, 'Edit'); await button(page, 'Save').click(); await expect(page.getByRole('heading', { level: 1 })).toHaveText('Current Plans')
+  expect((await records(page)).schedules[0].endDate).toBe('2025-01-12')
+  await returnCalendar(page); await field(page, 'Calendar date').fill('2024-12-30'); await expect(page.locator('.calendar-event')).toContainText('Past Due')
+  await field(page, 'Calendar date').fill('2025-01-06'); await expect(page.locator('.calendar-event')).toContainText('Incomplete'); await page.locator('.calendar-event').click()
   await expect(field(page, 'Squat occurrence 2 set 1 Weight (kg)')).toHaveValue('55')
 })
 

@@ -27,7 +27,7 @@ export async function startWeekly(page: Page, plan: string, day: string) {
   await expect(page.locator('.training-day-card').first()).toBeVisible()
   for (let i = 0; i < 10; i++) {
     const pending = page.locator('.training-day-card').filter({ hasText: day }).filter({ has: page.locator('.day-status.pending, .day-status.due-today, .day-status.past-due') })
-    if (await pending.count()) { await pending.first().click(); await page.getByRole('dialog').getByRole('button', { name: /^(Start|Resume draft)$/ }).click(); return }
+    if (await pending.count()) { await pending.first().click(); await page.getByRole('dialog').getByRole('button', { name: /^(Start|Resume)$/ }).click(); return }
     await trainButton(page, 'Next week').click(); await expect(page.locator('.training-day-card').first()).toBeVisible()
   }
   throw new Error('No active pending week for test program')
