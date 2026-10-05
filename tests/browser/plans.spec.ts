@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -107,7 +108,7 @@ test('source picker filters combine and copied prescriptions remain independent 
   await picker.getByRole('button', { name: 'Tags', exact: true }).click()
   await picker.getByRole('button', { name: 'Legs', exact: true }).click(); await picker.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(picker.locator('.exercise-selection-row')).toHaveCount(1)
-  await expect(picker).toContainText('ANY selected tag matches')
+  await expect(picker).not.toContainText('ANY selected tag matches')
   await button(page, 'Add Squat').click()
   await occurrenceAction(page, days(page).first(), 'Edit')
   await page.getByLabel('Set 1 Reps minimum', { exact: true }).fill('9')
@@ -203,8 +204,7 @@ test('stale tabs and another tab profile selection cannot retarget plan input', 
   await cancel(other, true)
   await cardAction(other, card(other, 'Latest'), 'Edit')
   await other.getByLabel('Plan name', { exact: true }).fill('Guest updated')
-  await button(page, 'Settings').click(); await page.getByLabel('New profile name').fill('Other')
-  await button(page, 'Create profile').click(); await expect(page.locator('input[name="name"]')).toHaveValue('Other')
+  await button(page, 'Settings').click(); await createNamedProfile(page, 'Other'); await expect(page.locator('input[name="name"]')).toHaveValue('Other')
   await button(page, 'Light').click(); await button(page, 'Create').click()
   await expect(card(page, 'Latest')).toHaveCount(0)
   await save(other, 'Guest updated')

@@ -6,6 +6,7 @@ import { dayStatus } from '../../lib/weekly-status'
 import { useWorkspace } from '../../app/workspace-context'
 import { useScreenNavigation } from '../../app/navigation-context'
 import { useCurrentInstant } from '../../lib/use-current-instant'
+import { readCalendarView, saveCalendarView } from '../../lib/calendar-view'
 import { activePlanRuns } from '../../db/active-plans'
 import { schedules, type CalendarEvent } from '../../db/schedules'
 import { calendarActivity, type CalendarActivity } from '../../db/calendar-activity'
@@ -26,9 +27,9 @@ export function CalendarPage() {
   return <CalendarWorkspace key={snapshot.profile.id} profileId={snapshot.profile.id} />
 }
 function CalendarWorkspace({ profileId }: { profileId: string }) {
-  const { allowLeave, snapshot } = useWorkspace(), { openScreen } = useScreenNavigation(), instant = useCurrentInstant()
+  const { allowLeave } = useWorkspace(), { openScreen } = useScreenNavigation(), instant = useCurrentInstant()
   const [dayAction, setDayAction] = useState<{ event: CalendarEvent; run: Schedule; displayDate: string }>()
-  const [selection, setSelection] = useState<string>(), [view, setView] = useState<CalendarView>('month')
+  const [selection, setSelection] = useState<string>(), [view, setView] = useState<CalendarView>(readCalendarView)
   const [weekExpansion, setWeekExpansion] = useState<{ month: string; weeks: string[] }>({ month: '', weeks: [] })
   const [destination, setDestination] = useState<'calendar' | 'current' | 'previous'>('calendar'), [menu, setMenu] = useState(false)
   const [editor, setEditor] = useState<{ schedule: Schedule } | { startWeek: string; zone: string }>(), [error, setError] = useState(''), [attempt, setAttempt] = useState(0), [busy, setBusy] = useState(false)
@@ -41,7 +42,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
       return { data, colors: calendarColors(profileId, [...data.schedules.map((run) => run.planId), ...data.sessions.map((session) => session.sourcePlanId)]), error: '' }
     } catch (error) { return { error: message(error) } }
   }, [profileId, attempt])
-  const data = library?.data, zone = snapshot.profile.timeZone ?? browserZone(), today = localToday(zone, instant), date = selection ?? today, range = viewRange(date, view)
+  const data = library?.data, zone = browserZone(), today = localToday(zone, instant), date = selection ?? today, range = viewRange(date, view)
   const colors = library?.colors ?? {}
   const monthKey = date.slice(0, 7), defaultWeek = today >= range.start && today <= range.end ? monday(today) : range.start
   const expandedWeeks = weekExpansion.month === monthKey ? weekExpansion.weeks : [defaultWeek]
@@ -82,21 +83,21 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
     {data?.schedules.filter((run) => run.kind !== 'unscheduled' && scheduleActiveOn(run, day)).map((run) => { const revision = revisionAt(run, day); return revision?.needsRepair ? <p className="muted" key={run.id}>{revision.planName}: mapping needs repair</p> : revision && !revision.unscheduled && events && !events.some((activity) => activity.event?.ref.scheduleId === run.id && activity.date === day && !activity.event.unscheduled) ? <p className="muted" key={run.id}>{revision.planName}: Rest</p> : null })}
   </section>
   return <>
-    <div className="calendar-heading"><h1 id="calendar-heading" tabIndex={-1}>{editor ? ('schedule' in editor ? 'Edit Plan' : 'Add Plan') : destination === 'calendar' ? 'Calendar' : destination === 'current' ? 'Current Plans' : 'Previous Plans'}</h1>{!editor && (destination === 'calendar' ? <button id="calendar-menu" aria-label="Calendar menu" onClick={(event) => { returnPosition.current = { y: window.scrollY, trigger: event.currentTarget }; setMenu(true) }}><Menu aria-hidden="true" /></button> : destination === 'current' ? <button onClick={returnCalendar}>Cancel</button> : null)}</div>
+    <div className="calendar-heading"><h1 id="calendar-heading" tabIndex={-1}>{editor ? ('schedule' in editor ? 'Edit Plan' : 'Add Plan') : destination === 'calendar' ? 'Calendar' : destination === 'current' ? 'Current Plans' : 'Previous Plans'}</h1>{!editor && (destination === 'calendar' ? <button id="calendar-menu" aria-label="Calendar menu" onClick={(event) => { returnPosition.current = { y: window.scrollY, trigger: event.currentTarget }; setMenu(true) }}><Menu aria-hidden="true" /></button> : destination === 'current' ? <button onClick={returnCalendar}>Back</button> : null)}</div>
     {(result?.error || library?.error) && <p role="alert">Could not load Calendar. {result?.error || library?.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry calendar</button></p>}
     {editor && ('schedule' in editor ? <ScheduleEditor profileId={profileId} schedule={editor.schedule} onCancel={closeEditor} onSaved={closeEditor} /> : <AddPlans profileId={profileId} plans={data?.plans ?? []} activePlanIds={new Set((data?.schedules ?? []).filter((run) => !runLifecycle(run, data?.sessions ?? [], instant).previous).map((run) => run.planId))} startWeek={editor.startWeek} zone={editor.zone} onCancel={closeEditor} onSaved={closeEditor} />)}
     {destination !== 'calendar' && <div hidden={!!editor}>{data ? <PlanRuns key={destination} profileId={profileId} runs={data.schedules} sessions={data.sessions} instant={instant} previous={destination === 'previous'} duplicateIds={duplicates} onEdit={(schedule) => edit({ schedule })} onCancel={returnCalendar} /> : <p role="status">Loading plans...</p>}</div>}
     {!editor && destination === 'calendar' && <>
       <div className="calendar-toolbar">
-        <div className="segmented" aria-label="Calendar view">{(['day', 'week', 'month'] as const).map((item) => <button key={item} aria-pressed={view === item} onClick={() => setView(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div>
+        <div className="segmented" aria-label="Calendar view">{(['day', 'week', 'month'] as const).map((item) => <button key={item} aria-pressed={view === item} onClick={() => { setView(item); saveCalendarView(item) }}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div>
         <div className="actions"><button aria-label="Previous period" onClick={() => shift(-1)}><ArrowLeft aria-hidden="true" /></button><button onClick={showToday}>Today</button><button aria-label="Next period" onClick={() => shift(1)}><ArrowRight aria-hidden="true" /></button></div>
-        <button id="calendar-add" className="primary" disabled={!data} onClick={() => { returnPosition.current = { y: window.scrollY, trigger: document.activeElement as HTMLElement }; edit({ startWeek: monday(date), zone }) }}>Add Plan</button>
+        <button id="calendar-add" className="primary" disabled={!data} onClick={() => { returnPosition.current = { y: window.scrollY, trigger: document.activeElement as HTMLElement }; edit({ startWeek: monday(selection ?? localToday(browserZone())), zone: browserZone() }) }}>Add Plan</button>
         <Field label="Calendar date" type="date" value={date} onChange={(e) => { if (validDate(e.target.value)) setSelection(e.target.value) }} />
       </div>
       {!!duplicates.size && <p role="status">Some plans have multiple active instances. <button onClick={(event) => { returnPosition.current = { y: window.scrollY, trigger: event.currentTarget }; openRuns('current') }}>Review Current Plans</button></p>}
-      <h2 className="calendar-range" aria-live="polite">{view === 'month' ? new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)) : `${range.start}${range.end !== range.start ? ` – ${range.end}` : ''}`}</h2>
+      {view !== 'day' && <h2 className="calendar-range" aria-live="polite">{view === 'month' ? new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)) : `${range.start}${range.end !== range.start ? ` – ${range.end}` : ''}`}</h2>}
       {!events && !result?.error && <p role="status">Loading calendar…</p>}
-      {view === 'month' ? <div className="calendar-month" aria-label="month calendar">{dates.filter((_, index) => index % 7 === 0).map((start, index) => <section className="calendar-week-section" key={start} aria-label={`Calendar Week ${index + 1}`}><h2><button aria-expanded={expandedWeeks.includes(start)} aria-controls={`calendar-week-${start}`} onClick={() => setWeekExpansion({ month: monthKey, weeks: expandedWeeks.includes(start) ? expandedWeeks.filter((week) => week !== start) : [...expandedWeeks, start] })}>Week {index + 1}<ChevronDown aria-hidden="true" className={expandedWeeks.includes(start) ? 'expanded-chevron' : ''} /></button></h2><div id={`calendar-week-${start}`} hidden={!expandedWeeks.includes(start)}><div className="calendar-grid calendar-view-week">{dates.slice(index * 7, index * 7 + 7).map(renderDay)}</div></div></section>)}</div> : <div className={`calendar-grid calendar-view-${view}`} aria-label={`${view} calendar`}>{dates.map(renderDay)}</div>}
+      {view === 'month' ? <div className="calendar-month" aria-label="month calendar">{dates.filter((_, index) => index % 7 === 0).map((start, index) => <section className="calendar-week-section" key={start} aria-label={`Calendar Week ${index + 1}`}><h2><button aria-expanded={expandedWeeks.includes(start)} aria-controls={`calendar-week-${start}`} onClick={() => setWeekExpansion({ month: monthKey, weeks: expandedWeeks.includes(start) ? expandedWeeks.filter((week) => week !== start) : [...expandedWeeks, start] })}>Week {index + 1}<ChevronDown aria-hidden="true" className={expandedWeeks.includes(start) ? 'expanded-chevron' : ''} /></button></h2><div id={`calendar-week-${start}`} hidden={!expandedWeeks.includes(start)}><div className="calendar-month-scroll" role="region" aria-label={`Days in Week ${index + 1}`} tabIndex={0}><div className="calendar-grid calendar-view-month">{dates.slice(index * 7, index * 7 + 7).map(renderDay)}</div></div></div></section>)}</div> : <div className={`calendar-grid calendar-view-${view}`} aria-label={`${view} calendar`}>{dates.map(renderDay)}</div>}
       {dayAction && <TrainingDayActions profileId={profileId} {...dayAction} onClose={() => setDayAction(undefined)} onOpened={(value) => { setDayAction(undefined); openScreen('train', { profileId, draftId: value.draft?.id, sessionId: value.session?.id }) }} />}
       {error && <p role="alert">{error}</p>}
     </>}

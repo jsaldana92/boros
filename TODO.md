@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-05
-Status: Calendar/Create/Progress revision implemented and verified locally: build/type/lint pass, data 194/194, affected static 314/316 with both coordinate assertions corrected and measurement rerun 16/16; Firefox 16/16. Final same-context rebuild checks 6/6 pass. Physical-device/AT release gates and production persistence incident remain unresolved.
-Current scope: authoritative active instances across Calendar/Train, collapsible stacked Calendar weeks, shared Create/Progress browsing, weight graph/filter/dialogs and instance/Overall analytics. Preserve owner records and navigation. No commit, push, deploy or hosting change.
+Status: Calendar/shared-filter/Create/Settings refinements complete in available local verification. Build/typecheck/lint/diff pass, data 198/198, Edge root/project desktop/phone 320/320, retained-context updates 6/6. Firefox 36/38 initially, affected-suite rerun 14/14. Physical release gates and production persistence investigation remain open.
+Current scope: horizontal collapsible Month weeks, remembered Calendar view, shared Search/Sort/Tags and library cards, transactional Guest creation, device timezone defaults, scoped Download confirmation and extra bottom-tab gesture spacing. Preserve all records. No commit, push, deploy or hosting changes.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -86,7 +86,7 @@ These defaults make implementation concrete. They are design choices, not additi
 ### Calendar and dates
 
 - Weeks run Monday–Sunday. Compute date keys using calendar-aware operations, not elapsed milliseconds divided by seven days.
-- A schedule records the browser's IANA time zone when created, its start-week date, and its training-day-to-weekday mapping. Retain it across device imports and expose it in run details/editor; date cards omit it.
+- A schedule records the browser's IANA time zone when created, its start-week date, and its training-day-to-weekday mapping. Retain it internally across device imports; do not add timezone annotations to the current UI.
 - New plans require duration in weeks. New schedules repeat for that many Monday–Sunday weeks anchored to their selected start week, unless stopped earlier. Existing records without duration remain unbounded. A duration mentioned in a name is never interpreted as a schedule length. Existing schedule durations change only through explicit preview/confirmation; earlier missed dates and started/completed sessions remain.
 - Map each training day once per week to a distinct weekday within that schedule; remaining weekdays are rest days. Separate schedules may coexist.
 - Identify occurrences by schedule ID, stable training day ID, and scheduled local date. Store the scheduled week/date separately from the actual completion timestamp.
@@ -715,6 +715,25 @@ phase/group and hash-routing handoffs remain historical.
 - [x] Final-source retained-context two-rebuild regression 6/6 passed, 1.5m, preserving all records, active profile and photo bytes in Edge root desktop/project phone and Firefox desktop.
 - [ ] Physical phone/Safari/screen reader/keyboard, actual audio/vibration and live Ko-fi acceptance. Production deployment-loss cause still needs original-context evidence, not a presumed code fix.
 
+### Calendar, shared filters, Create and Settings refinements (2026-10-05)
+
+The b75f7b87 request and added tab-bar gesture spacing supersede the previous
+stacked Month layout, Settings return/profile-creation/timezone controls and
+export acknowledgment UI. Prior checklists/handoffs remain historical.
+
+- [x] Horizontal seven-column Monday–Sunday Month rows; independent plain collapsible headings; centered Month/Week ranges; no redundant Day heading; page-level Back retains Calendar state.
+- [x] Allowlisted browser-local Day/Week/Month preference; lazy read, explicit-change writes, safe invalid/denied storage and no dataset/editor persistence.
+- [x] Shared Search/Sort alignment and fixed size, Newest/Oldest labels, Tags/Clear row, unchanged ANY matching, compact selected pills with separate keyboard focus.
+- [x] Shared Create/Overall library-exercise cards with actual Added dates; plan-occurrence day subtitles retained; one Create divider and existing list bounds/order.
+- [x] Dropdown New profile allocates first free normalized Guest name, creates/selects atomically, handles legacy unnamed Guest and concurrent connections, guards dirty forms and repeated events, rolls back on failure. Name loads effective editable text without a false dirty state.
+- [x] Remove Settings Return and timezone section; new actions resolve current device IANA zone, existing history/old preference fields remain. Initialization/selection/import no longer invent an absent profile preference. No schema change.
+- [x] Data notice retained; single ID-bound Download privacy confirmation, processing/cancellation/errors and validated ZIP preserved; exact Upload sentence and divider before unchanged guarded Clear Data.
+- [x] Bottom tabs: 24 px plus device safe area (16 px additional), with matching main/keyboard scroll and fixed session-action clearance.
+- [x] Data 198/198, production build, explicit typecheck/lint and diff check. New allocation/rollback/default-zone/preference regressions plus strict backup/restore coverage.
+- [x] Affected root/project phone/desktop matrix **320/320**; retained-context release/rebuild checks **6/6**.
+- [x] Firefox affected-suite rerun **14/14** after initial 36/38 (subpixel assertion and engine cleanup issue); all tested cases now have passing evidence. See [verification record](docs/interface-refinements-verification.md).
+- [ ] Physical phone gesture/keyboard/Safari/screen-reader checks, physical audio/vibration and live Ko-fi. Production persistence incident remains unresolved.
+
 ## 6. Required test fixtures
 
 Build these fixtures as the relevant phase begins, using fictional people and tiny synthetic images.
@@ -741,6 +760,13 @@ These do not block Phase 0 unless the owner changes the scope.
 
 | Date       | Decision                                                                        | Reason                                                                  |
 | ---------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 2026-10-05 | Browser-local allowlisted Calendar view; write only on deliberate change | Restore Day/Week/Month without resetting dates, recording editor contents or touching records |
+| 2026-10-05 | Allocate effective normalized Guest names and select in one profiles/settings transaction | Prevent cross-tab duplicate names, orphan creation and false success; unnamed legacy Guest reserves its displayed name |
+| 2026-10-05 | Device timezone for new actions; preserve old optional preference/context, including absence | Remove hidden default behavior without shifting schedules/history or changing v5/v8 contracts |
+| 2026-10-05 | One shared Download modal captures the chosen profile ID | Exact privacy confirmation while preserving export snapshots/checksums and cancellation |
+| 2026-10-05 | Shared 132 px Sort/44 px control height, compact inner pills and reusable library cards | Consistent browsing across tabs/pickers without changing sort/tag identity rules |
+| 2026-10-05 | Add 16 px bottom-tab gesture padding on top of existing spacing and safe area | Move tab targets farther from swipe gestures; coordinate fixed actions and content clearance |
+
 | 2026-10-04 | Calendar run views and rings derive existing v5 records; one active/future assignment per profile/template is transaction-checked, including revival/moves | Preserve historical/imported duplicates and full committed workload; never rewrite sessions or silently close runs |
 | 2026-10-04 | Pointer-focused buttons do not trigger AppShell visibility scrolling; keyboard/fields keep it | Reproduced 61px movement before pointer-up lost desktop/phone clicks |
 | 2026-10-02 | Local browser data; multiple profiles without passwords                         | Owner requirement                                                       |
@@ -863,13 +889,13 @@ These do not block Phase 0 unless the owner changes the scope.
 
 ## 9. Current checkpoint
 
-- Calendar/Create/Progress revision is complete in available local verification. Physical acceptance remains pending. Phase 10 remains **Verification pending**, Phase 11 **In progress**. Earlier phase results remain historical.
-- Active instances are authoritative in both Calendar and Train; no new schema, destructive repair or duplicate workspace. Create/Calendar/Progress share browsing and run actions. New weight controls preserve exact historical time, canonical values, local photos and failed input.
-- Plan analytics uses run/day/exercise IDs; Overall uses reliable library provenance. Full exercises count separately from partial performance; explicit skips require evidence. Legacy unlinked logs remain plan-accessible. Definitions and conservative legacy limitations are documented.
-- Database **boros v5**, AI **v3**, backup **v8** and strict older readers remain. No dependencies, commit, deploy, hosting or manifest edits, and no owner data cleared.
-- Build/typecheck/lint pass; data **194/194**. Broad desktop **125/126**, obsolete UI assertion updated. Affected static **314/316**, two phone viewport-coordinate assertions corrected; complete measurement matrix rerun **16/16**. Firefox **16/16**. All affected test cases now have passing evidence; the full matrices were not repeated after test-only corrections. See [verification record](docs/progress-redesign-verification.md).
-- Final-source cross-build **6/6** passed (1.5m) with retained origin/context across four release stages. Physical phone/Safari/AT/audio/vibration/live Ko-fi and the production persistence investigation remain unverified/unresolved.
-- Next: exact disposable-profile device checks in the record; collect production read-only before/after persistence evidence only at a separately authorized deployment.
+- Calendar/shared-filter/Create/Settings refinements are complete in available local verification; physical acceptance remains pending. Phase 10 stays **Verification pending**, Phase 11 **In progress**; prior phase/handoff records remain historical.
+- Calendar uses horizontal collapsible weeks, remembers the allowlisted view and retains state through Back. Create and Progress share filters and Added cards; selected tags retain compact geometry. Bottom navigation adds 16 px of gesture clearance plus the safe area.
+- New profile allocation/selection is transactional and concurrency-safe, with pre-creation dirty confirmation. Name shows effective values. New-action timezone defaults use the device; existing records and strict backup compatibility remain.
+- Download has one exact, ID-bound privacy confirmation. Upload/clear workflow, checksum validation, guards and failure handling stay functional.
+- Database **boros v5**, AI **v3**, backup **v8**. No dependency/schema/manifest/hosting change, commit, push, deploy or owner-data clearing.
+- Build/typecheck/lint/diff pass; data **198/198**. Edge production matrix **320/320**, retained-context updates **6/6**. Firefox initially **36/38**, then affected suites **14/14**; exact staged results in [verification record](docs/interface-refinements-verification.md).
+- Next: exact disposable-profile physical checks in that record. Production persistence root cause still needs original-context evidence; do not infer resolution from local rebuild checks.
 
 ## 10. Handoff entry template
 
@@ -1677,3 +1703,15 @@ Fresh verification against the final build (isolated contexts/test databases):
 - Verification: build/typecheck/lint pass, data 194/194; initial focused root 4/4 + 6/6; broad root 125/126 with corrected obsolete editor assertion; affected root/project desktop/phone 314/316 with corrected coordinate assertions and final weight suite 16/16. Firefox 16/16. Final retained-context rebuild regression 6/6 passed (1.5m). No remaining known application failures in performed checks.
 - Remaining: physical phones/Safari/screen readers/software keyboards, audio/vibration, live Ko-fi and separately authorized production persistence capture. Earlier handoffs and their unverified gates remain historical, without new completion claims.
 - Next: carry out the exact disposable-profile manual checklist and the separately authorized production evidence capture. Do not publish without separate authorization.
+
+### Handoff ? Calendar, shared filters, Create, Settings and gesture spacing (2026-10-05)
+
+- Status: implemented and locally verified. Phase 10 remains Verification pending and Phase 11 In progress because physical release gates are still open. No unrelated work was overwritten.
+- Calendar: seven horizontal cells per collapsible Month week, plain keyboard-accessible headings, centered ranges, concise Day view, Back on run pages and a validated local view preference. Expanded narrow rows scroll horizontally without document overflow; records and existing pointer/focus behavior stay intact.
+- Browsing: shared fixed-size Search/Sort, Newest/Oldest labels, Tags/Clear alignment, compact selected pills, shared Added-date library cards and exactly one Create divider. Existing identity, ANY-match, sorting and bounded-list behavior preserved.
+- Settings: transactional first-free Guest allocation plus selection, dirty-confirmation before creation, repeated-event locking, rollback errors and effective editable Name. New actions use current device zones; saved zones/history and optional legacy fields, including absence, survive. Startup/selection/restore no longer introduce an unused preference.
+- Data: one captured-ID Download privacy confirmation; validated complete ZIP, cancellation and truthful errors stay. Exact Upload sentence and a divider before the unchanged Clear Data workflow. No new schema or backup version.
+- Navigation padding: 24 px plus the device safe area, 16 px more than before; main-content, scroll clearance and fixed session actions adjusted together.
+- Validation: build/typecheck/lint/diff pass; data **198/198** (5.45 s); final affected static matrix **320/320** (5.3 m) at root/project paths and desktop/touch-phone sizes; Firefox first **36/38**, then affected-suite **14/14** (53.4 s) after test-coordinate tolerance and serial browser cleanup. Earlier broad desktop **123/131** had eight superseded expectations, all covered by the passing final affected matrix. Failures and exact commands are recorded, not hidden.
+- Persistence: final-source same-origin/context four-stage regression **6/6** (2.1 m), including two rebuilds, both normal and legacy-AI fixtures, active selection, stable IDs, records and photo bytes. Historical release setup stays untouched; only current Back/Guest UI assertions changed. Local success does not establish the production loss incident's cause.
+- Files/checks/manual steps: [interface verification](docs/interface-refinements-verification.md), updated README. Physical phones/gestures/software keyboards, Safari, screen readers, physical audio/vibration and live Ko-fi remain unverified. Next: the exact disposable-profile manual checks; no commit, push, deployment, hosting or owner-data clearing performed.

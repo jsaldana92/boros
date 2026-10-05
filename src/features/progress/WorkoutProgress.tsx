@@ -4,7 +4,7 @@ import { progress } from '../../db/progress'
 import { useWorkspace } from '../../app/workspace-context'
 import { exerciseCounts, performanceStats, selectPerformances, type Performance, type ProgressItem } from '../../lib/progress-analytics'
 import { displayNumber, fromKg, nameKey, type WeightUnit } from '../../schemas/profile'
-import { displayRunDate } from '../../lib/run-progress'
+import { LibraryExerciseCard } from '../create/LibraryExerciseCard'
 import { useCurrentInstant } from '../../lib/use-current-instant'
 import { PlanRuns } from '../calendar/PlanRuns'
 import { LibraryFilters } from '../create/LibraryFilters'
@@ -64,7 +64,7 @@ function ItemBrowser({ items, tags, onSelect, overall = false }: { items: Progre
   const [search, setSearch] = useState(''), [sort, setSort] = useState<LibrarySort>('az'), [filterTags, setFilterTags] = useState<string[]>([])
   const visible = filterExercises(items.map((i) => ({ ...i, id: i.key })), search, sort, filterTags, false)
   return <><LibraryFilters search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
-    {visible.length ? <BoundedGrid rows={3} label={overall ? 'Overall exercises' : 'Plan exercises'} className="workout-progress-grid">{visible.map((item) => <button key={item.key} onClick={() => onSelect(item.key)}><strong>{item.name}</strong><small>{overall ? `Date Added: ${displayRunDate(item.createdAt.slice(0, 10))}` : item.context}</small></button>)}</BoundedGrid> : <p>{search || filterTags.length ? 'No exercises match these filters.' : 'No exercises yet.'}</p>}
+    {visible.length ? <BoundedGrid rows={3} label={overall ? 'Overall exercises' : 'Plan exercises'} className="workout-progress-grid">{visible.map((item) => <LibraryItemCard key={item.key} item={item} overall={overall} onSelect={onSelect} />)}</BoundedGrid> : <p>{search || filterTags.length ? 'No exercises match these filters.' : 'No exercises yet.'}</p>}
   </>
 }
 function Metric({ label, value, onClick }: { label: string; value: ReactNode; onClick?: () => void }) {
@@ -80,4 +80,8 @@ function ExerciseStatistics({ performances, counts, unit, zone, overall, name }:
     {(['Weight', 'Reps'] as const).map((kind) => <PointChart key={kind} title={`${name} recorded ${kind.toLowerCase()}`} unit={kind === 'Weight' ? unit : 'reps'} selectorLabel={`Select ${kind.toLowerCase()} set for ${name}`} selectedId={selected?.id} onSelect={setSelection} points={stats.sets.map((s) => ({ id: s.id, time: Date.parse(s.performance.session.completedAt), value: kind === 'Weight' ? fromKg(s.result.weightKg, unit) : s.result.reps, date: date(s), label: `${weight(s.result.weightKg)} × ${s.result.reps} reps · ${date(s)} · ${s.performance.session.planName} · ${s.performance.session.day.name} · Set ${s.index + 1}` }))} />)}
     {extreme && detail && <ActionDialog title={detail.label} hideTitle onClose={() => setDetail(undefined)} actions={<button onClick={() => setDetail(undefined)}>Close</button>}><p className="weight-detail-value">{detail.reps ? `${extreme.result.reps} reps` : weight(extreme.result.weightKg)}</p><p>{detail.reps ? weight(extreme.result.weightKg) : `${extreme.result.reps} reps`}</p><p>{date(extreme)}</p>{overall && <p>{extreme.performance.session.planName} · {extreme.performance.session.day.name}</p>}</ActionDialog>}
   </div>
+}
+
+function LibraryItemCard({ item, overall, onSelect }: { item: ProgressItem; overall: boolean; onSelect: (key: string) => void }) {
+  return overall ? <LibraryExerciseCard name={item.name} createdAt={item.createdAt} onClick={() => onSelect(item.key)} /> : <button onClick={() => onSelect(item.key)}><strong>{item.name}</strong><small>{item.context}</small></button>
 }

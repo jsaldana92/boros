@@ -1,3 +1,4 @@
+import { confirmDownload } from './settings-actions'
 import { closeTimer } from './train-actions'
 import 'fake-indexeddb/auto'
 import { expect, test, type Page, type Download } from '@playwright/test'
@@ -9,7 +10,6 @@ import { representativeProfile, strangeText } from '../fixtures/backup-profile'
 
 test.setTimeout(90000)
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
-const acknowledge = (page: Page) => page.getByRole('checkbox', { name: 'I understand this exports saved data only.' })
 async function seed(page: Page) {
   const database = new BorosDatabase(`boros-test-browser-export-${crypto.randomUUID()}`)
   try {
@@ -44,7 +44,7 @@ async function archive(download: Download) {
   for (const item of manifest.inventory) { const bytes = await zip.file(item.path)!.async('uint8array'); expect(bytes.byteLength).toBe(item.bytes); expect(createHash('sha256').update(bytes).digest('hex')).toBe(item.sha256) }
   return { zip, manifest, data }
 }
-async function download(page: Page) { await acknowledge(page).check(); const ready = page.waitForEvent('download', { timeout: 15000 }); await button(page, 'Download data').click(); return archive(await ready) }
+async function download(page: Page) { const ready = page.waitForEvent('download', { timeout: 15000 }); await confirmDownload(page); return archive(await ready) }
 
 test('Settings downloads complete isolated archives with truthful feedback, unchanged records, two profiles and both themes', async ({ page }, testInfo) => {
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message))
@@ -56,28 +56,28 @@ test('Settings downloads complete isolated archives with truthful feedback, unch
   for (const store of before.filter((s) => !['profiles', 'settings', 'photos', 'restTimers'].includes(s.name))) expect(data[store.name]).toEqual(store.records.filter((r) => r.profileId === fixture.id))
   for (const asset of data.assets) { const source = before.find((s) => s.name === 'photos')!.records.find((r) => r.id === asset.id)!; expect(Array.from(await zip.file(asset.path)!.async('uint8array'))).toEqual((source.blob as { bytes: number[] }).bytes) }
   expect(await records(page)).toEqual(before); expect(page.url()).toBe(address)
-  await button(page, 'Download data').focus(); await page.screenshot({ path: testInfo.outputPath('export-dark.png'), fullPage: true })
+  await button(page, 'Download').focus(); await page.screenshot({ path: testInfo.outputPath('export-dark.png'), fullPage: true })
   await button(page, 'Light').click(); await page.getByLabel('Active profile').selectOption(fixture.otherId)
-  await expect(acknowledge(page)).not.toBeChecked()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   const second = await download(page); expect(second.data.profile.id).toBe(fixture.otherId); expect(second.data.plans).toHaveLength(0); expect(JSON.stringify(second.data)).not.toContain(fixture.id)
-  await page.setViewportSize({ width: 320, height: 720 }); await page.addStyleTag({ content: 'html { font-size: 24px; }' }); await button(page, 'Download data').focus()
+  await page.setViewportSize({ width: 320, height: 720 }); await page.addStyleTag({ content: 'html { font-size: 24px; }' }); await button(page, 'Download').focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  const box = await button(page, 'Download data').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(box!.y + box!.height).toBeLessThanOrEqual(nav!.y)
+  const box = await button(page, 'Download').boundingBox(), nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox(); expect(box!.y + box!.height).toBeLessThanOrEqual(nav!.y)
   await page.screenshot({ path: testInfo.outputPath('export-light-large-text.png'), fullPage: true }); expect(errors).toEqual([])
 })
 
 test('saved-data acknowledgement, unsaved Settings edits, missing assets and worker failures never claim a successful download', async ({ page }) => {
   const fixture = await seed(page); let downloads = 0; page.on('download', () => downloads++)
-  await button(page, 'Download data').click(); await expect(page.getByRole('alert')).toContainText('Confirm the saved-data scope')
-  await acknowledge(page).check(); await page.locator('input[name="name"]').fill('Unsaved name'); await button(page, 'Download data').click(); await expect(page.getByRole('alert')).toContainText('unsaved Settings edits')
+  await button(page, 'Download').click(); await expect(page.getByRole('dialog', { name: 'Downloading data' })).toContainText('The resulting ZIP file is not password protected.'); await button(page, 'Cancel').click(); expect(downloads).toBe(0)
+  await page.locator('input[name="name"]').fill('Unsaved name'); await confirmDownload(page); await expect(page.getByRole('dialog').getByRole('alert')).toContainText('unsaved Settings edits'); await button(page, 'Cancel').click()
   page.once('dialog', (dialog) => dialog.accept()); await button(page, 'Reload saved profile').click()
   await page.evaluate(async ({ id, entry }) => {
     const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('boros'); request.onsuccess = () => resolve(request.result) })
     await new Promise<void>((resolve) => { const tx = db.transaction('measurements', 'readwrite'); tx.oncomplete = () => resolve(); const store = tx.objectStore('measurements'), request = store.get([id, entry.id]); request.onsuccess = () => store.put({ ...request.result, photoId: crypto.randomUUID() }) }); db.close()
   }, fixture)
-  const before = await records(page); await button(page, 'Download data').click(); await expect(page.getByRole('alert')).toContainText('requires missing photo'); await expect(page.getByRole('alert')).toContainText('No download was started'); expect(await records(page)).toEqual(before)
+  const before = await records(page); await confirmDownload(page); await expect(page.getByRole('alert')).toContainText('requires missing photo'); await expect(page.getByRole('alert')).toContainText('No download was started'); expect(await records(page)).toEqual(before)
   await page.evaluate(() => { window.Worker = class { constructor() { throw new Error('Simulated worker failure') } } as unknown as typeof Worker })
-  await button(page, 'Download data').click(); await expect(page.getByRole('alert')).toContainText('Simulated worker failure'); expect(downloads).toBe(0)
+  await confirmDownload(page); await expect(page.getByRole('alert')).toContainText('Simulated worker failure'); expect(downloads).toBe(0)
 })
 
 test('duplicate clicks, cancel, profile switching and navigation cannot retarget a delayed export; download URLs are revoked', async ({ page }) => {
@@ -89,11 +89,11 @@ test('duplicate clicks, cancel, profile switching and navigation cannot retarget
     }
   })
   let downloads = 0; page.on('download', () => downloads++)
-  await acknowledge(page).check(); await button(page, 'Download data').evaluate((element) => { element.click(); element.click() })
+  await button(page, 'Download').click(); await button(page, 'I understand (Download)').evaluate((element) => { element.click(); element.click() })
   await expect(button(page, 'Preparing export…')).toBeDisabled(); await button(page, 'Cancel export').click(); await expect(page.getByText('Export canceled.', { exact: false })).toBeVisible()
-  await button(page, 'Download data').click(); await expect(button(page, 'Preparing export…')).toBeDisabled(); await page.getByLabel('Active profile').selectOption(fixture.otherId)
-  await expect(page.getByText('Download saved data for', { exact: false })).toContainText('Other private profile'); await page.evaluate(() => (window as unknown as { releaseExport: () => void }).releaseExport())
-  await acknowledge(page).check(); await button(page, 'Download data').click(); await expect(button(page, 'Preparing export…')).toBeDisabled(); await button(page, 'Train').click(); await button(page, 'Settings').click(); expect(downloads).toBe(0)
+  await confirmDownload(page); await expect(button(page, 'Preparing export…')).toBeDisabled(); await page.getByLabel('Active profile').selectOption(fixture.otherId)
+  await expect(page.locator('input[name=name]')).toHaveValue('Other private profile'); await page.evaluate(() => (window as unknown as { releaseExport: () => void }).releaseExport())
+  await confirmDownload(page); await expect(button(page, 'Preparing export…')).toBeDisabled(); await button(page, 'Train').click(); await button(page, 'Settings').click(); expect(downloads).toBe(0)
   await page.reload(); await page.clock.install()
   await page.evaluate(() => { const create = URL.createObjectURL, revoke = URL.revokeObjectURL, tracked = { created: [] as string[], revoked: [] as string[] }; (window as unknown as { tracked: typeof tracked }).tracked = tracked; URL.createObjectURL = (blob) => { const url = create(blob); if (blob instanceof Blob && blob.type === 'application/zip') tracked.created.push(url); return url }; URL.revokeObjectURL = (url) => { tracked.revoked.push(url); revoke(url) } })
   const result = await download(page); expect(result.data.profile.id).toBe(fixture.otherId); await page.clock.fastForward(61000)
@@ -105,7 +105,7 @@ test('another tab with a failed training autosave is explicitly excluded while p
   await closeTimer(other)
   await other.evaluate(() => { const original = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (...args) { if (this.name === 'drafts') throw new DOMException('Pending data not saved', 'QuotaExceededError'); return original.apply(this, args) } })
   await other.getByLabel('=Range 雪 set 1 Weight (lb)', { exact: true }).fill('999'); await expect(other.getByRole('alert')).toContainText('Pending data not saved')
-  await expect(page.getByText('Only committed records are included.', { exact: false })).toContainText('Pending or failed autosaves')
+  await expect(page.getByText('Only committed records are included.', { exact: false })).toHaveCount(0)
   const result = await download(page), draft = result.data.drafts.find((d) => d.id === fixture.savedDraft.id)
   expect(draft.input.exercises[0].sets[0].load).toBe('12.'); expect(result.manifest.snapshotPolicy).toContain('pending/failed autosaves'); await expect(other.getByLabel('=Range 雪 set 1 Weight (lb)', { exact: true })).toHaveValue('999')
 })

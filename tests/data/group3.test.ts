@@ -10,7 +10,7 @@ import { sessionService } from '../../src/db/sessions.ts'
 import { scheduleService } from '../../src/db/schedules.ts'
 import { captureProfile } from '../../src/db/backups.ts'
 import { groupedPlan } from '../fixtures/group2.ts'
-import { browserZone, dateRange, monthStart, viewRange, weekday } from '../../src/lib/calendar-dates.ts'
+import { dateRange, monthStart, viewRange, weekday } from '../../src/lib/calendar-dates.ts'
 import { planStatus, schedulePending } from '../../src/lib/plan-status.ts'
 import { occurrences } from '../../src/schemas/schedule.ts'
 import { profileInputSchema } from '../../src/schemas/profile.ts'
@@ -33,7 +33,7 @@ async function setup(t) {
 const profileInput = (p, timeZone) => ({ name: p.kind === 'guest' ? '' : p.name, weightUnit: p.weightUnit, heightUnit: p.heightUnit, timeZone })
 const filled = (draft) => { const input = structuredClone(draft.input); input.exercises.forEach((e) => e.sets.forEach((s) => Object.assign(s, { load: '20', reps: '5' }))); return input }
 
-test('time-zone default is persisted once; changes are isolated and never reinterpret schedules, sessions or measurements', async (t) => {
+test('legacy time-zone fields remain compatible; selection never rewrites profile, schedules, sessions or measurements', async (t) => {
   const { db, id, profiles, sessions, plan, createSchedule } = await setup(t)
   const schedule = await createSchedule('America/New_York')
   const draft = await sessions.start(id, plan.id, plan.days[0].id); await sessions.complete(id, draft.id, draft.revision, filled(draft), false)
@@ -41,14 +41,14 @@ test('time-zone default is persisted once; changes are isolated and never reinte
   await profiles.save(id, original.revision, { ...profileInput(original, 'America/New_York'), weightKg: 75.123456789 })
   const before = await captureProfile(id, db), other = await profiles.create('Other')
   const changed = await profiles.save(id, before.profile.revision, profileInput(before.profile, 'Asia/Tokyo'))
-  assert.equal(changed.timeZone, 'Asia/Tokyo'); assert.equal((await profiles.getProfile(other.id)).timeZone, browserZone())
+  assert.equal(changed.timeZone, 'Asia/Tokyo'); assert.equal((await profiles.getProfile(other.id)).timeZone, undefined)
   const after = await captureProfile(id, db)
   for (const key of ['schedules', 'sessions', 'drafts', 'measurements']) assert.deepEqual(after[key], before[key])
   assert.equal(after.schedules[0].timeZone, schedule.timeZone)
   for (const invalid of ['', '+02:00', 'Mars/Olympus']) assert.equal(profileInputSchema.safeParse(profileInput(changed, invalid)).success, false)
   await db.profiles.update(id, { timeZone: undefined })
   await profiles.select(id)
-  const initialized = await profiles.snapshot(id); assert.equal(initialized.profile.timeZone, browserZone()); assert.equal(initialized.profile.revision, changed.revision + 1)
+  const initialized = await profiles.snapshot(id); assert.equal(initialized.profile.timeZone, undefined); assert.equal(initialized.profile.revision, changed.revision)
   db.close(); await db.open(); assert.deepEqual((await profiles.snapshot(id)).profile, initialized.profile); assert.equal(db.verno, 5)
 })
 

@@ -1,3 +1,4 @@
+import { deviceZone } from './settings-actions'
 import { runPage, returnCalendar } from './calendar-actions'
 import { writeFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
@@ -14,8 +15,7 @@ async function rows(p: Page, store: string) { return p.evaluate(async (store) =>
 async function fixture(p: Page, theme = 'Dark') {
   await p.clock.setFixedTime(new Date('2026-10-05T16:00:00Z')); await p.goto('./')
   if (await b(p, 'Understood').isVisible()) await b(p, 'Understood').click()
-  await b(p, 'Settings').click(); await b(p, theme).click(); await f(p, 'Time zone').fill('America/New_York'); await b(p, 'Save profile').click()
-  await expect(p.getByText('Profile saved.', { exact: true })).toBeVisible()
+  await b(p, 'Settings').click(); await b(p, theme).click(); await deviceZone(p, 'America/New_York')
   await b(p, 'Create').click(); await b(p, 'Import AI Output').click()
   await f(p, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 2, kind: 'plan', plan: { name: 'Weekly strength', durationWeeks: 4, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map((name) => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 8, max: 8 } }], restBetweenSetsSeconds: 65 }] })) } }))
   await b(p, 'Validate and preview').click(); await f(p, 'Plan note (optional)').fill('Saved program note\nSecond line'); await b(p, 'Save plan').click()

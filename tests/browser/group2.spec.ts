@@ -1,3 +1,5 @@
+import { confirmDownload } from './settings-actions'
+import { createNamedProfile } from './settings-actions'
 import { addCalendarPlan, manageRun, returnCalendar } from './calendar-actions'
 import { waitForDraft, startWeekly } from './train-actions'
 import { cardAction } from './create-actions'
@@ -106,8 +108,8 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await saved(page); await button(page, 'Save').click(); await expect(details).toContainText('Complete session')
   await button(page, 'Settings').click(); await button(page, 'Dark').click(); await train(page)
   await page.screenshot({ path: info.outputPath('group-training-dark-320.png'), fullPage: true })
-  await button(page, 'Settings').click(); await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
-  const pending = page.waitForEvent('download'); await button(page, 'Download data').click()
+  await button(page, 'Settings').click();
+  const pending = page.waitForEvent('download'); await confirmDownload(page)
   const bytes = await readFile((await (await pending).path())!), zip = await JSZip.loadAsync(bytes)
   expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(8)
   expect(zip.file('csv/supersets.csv')).toBeTruthy()
@@ -144,7 +146,7 @@ test('legacy AI asks for duration; rejected grouping retains input and imports s
   await button(page, 'Import AI Output').click(); const invalid = groupedAI(); invalid.plan.days[0].exercises[1].superset = 99
   await field(page, 'AI output JSON').fill(JSON.stringify(invalid)); await button(page, 'Validate and preview').click(); await expect(page.getByRole('alert')).toContainText('plan.days[0].exercises[1].superset')
   await field(page, 'AI output JSON').fill(JSON.stringify(groupedAI())); await button(page, 'Validate and preview').click()
-  const second = await context.newPage(); await second.goto('./'); await button(second, 'Settings').click(); await field(second, 'New profile name').fill('Other'); await button(second, 'Create profile').click()
+  const second = await context.newPage(); await second.goto('./'); await button(second, 'Settings').click(); await createNamedProfile(second, 'Other')
   await button(page, 'Save plan').click(); await expect(card(page)).toBeVisible()
   await button(second, 'Create').click(); await expect(card(second)).toHaveCount(0)
   await second.close()

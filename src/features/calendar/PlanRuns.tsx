@@ -49,7 +49,7 @@ export function PlanRuns({ profileId, runs, sessions, instant, previous, duplica
         <RunIndicators progress={lifecycle.progress} />
       </PlanCard>
     })}</div>
-    {previous && onCancel && <div className="actions"><button onClick={onCancel}>Cancel</button></div>}
+    {previous && onCancel && <div className="actions"><button onClick={onCancel}>Back</button></div>}
     {selected && <ActionDialog title={selected.revisions.at(-1)?.planName ?? 'Plan actions'} hideTitle onClose={close} actions={<button disabled={busy} onClick={close}>Cancel</button>}>
       <div className="stacked-actions">{previous ? <><button disabled={busy} onClick={() => void act(async () => { await runActions.setHidden(profileId, selected.id, selected.revision, !selected.hiddenAt); finish() })}>{selected.hiddenAt ? 'Unhide' : 'Hide'}</button><button className="destructive" disabled={busy} onClick={() => prepare('delete')}>Delete</button></> : <><button disabled={busy} onClick={() => { setSelectedId(undefined); onEdit?.(selected) }}>Edit</button><button disabled={busy} onClick={() => prepare('reset')}>Reset</button><button className="destructive" disabled={busy} onClick={() => prepare('end')}>End</button></>}</div>
       {!confirmation && error && <p role="alert">{error}</p>}

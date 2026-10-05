@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { cardAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -93,8 +94,7 @@ test('combined search, sorting, ANY-tag filters and profile isolation', async ({
   await tags.getByRole('button', { name: 'Legs', exact: true }).click()
   await expect(page.getByRole('article')).toHaveCount(1)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByLabel('New profile name', { exact: true }).fill('Other')
-  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await createNamedProfile(page, 'Other')
   await expect(page.locator('input[name="name"]')).toHaveValue('Other')
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByRole('article')).toHaveCount(0)
@@ -185,8 +185,7 @@ test('another tab selecting a profile cannot retarget an exercise draft; light t
   const other = await context.newPage()
   await other.goto('./')
   await other.getByRole('button', { name: 'Settings', exact: true }).click()
-  await other.getByLabel('New profile name', { exact: true }).fill('Other')
-  await other.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await createNamedProfile(other, 'Other')
   await expect(other.locator('input[name="name"]')).toHaveValue('Other')
   await other.getByRole('button', { name: 'Light', exact: true }).click()
   await other.getByRole('button', { name: 'Create', exact: true }).click()

@@ -8,6 +8,7 @@ import type { Exercise, ExerciseInput } from '../../schemas/exercise'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ExerciseDetails } from './ExerciseDetails'
 import { PlanLibrary } from './PlanLibrary'
+import { LibraryExerciseCard } from './LibraryExerciseCard'
 import { LibraryFilters } from './LibraryFilters'
 import { ExerciseEditor } from './ExerciseEditor'
 import { filterExercises, type LibrarySort } from './library'
@@ -72,7 +73,7 @@ function ExerciseLibrary({ plans, profileId, planOpen, onPlan, onEditing, onImpo
         <p role="status">{status}</p>{error && <p role="alert">{error}</p>}
         <p className="muted">{visible.length} {archived ? 'archived' : 'active'} exercise{visible.length === 1 ? '' : 's'}</p>
         {!visible.length && <p>{search || filterTags.length ? 'No exercises match these filters.' : archived ? 'No archived exercises.' : 'No exercises yet. Choose Create exercise to add one.'}</p>}
-        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><button className="catalog-card" aria-label={record.name} onClick={(event) => { trigger.current = event.currentTarget; setError(''); setSelected(record) }}>{record.name}</button></article>)}</div>
+        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><LibraryExerciseCard name={record.name} createdAt={record.createdAt} onClick={(event) => { trigger.current = event.currentTarget; setError(''); setSelected(record) }} /></article>)}</div>
       </>}
     </div>
     {selected && <ExerciseDetails exercise={selected} tags={data ? exerciseToInput(selected, data.tags).tagNames : []} busy={busy} error={error} onClose={() => setSelected(undefined)}

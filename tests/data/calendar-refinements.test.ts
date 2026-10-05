@@ -27,6 +27,7 @@ async function setup(t: TestContext) {
   const db = new BorosDatabase(`boros-test-calendar-refinements-${crypto.randomUUID()}`); t.after(() => db.delete())
   const profiles = profileService(db), id = (await profiles.initialize()).activeProfileId
   await db.profiles.update(id, { timeZone: 'UTC' })
+  const resolved = Intl.DateTimeFormat.prototype.resolvedOptions; t.mock.method(Intl.DateTimeFormat.prototype, 'resolvedOptions', function () { return { ...resolved.call(this), timeZone: 'UTC' } })
   const plans = planService(db), calendar = scheduleService(db), batch = calendarRunService(db), actions = runActionService(db), sessions = sessionService(db), weekly = weeklyService(db)
   const makePlan = (name: string, count = 4) => plans.save(id, { name, durationWeeks: 5, days: Array.from({ length: count }, (_, i) => ({ ...newDay(i + 1), exercises: [copyExercise({ name: 'Press', tagNames: [], sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 5, max: 5 } }], restBetweenSeconds: 30 })] })) })
   const plan = await makePlan('First'), second = await makePlan('Second')

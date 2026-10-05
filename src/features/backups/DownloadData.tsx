@@ -3,11 +3,13 @@ import { useWorkspace } from '../../app/workspace-context'
 import { captureProfile } from '../../db/backups'
 import packageInfo from '../../../package.json'
 import { startDownload } from './download'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { effectiveProfileName } from '../../schemas/profile'
 import { requireBackupCrypto } from '../../lib/browser-crypto'
 
 export function DownloadData() {
   const { snapshot, dirty } = useWorkspace()
-  const [acknowledged, setAcknowledged] = useState(false), [busy, setBusy] = useState(false), [status, setStatus] = useState(''), [error, setError] = useState('')
+  const [confirmation, setConfirmation] = useState<{ id: string; name: string }>(), [busy, setBusy] = useState(false), [status, setStatus] = useState(''), [error, setError] = useState('')
   const worker = useRef<Worker | undefined>(undefined), ticket = useRef(0), locked = useRef(false)
   useEffect(() => () => { ticket.current++; worker.current?.terminate(); locked.current = false }, [])
   const cancel = () => { ticket.current++; worker.current?.terminate(); worker.current = undefined; locked.current = false; setBusy(false); setStatus('Export canceled. Saved data is unchanged.') }
@@ -15,8 +17,9 @@ export function DownloadData() {
     if (locked.current) return
     setError(''); setStatus('')
     if (dirty) { setError('Save or discard your unsaved Settings edits before exporting. They are not part of saved data.'); return }
-    if (!acknowledged) { setError('Confirm the saved-data scope before exporting.'); return }
-    const profileId = snapshot.profile.id, name = snapshot.profile.name, request = ++ticket.current
+    if (!confirmation || confirmation.id !== snapshot.profile.id) { setError('The selected profile changed. Reopen Download to confirm its name.'); return }
+    const profileId = confirmation.id, name = confirmation.name, request = ++ticket.current
+    setConfirmation(undefined)
     locked.current = true; setBusy(true); setStatus(`Reading saved data for ${name}`)
     const fail = (message: string) => { if (ticket.current !== request) return; worker.current?.terminate(); worker.current = undefined; locked.current = false; setBusy(false); setError(`Export failed. ${message} No download was started; saved data is unchanged.`); setStatus('') }
     try {
@@ -39,12 +42,8 @@ export function DownloadData() {
     } catch (error) { fail((error as Error).message) }
   }
   return <div className="backup-export">
-    <p>Download saved data for <strong>{snapshot.profile.name}</strong>.</p>
-    <p>The ZIP contains personal records and photos. It is not password-protected. Use Upload data below to validate and preview a restore.</p>
-    <p id="export-scope">Only committed records are included. Save edits and Apply notes, then wait until “Saving…” disappears without an error in every training tab. Pending or failed autosaves and unsaved forms are excluded; Boros cannot flush another tab’s input.</p>
-    <label className="check-label"><input type="checkbox" checked={acknowledged} disabled={busy} onChange={(event) => setAcknowledged(event.target.checked)} />I understand this exports saved data only.</label>
-    <p className="muted">Preparation runs locally. Leaving Settings or switching profiles cancels preparation. Large exports need browser memory; available capacity depends on your device.</p>
-    <div className="actions"><button type="button" className="primary" aria-describedby="export-scope" disabled={busy} onClick={() => void download()}>{busy ? 'Preparing export…' : 'Download data'}</button>{busy && <button type="button" onClick={cancel}>Cancel export</button>}</div>
-    <p role="status" aria-live="polite">{status}</p>{error && <p role="alert">{error}</p>}
+    <div className="actions"><button type="button" className="primary" disabled={busy} onClick={() => { setError(''); setStatus(''); setConfirmation({ id: snapshot.profile.id, name: effectiveProfileName(snapshot.profile) }) }}>{busy ? 'Preparing export…' : 'Download'}</button>{busy && <button type="button" onClick={cancel}>Cancel export</button>}</div>
+    {confirmation && <ConfirmDialog title="Downloading data" confirmLabel="I understand (Download)" onCancel={() => setConfirmation(undefined)} onConfirm={() => void download()}><p>Warning: this contains all of the information saved in this website for {confirmation.name}, which may be sensitive. The resulting ZIP file is not password protected. Download at your own discretion.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
+    <p role="status" aria-live="polite">{status}</p>{!confirmation && error && <p role="alert">{error}</p>}
   </div>
 }

@@ -1,7 +1,6 @@
 import { createId } from '../lib/browser-crypto.ts'
 import { type BorosDatabase, db } from './database.ts'
-import { nameKey, photoSchema, profileInputSchema, selectedPlanIdsSchema, themeSchema, workspaceSettingsSchema } from '../schemas/profile.ts'
-import { browserZone } from '../lib/calendar-dates.ts'
+import { effectiveProfileName, nameKey, photoSchema, profileInputSchema, selectedPlanIdsSchema, themeSchema, workspaceSettingsSchema } from '../schemas/profile.ts'
 import { appendSettingsWeight, latestMeasurement } from './measurements.ts'
 import { removeUnusedPhoto } from './photos.ts'
 import { repairProfileTemplates } from './template-repair.ts'
@@ -20,16 +19,18 @@ export function profileService(database: BorosDatabase) {
     if (!profile) throw new Error('The selected profile is missing. No replacement workspace was created.')
     return profile
   }
-  const initializeTimeZone = async (profile: Profile) => {
-    if (profile.timeZone !== undefined) return profile
-    const next = { ...profile, timeZone: browserZone(), revision: profile.revision + 1, updatedAt: new Date().toISOString() }
-    await database.profiles.put(next)
-    return next
-  }
   const checkName = async (displayName: string, ownId?: string) => {
     if (!nameKey(displayName)) throw new Error('Enter a profile name.')
-    const existing = await database.profiles.where('nameKey').equals(nameKey(displayName)).first()
-    if (existing && existing.id !== ownId) throw new Error('A profile with that name already exists.')
+    const existing = (await database.profiles.toArray()).some((profile) => profile.id !== ownId && nameKey(effectiveProfileName(profile)) === nameKey(displayName))
+    if (existing) throw new Error('A profile with that name already exists.')
+  }
+  // Caller owns a profiles/settings read-write transaction, including name allocation.
+  const addNamed = async (name: string) => {
+    const now = new Date().toISOString()
+    const profile: Profile = { id: createId(), name, nameKey: nameKey(name), kind: 'named', revision: 1, weightUnit: 'kg', heightUnit: 'cm', createdAt: now, updatedAt: now }
+    await database.profiles.add(profile)
+    if (!await database.settings.update('workspace', { activeProfileId: profile.id })) throw new Error('Workspace settings are unavailable. The new profile was not created.')
+    return profile
   }
   return {
     async initialize() {
@@ -41,7 +42,7 @@ export function profileService(database: BorosDatabase) {
         const settings = await database.settings.get('workspace')
         if (settings) {
           workspaceSettingsSchema.parse(settings)
-          await initializeTimeZone(await getProfile(settings.activeProfileId))
+          await getProfile(settings.activeProfileId)
           await repairProfileTemplates(database, settings.activeProfileId)
           await repairClosedRunDrafts(database, settings.activeProfileId)
           return settings
@@ -50,7 +51,7 @@ export function profileService(database: BorosDatabase) {
           throw new Error('Workspace settings are missing but records exist. No data was replaced. Keep this browser data and seek recovery assistance.')
         }
         const now = new Date().toISOString()
-        const guest: Profile = { id: createId(), kind: 'guest', name: 'Guest', nameKey: nameKey('Guest'), weightUnit: 'kg', heightUnit: 'cm', timeZone: browserZone(), revision: 1, createdAt: now, updatedAt: now }
+        const guest: Profile = { id: createId(), kind: 'guest', name: 'Guest', nameKey: nameKey('Guest'), weightUnit: 'kg', heightUnit: 'cm', revision: 1, createdAt: now, updatedAt: now }
         await database.profiles.add(guest)
         const initial = { id: 'workspace' as const, activeProfileId: guest.id, theme: 'dark' as const, noticeAccepted: false }
         await database.settings.add(initial)
@@ -71,7 +72,7 @@ export function profileService(database: BorosDatabase) {
     },
     async select(profileId: string) {
       await database.transaction('rw', [database.profiles, database.settings, database.plans, database.exercises, database.tags, database.schedules, database.drafts, database.sessions, database.restTimers], async () => {
-        await initializeTimeZone(await getProfile(profileId))
+        await getProfile(profileId)
         await repairProfileTemplates(database, profileId)
         await repairClosedRunDrafts(database, profileId)
         if (!await database.settings.update('workspace', { activeProfileId: profileId })) throw new Error('Workspace settings are unavailable.')
@@ -92,11 +93,15 @@ export function profileService(database: BorosDatabase) {
       const input = profileInputSchema.parse({ name, weightUnit: 'kg', heightUnit: 'cm' })
       return database.transaction('rw', database.profiles, database.settings, async () => {
         await checkName(input.name)
-        const now = new Date().toISOString()
-        const profile: Profile = { id: createId(), name: input.name, nameKey: nameKey(input.name), kind: 'named', revision: 1, weightUnit: 'kg', heightUnit: 'cm', timeZone: browserZone(), createdAt: now, updatedAt: now }
-        await database.profiles.add(profile)
-        if (!await database.settings.update('workspace', { activeProfileId: profile.id })) throw new Error('Workspace settings are unavailable.')
-        return profile
+        return addNamed(input.name)
+      })
+    },
+    async createNextGuest() {
+      return database.transaction('rw', database.profiles, database.settings, async () => {
+        const occupied = new Set((await database.profiles.toArray()).map((profile) => nameKey(effectiveProfileName(profile))))
+        let name = 'Guest', suffix = 0
+        while (occupied.has(nameKey(name))) name = `Guest (${++suffix})`
+        return addNamed(name)
       })
     },
     async selectPlans(profileId: string, expectedRevision: number, raw: string[]) {
@@ -122,7 +127,7 @@ export function profileService(database: BorosDatabase) {
         const displayName = input.name || (original.kind === 'guest' ? 'Guest' : '')
         await checkName(displayName, profileId)
         const { weightKg, ...fields } = input
-        const next: Profile = { ...original, ...fields, name: displayName, nameKey: nameKey(displayName), kind: input.name ? 'named' : original.kind, revision: original.revision + 1, updatedAt: new Date().toISOString() }
+        const next: Profile = { ...original, ...fields, name: displayName, nameKey: nameKey(displayName), kind: original.kind === 'guest' && displayName === 'Guest' ? 'guest' : 'named', revision: original.revision + 1, updatedAt: new Date().toISOString() }
         if (photo !== undefined) {
           next.photoId = photo ? createId() : undefined
           if (photo) await database.photos.add({ ...photo, profileId, id: next.photoId!, createdAt: next.updatedAt, role: 'avatar' })

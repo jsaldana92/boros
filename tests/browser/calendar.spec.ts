@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { manageRun, returnCalendar, addCalendarPlan, stagePlan } from './calendar-actions'
 import { waitForDraft } from './train-actions'
 import { expect, test, type Page } from '@playwright/test'
@@ -41,7 +42,7 @@ test('four-day schedule: partial completion, next/prior week, all views, reload,
   const localCompletion = await page.evaluate(() => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date('2025-01-06T01:00:00Z')))
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText(`Completed: ${localCompletion}`)
   await button(page, 'Settings').click(); await button(page, 'Light').click()
-  await page.getByLabel('New profile name', { exact: true }).fill('Other calendar'); await button(page, 'Create profile').click()
+  await createNamedProfile(page, 'Other calendar')
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await expect(page.locator('.calendar-event')).toHaveCount(0); await expect(page.getByText('No Calendar assignments. Add a plan to begin.')).toHaveCount(0)
   await button(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await button(page, 'Calendar').click()
   await page.getByLabel('Calendar date', { exact: true }).fill('2024-12-30'); await expect(page.locator('.calendar-event').filter({ hasText: 'Incomplete' })).toHaveCount(1)
@@ -72,8 +73,7 @@ test('stored schedule zone and Today survive a device-zone change at a Sunday/Mo
   await setup(page); await expect(page.getByLabel('Displayed time zone', { exact: true })).toHaveCount(0)
   await button(page, 'Today').click(); await expect(page.getByLabel('Calendar date', { exact: true })).toHaveValue('2025-01-05')
   await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Tokyo' }); await page.reload()
-  await button(page, 'Today').click(); await expect(page.getByLabel('Calendar date', { exact: true })).toHaveValue('2025-01-05')
-  await button(page, 'Settings').click(); await page.getByLabel('Time zone', { exact: true }).fill('Asia/Tokyo'); await button(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
+  await button(page, 'Today').click(); await expect(page.getByLabel('Calendar date', { exact: true })).toHaveValue('2025-01-06')
   await button(page, 'Calendar').click(); await button(page, 'Today').click(); await expect(page.getByLabel('Calendar date', { exact: true })).toHaveValue('2025-01-06'); await expect(page.locator('.calendar-event').first()).not.toContainText('America/New_York')
   await manageRun(page, 'Edit'); await expect(page.locator('.schedule-editor')).not.toContainText('America/New_York')
 })

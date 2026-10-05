@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react'
 import { profiles, type ProfileSnapshot } from '../../db/profiles'
 import { useWorkspace } from '../../app/workspace-context'
-import { displayNumber, fromKg, toKg, type HeightUnit, type PreparedPhoto, type WeightUnit } from '../../schemas/profile'
+import { effectiveProfileName, displayNumber, fromKg, toKg, type HeightUnit, type PreparedPhoto, type WeightUnit } from '../../schemas/profile'
 import { preparePhoto } from './photos'
 import { Avatar } from './Avatar'
 import { displayDateTime } from '../../lib/display-dates'
-import { browserZone, validZone } from '../../lib/calendar-dates'
 
 function initialForm(snapshot: ProfileSnapshot) {
   const p = snapshot.profile
   const inches = (p.heightCm ?? 0) / 2.54
-  return { timeZone: p.timeZone ?? browserZone(), name: p.kind === 'guest' ? '' : p.name, age: p.age == null ? '' : String(p.age),
+  return { name: effectiveProfileName(p), age: p.age == null ? '' : String(p.age),
     height: p.heightCm == null ? '' : displayNumber(p.heightCm), feet: p.heightCm == null ? '' : String(Math.floor(inches / 12)), inches: p.heightCm == null ? '' : displayNumber(inches % 12),
     weight: snapshot.measurement ? displayNumber(fromKg(snapshot.measurement.weightKg, p.weightUnit)) : '', weightUnit: p.weightUnit, heightUnit: p.heightUnit }
 }
@@ -73,8 +72,7 @@ export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
       if (age !== undefined && (!Number.isInteger(age) || age < 0 || age > 130)) throw new Error('Age must be a whole number from 0 to 130, or left blank.')
       if (height !== undefined && (height <= 0 || height > 300)) throw new Error('Height must be greater than 0 and at most 300 cm (9 ft 10.11 in).')
       if (weight !== undefined && (weight <= 0 || weight > 1000)) throw new Error('Weight must be greater than 0 and at most 1000 kg (2204.62 lb).')
-      if (!validZone(form.timeZone)) throw new Error('Choose a supported IANA time zone, such as America/New_York.')
-      await profiles.save(baseline.profile.id, baseline.profile.revision, { name: form.name, age, heightCm: height, weightKg: weight, heightUnit: form.heightUnit, weightUnit: form.weightUnit, timeZone: form.timeZone }, photo)
+      await profiles.save(baseline.profile.id, baseline.profile.revision, { name: form.name, age, heightCm: height, weightKg: weight, heightUnit: form.heightUnit, weightUnit: form.weightUnit }, photo)
       reset(await profiles.snapshot(baseline.profile.id)); setStatus('Profile saved.')
     } catch (e) { setError(e instanceof Error ? e.message : 'Save failed. Your input has been kept.') }
     finally { setBusy(false) }
@@ -82,10 +80,7 @@ export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
     {stale && <p role="status">This profile changed in another tab. Your unsaved input is kept. Review the latest saved values before editing again.</p>}
     <fieldset disabled={busy}>
       <legend className="sr-only">Edit profile</legend>
-      <label>Time zone<input list="profile-time-zones" value={form.timeZone} onChange={(e) => change('timeZone', e.target.value)} required aria-describedby="time-zone-help" /></label>
-      <datalist id="profile-time-zones">{[...new Set([browserZone(), 'UTC', ...Intl.supportedValuesOf('timeZone')])].map((zone) => <option key={zone} value={zone} />)}</datalist>
-      <p id="time-zone-help" className="muted">Used for new schedules and Calendar Today. Existing schedules keep their saved time zones.</p>
-      <label>Name {baseline.profile.kind === 'guest' && <span className="muted">(leave blank to keep Guest)</span>}<input name="name" maxLength={80} required={baseline.profile.kind === 'named'} value={form.name} onChange={(e) => change('name', e.target.value)} /></label>
+      <label>Name<input name="name" maxLength={80} required={baseline.profile.kind === 'named'} value={form.name} onChange={(e) => change('name', e.target.value)} /></label>
       <div className="photo-field"><Avatar blob={photo === null ? undefined : photo?.blob ?? baseline.photo?.blob} name={form.name || 'Guest'} /><label>Profile photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={async (e) => {
         const file = e.target.files?.[0]; e.target.value = ''; if (!file) return
         setBusy(true); setPhotoError(''); setStatus('')

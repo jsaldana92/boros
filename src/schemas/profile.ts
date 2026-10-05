@@ -47,6 +47,7 @@ export interface Profile {
   createdAt: string
   updatedAt: string
 }
+export const effectiveProfileName = (profile: Pick<Profile, 'name' | 'kind'>) => profile.name.trim() || (profile.kind === 'guest' ? 'Guest' : profile.name)
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>
 export interface PhotoAsset {
   profileId: string

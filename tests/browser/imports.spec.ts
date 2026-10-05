@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { planFixture, workoutFixture } from '../fixtures/interchange'
@@ -125,7 +126,7 @@ test('standalone imports use the library editor; duplicate names require rename 
   await expect(page.getByRole('alert')).toContainText('already exists')
   await page.getByLabel('Exercise name', { exact: true }).fill('Guest renamed import')
   const other = await context.newPage(); await other.goto('./'); await button(other, 'Settings').click()
-  await other.getByLabel('New profile name').fill('Other'); await button(other, 'Create profile').click()
+  await createNamedProfile(other, 'Other')
   await expect(other.locator('input[name="name"]')).toHaveValue('Other'); await button(other, 'Create').click()
   await expect(other.getByRole('article')).toHaveCount(0)
   await button(page, 'Save exercise').click(); await expect(page.getByRole('article', { name: 'Guest renamed import', exact: true })).toBeVisible()

@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { expect, test, type Page } from '@playwright/test'
 
 async function openSettings(page: Page) {
@@ -48,8 +49,7 @@ test('Guest conversion, units, avatar, profile switching, and reload persistence
   await page.reload()
   await expect(nameInput(page)).toHaveValue('Ada')
   await expect(page.locator('header .avatar img')).toBeVisible()
-  await page.getByLabel('New profile name').fill('Bea')
-  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await createNamedProfile(page, 'Bea')
   await expect(nameInput(page)).toHaveValue('Bea')
   await expect(page.getByLabel('Weight (kg, optional)', { exact: true })).toHaveValue('')
   await expect(page.getByLabel('Age (optional)')).toHaveValue('')
@@ -101,11 +101,9 @@ test('theme and approved shell persist across routes; settings navigation is ina
 
 test('duplicate names, invalid demographics, and rejected photos preserve input', async ({ page }) => {
   await openSettings(page)
-  await page.getByLabel('New profile name').fill('Ada Lovelace')
-  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await createNamedProfile(page, 'Ada Lovelace')
   await expect(nameInput(page)).toHaveValue('Ada Lovelace')
-  await page.getByLabel('New profile name').fill('  ＡDA   LOVELACE ')
-  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await page.getByLabel('Active profile').selectOption('new-profile'); await nameInput(page).fill('  ＡDA   LOVELACE '); await page.getByRole('button', { name: 'Save profile', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('already exists')
   await page.getByLabel('Age (optional)').fill('-1')
   await page.getByRole('button', { name: 'Save profile', exact: true }).click()
@@ -125,8 +123,7 @@ test('stale tab cannot overwrite; tab selection cannot retarget another tab draf
   await other.getByRole('button', { name: 'Save profile', exact: true }).click()
   await expect(other.getByRole('alert')).toContainText('changed in another tab')
   await expect(nameInput(other)).toHaveValue('Unsaved in other tab')
-  await page.getByLabel('New profile name').fill('Bea')
-  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await createNamedProfile(page, 'Bea')
   await expect(nameInput(page)).toHaveValue('Bea')
   await expect(other.getByLabel('Active profile')).not.toHaveValue(await page.getByLabel('Active profile').inputValue())
   other.once('dialog', (dialog) => dialog.accept())
@@ -168,11 +165,10 @@ test('unavailable IndexedDB shows retry without reporting an empty workspace', a
 
 test('switching with an unsaved form requires confirmation and cannot copy it to another profile', async ({ page }) => {
   await openSettings(page)
-  await page.getByLabel('New profile name').fill('Ada')
-  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await createNamedProfile(page, 'Ada')
   await expect(nameInput(page)).toHaveValue('Ada')
   await page.getByLabel('Active profile').selectOption({ label: 'Guest' })
-  await expect(nameInput(page)).toHaveValue('')
+  await expect(nameInput(page)).toHaveValue('Guest')
   await nameInput(page).fill('Uncommitted Guest name')
   page.once('dialog', (dialog) => dialog.dismiss())
   await page.getByLabel('Active profile').selectOption({ label: 'Ada' })
@@ -183,6 +179,6 @@ test('switching with an unsaved form requires confirmation and cannot copy it to
   await page.getByLabel('Age (optional)').fill('25')
   await save(page)
   await page.getByLabel('Active profile').selectOption({ label: 'Guest' })
-  await expect(nameInput(page)).toHaveValue('')
+  await expect(nameInput(page)).toHaveValue('Guest')
   await expect(page.getByLabel('Age (optional)')).toHaveValue('')
 })

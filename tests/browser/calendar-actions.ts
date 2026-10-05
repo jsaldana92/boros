@@ -13,7 +13,7 @@ export async function manageRun(page: Page, action: string, name?: string) {
 }
 export async function returnCalendar(page: Page) {
   await expect(page.locator('dialog')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Calendar menu', exact: true })).toBeVisible()
 }
 export async function stagePlan(page: Page, name?: string, mapping?: number[]) {

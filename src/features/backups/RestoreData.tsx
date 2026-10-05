@@ -67,7 +67,7 @@ export function RestoreData() {
     } finally { locked.current = false; setCommitting(false); setBusy(false) }
   }
   return <div className="backup-restore">
-    <h3>Upload data</h3><p>Choose a Boros backup ZIP. Validation and preview stay in this browser; nothing changes until you confirm.</p>
+    <h3>Upload data</h3><p>Choose a Boros backup ZIP from which to update or create a new profile.</p>
     <label>Backup ZIP<input type="file" accept=".zip,application/zip" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} /></label>
     <p className="muted">Limits: 64 MiB ZIP, 128 MiB expanded, 4,096 files, 32 MiB per text file (2 MiB manifest), 5 MiB per photo. Use an original Boros export.</p>
     {backup && !plan && <section aria-label="Backup selection"><h3 ref={heading} tabIndex={-1}>Validated backup: {backup.data.profile.name}</h3><p>Exported: {displayDateTime(backup.manifest.exportedAt)}. Profile modified: {displayDateTime(backup.data.profile.updatedAt)}.</p><p>{Object.entries(backup.manifest.counts).map(([key, value]) => `${value} ${key}`).join(' · ')}</p>
@@ -87,7 +87,7 @@ export function RestoreData() {
       <label className="check-label"><input type="checkbox" checked={confirmed} disabled={busy} onChange={(e) => setConfirmed(e.target.checked)} />I confirm {labels[plan.choice].toLowerCase()} for {plan.result.profile.name}, including the changes shown above.</label>
       <div className="actions"><button className={plan.choice === 'clear' || plan.choice === 'replace' ? 'destructive' : 'primary'} disabled={busy} onClick={() => void commit()}>{busy ? 'Saving changes…' : 'Confirm and save'}</button><button disabled={busy} onClick={cancel}>Cancel</button></div>
     </section>}
-    {!plan && !backup && <><h3>Clear data for {owner.name}</h3><p>Clear this profile’s records and photos. Download data above first if you need a backup. Other profiles will remain.</p><button className="destructive" disabled={busy} onClick={() => void preview(true)}>Clear data</button></>}
+    {!plan && !backup && <><hr className="backup-divider" /><h3>Clear data for {owner.name}</h3><p>Clear this profile’s records and photos. Download data above first if you need a backup. Other profiles will remain.</p><button className="destructive" disabled={busy} onClick={() => void preview(true)}>Clear data</button></>}
     {busy && !committing && <button onClick={cancel}>Cancel preparation</button>}
     <p role="status" aria-live="polite">{status}</p>{error && <p role="alert">{error}</p>}
   </div>

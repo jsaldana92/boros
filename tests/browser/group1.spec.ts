@@ -1,3 +1,5 @@
+import { confirmDownload } from './settings-actions'
+import { createNamedProfile } from './settings-actions'
 import { expect, test, type Page } from '@playwright/test'
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
@@ -27,7 +29,7 @@ test('existing native IDs and measurements survive fallback initialization and p
   await page.reload(); await expect(page.getByLabel('Active profile')).toHaveValue(id)
   expect(await page.evaluate(() => typeof crypto.randomUUID)).toBe('undefined')
   expect(await records(page)).toEqual(before)
-  await page.getByLabel('New profile name').fill('Independent'); await button(page, 'Create profile').click()
+  await createNamedProfile(page, 'Independent')
   await expect(page.locator('input[name=name]')).toHaveValue('Independent')
   expect(await page.getByLabel('Active profile').inputValue()).not.toBe(id)
   await expect(page.getByLabel('Weight (kg, optional)', { exact: true })).toHaveValue('')
@@ -64,8 +66,8 @@ test('UUID fallback does not conceal missing secure context, checksum APIs or cl
   await expect(page.getByText('This connection is not secure.', { exact: false })).toBeVisible()
   const before = await records(page), downloads: string[] = []
   page.on('download', file => downloads.push(file.suggestedFilename()))
-  await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
-  await button(page, 'Download data').click()
+
+  await confirmDownload(page)
   await expect(page.locator('.backup-export [role=alert]')).toContainText('Backup checksum verification requires Web Crypto')
   await expect(page.locator('.backup-export [role=alert]')).toContainText('No download was started')
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'fixture.zip', mimeType: 'application/zip', buffer: Buffer.from('not trusted') })

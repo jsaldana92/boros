@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { expect, test, type Page } from '@playwright/test'
 
 test.setTimeout(90000)
@@ -65,7 +66,7 @@ test('two tabs reject stale updates, retain input and preserve active profile is
   await open(page); await add(page, '70', '2025-01-01T12:00:00Z'); const other = await context.newPage(); await open(other)
   await edit(page, 0); await edit(other, 0); await page.getByLabel('Weight (kg)', { exact: true }).fill('65'); await other.getByLabel('Weight (kg)', { exact: true }).fill('66'); await b(other, 'Update').click(); await expect(other.getByRole('dialog', { name: 'Update Weight' })).toHaveCount(0)
   await b(page, 'Update').click(); await expect(page.getByRole('alert')).toContainText('changed in another tab'); await expect(page.getByLabel('Weight (kg)', { exact: true })).toHaveValue('65'); await page.keyboard.press('Escape'); await b(page, 'Close').click()
-  await b(page, 'Settings').click(); await expect(page.getByLabel('Weight (kg, optional)', { exact: true })).toHaveValue('66'); await page.getByLabel('New profile name', { exact: true }).fill('Second progress'); await b(page, 'Create profile').click(); await b(page, 'Progress').click(); await expect(points(page)).toHaveCount(0); await add(page, '55', '2025-01-02T12:00:00Z')
+  await b(page, 'Settings').click(); await expect(page.getByLabel('Weight (kg, optional)', { exact: true })).toHaveValue('66'); await createNamedProfile(page, 'Second progress'); await b(page, 'Progress').click(); await expect(points(page)).toHaveCount(0); await add(page, '55', '2025-01-02T12:00:00Z')
   await b(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await b(page, 'Progress').click(); await expect(points(page)).toHaveCount(1); await expect(page.locator('.current-weight')).toContainText('66 kg'); await other.close()
 })
 

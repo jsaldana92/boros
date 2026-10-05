@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { waitForDraft, startWeekly, closeTimer } from './train-actions'
 import { cardAction, occurrenceAction } from './create-actions'
 import { expect, test, type Page } from '@playwright/test'
@@ -119,7 +120,7 @@ test('profile switching and unit changes recover canonical loads; light theme an
   await open(page); await fillSet(page, 'Press', 1, '45.359237'); await saved(page); await button(page, 'REST Press after set 1').click()
   await closeTimer(page); await saved(page); await page.reload(); await button(page, 'Settings').click(); await button(page, 'Light').click()
   await page.getByRole('combobox', { name: 'Weight unit', exact: true }).selectOption('lb'); await button(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
-  await input(page, 'New profile name').fill('Other'); await button(page, 'Create profile').click(); await expect(page.locator('input[name="name"]')).toHaveValue('Other'); await button(page, 'Train').click()
+  await createNamedProfile(page, 'Other'); await expect(page.locator('input[name="name"]')).toHaveValue('Other'); await button(page, 'Train').click()
   await expect(page.getByText('No active plan(s) selected.')).toBeVisible(); await expect(page.getByRole('button', { name: new RegExp("^Resume Training plan / Upper") })).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
   await button(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await button(page, 'Train').click(); await resume(page)
   await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100'); await expect(page.getByRole('region', { name: 'Rest timer' })).toBeVisible()

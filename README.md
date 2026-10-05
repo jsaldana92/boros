@@ -5,11 +5,12 @@ local profiles/settings, photos, dated weights, and an exercise library with
 Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
-The latest local revision makes active plan instances authoritative across Calendar
-and Train, adds collapsible Calendar weeks and bounded Create lists, and redesigns
-Progress weight logging, charts and instance/Overall analytics. Existing records,
-profile isolation and shared run actions are preserved. See
-[Calendar/Create/Progress verification](docs/progress-redesign-verification.md).
+The latest local revision restores horizontal, collapsible Month weeks, remembers
+Calendar's Day/Week/Month view, and unifies list filters and exercise cards. Settings
+creates independent Guest profiles through its dropdown and confirms Download in
+one scoped dialog. New actions use the device timezone; saved historical context
+is preserved. Bottom tabs include an extra 16 px gesture buffer, plus the device
+safe area. See [interface refinements verification](docs/interface-refinements-verification.md).
 
 The preceding revision adds read-only Create plan details and optional plan
 Instructions through editing, duplication, AI import, frozen training snapshots
@@ -88,9 +89,9 @@ from IndexedDB using Resume in Train. Existing discard confirmations and browser
 remain in place. Canceling navigation preserves the current screen and preference.
 
 Internal navigation adds no browser history entries. Browser Back/Forward moves
-between visited websites/documents and may leave Boros. Settings offers an in-app
-return to the previous internal screen, or Train when opened directly or after
-refresh. Copied/bookmarked addresses open Boros, not a particular screen; the
+between visited websites/documents and may leave Boros. Use the bottom tabs to
+leave Settings; its separate Return button has been removed. Copied/bookmarked
+addresses open Boros, not a particular screen; the
 receiving tab's valid preference determines its initial screen.
 
 Old top-level `#/train`, `#/create`, `#/calendar`, `#/progress`, and `#/settings`
@@ -461,7 +462,7 @@ layout, with noninteractive Rest rows for other weekdays. This does not assign
 Calendar dates. Scheduled weeks keep actual weekdays, including separate retained
 occurrences that coincide on one date. Empty/excluded/inactive weeks never gain
 new pending days; Rest rows never count toward progress. Their first activation saves the
-profile-local Monday and time zone, duration and independent prescription snapshot.
+device-local Monday and time zone at activation, duration and independent prescription snapshot.
 Old unscheduled sessions remain available under history/unfinished sessions with
 no inferred week. Each card opens its specific instance without a context selector
 or internal ID. If that instance disappears, the page reports it unavailable instead
@@ -642,7 +643,8 @@ physical keyboard, sound, vibration, quota or suspended-device behavior.
 
 ## Calendar and recurring schedules
 
-Calendar opens to the current named month with complete Monday–Sunday weeks,
+Calendar restores its saved Day/Week/Month view, or Month when none is valid. It
+opens on Today; Month shows complete Monday–Sunday weeks,
 dim adjacent-month dates and actionable events. Previous/Next advances calendar
 months. Day/week views retain their own navigation, with Today and a date input.
 There is no rolling history cutoff. Scheduled dates use the visible date range.
@@ -723,17 +725,21 @@ scrolling a button between pointer-down/up. All navigation retains one public UR
 
 ### Dates and time zones
 
-Profile Settings stores a validated IANA **Time zone** for new schedules and Calendar
-Today. New profiles use the browser zone. An older profile missing this preference
-receives it once at startup or profile selection; only its profile revision/update
-time changes. Reviewed legacy imports initialize the missing preference in their
-proposed new profile. Neither operation rewrites schedules, logs or measurements.
-Existing schedules keep their original zones when this preference or device zone
-changes. Calendar displays all zones together on each schedule's saved local date,
-with a read-only zone label. Event lateness uses the schedule zone, while Today
-and the default month use the profile preference. No editable zone is in Calendar.
-Refresh restores Calendar as a screen, then defaults to month view and Today;
-the selected date, view, and open editor are not persisted as navigation state.
+Settings no longer exposes a timezone preference. New Calendar assignments and
+Train activations resolve the device's current IANA timezone when the action
+begins. Measurement logging also uses device time. Existing schedules, occurrence
+snapshots and measurements keep their recorded timezone and UTC timestamps.
+Optional older profile timezone fields remain readable/exportable, and remain a
+fallback only for legacy history lacking a recorded occurrence zone; they no
+longer determine new-action defaults. Startup/selection and restore do not invent
+a missing profile preference. No history is shifted or rewritten.
+
+Calendar Today uses device time. Events retain schedule-local dates/status rules;
+no timezone annotations are added. `boros.calendar-view` in localStorage remembers
+only an allowlisted `day`, `week` or `month`, independently of the navigation
+preference. Missing/invalid values default to Month; denied storage never blocks
+Calendar. Only deliberate view changes write it. The old displayed date and an
+open editor are not restored after reload.
 
 Events are all-day Gregorian civil dates (`YYYY-MM-DD`), separate from UTC start,
 completion, and log timestamps. `src/lib/calendar-dates.ts` uses calendar field
@@ -853,8 +859,8 @@ and Phase 8 results follow.
 
 ## Download complete profile data (Phase 8)
 
-In Settings → Data, confirm the displayed profile and saved-data scope, then choose
-**Download data**. The ZIP contains personal records/photos and is not encrypted
+In Settings → Data, choose **Download**, review **Downloading data** for the named
+profile, then choose **I understand (Download)**. Cancel performs no export. The ZIP contains personal records/photos and is not encrypted
 or password-protected. The app reports **Download started**; check your browser's
 downloads to confirm the file was saved. Filenames include a sanitized profile
 name and UTC export timestamp.
@@ -874,9 +880,9 @@ Profile time-zone and Train selections are included. Browser-wide appearance/act
 object URLs, unsaved forms, unapplied notes and pending/failed autosaves are excluded.
 
 Before exporting, save edits/apply notes and wait until **Saving...** disappears without an error in
-every training tab. Boros cannot flush another tab's pending input; the UI requires
-acknowledging that only committed records are included and blocks dirty Settings
-forms. One read-only transaction captures the chosen profile and all owned records.
+every training tab. Boros cannot flush another tab's pending input. The single
+confirmation warns about sensitive, unprotected ZIP contents; dirty Settings
+forms block export. The confirmed stable profile ID binds the operation. One read-only transaction captures the chosen profile and all owned records.
 A worker then validates references, reads photo bytes, serializes CSV/JSON, hashes,
 compresses and reopens the ZIP for validation. Concurrent edits cannot mix record
 versions. Missing required references abort export without changing source data.
@@ -1097,7 +1103,7 @@ actual checks. The owner reports HTTPS resolved on 2026-10-03; this is owner
 verification, not a new automated production smoke test. No hosting changes or
 deployment were performed here.
 
-## Group 3: profile zones, month Calendar and selected Train plans
+## Historical Group 3: profile zones, month Calendar and selected Train plans
 
 The behavior above adds optional `timeZone` and `selectedPlanIds` profile fields;
 IndexedDB remains **v5**, with no store migration. Both preference writes share
@@ -1122,8 +1128,8 @@ with a missing selection link. Scheduling an existing Non-Scheduled run preserve
 its identity/results. Legacy duplicates remain available for explicit guarded
 resolution; historical instances permit new runs. The database remains boros v5.
 
-Calendar Month has independently collapsible Week sections with seven vertically
-stacked day cards. Today expands the relevant week. Create has Plan / Exercise /
+Calendar Month has independently collapsible Week sections with seven horizontal
+Monday–Sunday columns. Narrow screens scroll each expanded row horizontally. Today expands the relevant week. Create has Plan / Exercise /
 AI actions, then Plans and Exercises, using shared filters and measured scrolling
 lists. The Plans list shows approximately two rows.
 
@@ -1155,3 +1161,26 @@ See [current calculations, verification and exact manual checks](docs/progress-r
 record; the controls and counting rules above supersede it. Database/backup/AI
 formats remain v5/v8/v3, and the same-context cross-build regression is retained.
 Release acceptance and publication remain separate.
+
+## Current Settings and shared browsing
+
+Active profile includes a **New profile** action. It allocates the first free
+normalized Guest / Guest (1) / Guest (2) name and selects the independent profile
+in the same transaction. An unnamed legacy Guest occupies Guest. Two tabs cannot
+allocate the same name; a canceled dirty-form confirmation creates nothing and a
+failed write rolls back creation and selection. Name shows the effective name as
+editable text, without marking the initially loaded form dirty. Renaming preserves
+its stable ID and records. New profiles have kg/cm defaults and no copied records.
+
+Shared Search/Sort controls align across existing selectors, using a fixed 132 px
+Sort width and 44 px control height. Newest/Oldest labels retain each list's stored
+sort key. Tags/Clear share one row; ANY matching stays unchanged. The compact
+selected pill no longer inherits the old outer border/shadow; its 44 px target and
+keyboard focus remain. Create/Progress standalone exercise cards share name and
+Added: dd/mm/yyyy from the actual library creation date. Plan occurrences retain
+their training-day subtitle. Create keeps one divider before Plans.
+
+Settings Data retains the browser-storage notice, Download, Upload and guarded
+Clear Data. The privacy warning is one shared modal; processing/cancel/failure
+states and checksum validation remain. Upload and Clear Data have a divider;
+Clear Data retains its prior scope and confirmation requirements.

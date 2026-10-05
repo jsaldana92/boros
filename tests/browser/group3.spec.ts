@@ -1,3 +1,4 @@
+import { deviceZone, createNamedProfile } from './settings-actions'
 import { manageRun, returnCalendar, stagePlan } from './calendar-actions'
 import { waitForDraft, startWeekly } from './train-actions'
 import { expect, test, type Page } from '@playwright/test'
@@ -18,7 +19,7 @@ async function importPlan(p: Page, name: string) {
   await button(p, 'Validate and preview').click(); await button(p, 'Save plan').click(); await expect(p.getByRole('article', { name: `Plan ${name}`, exact: true })).toBeVisible()
 }
 async function zone(p: Page, value: string) {
-  await button(p, 'Settings').click(); await field(p, 'Time zone').fill(value); await button(p, 'Save profile').click(); await expect(p.getByText('Profile saved.', { exact: true })).toBeVisible()
+  await deviceZone(p, value)
 }
 async function select(p: Page, names: string[]) {
   await button(p, 'Train').click()
@@ -56,7 +57,7 @@ test('immediate multi-plan selection, scheduling existing run, exact calendar oc
   await field(page, 'Press set 1 Weight (kg)').fill('42'); await field(page, 'Press set 1 Repetitions').fill('6'); await waitForDraft(page)
   const draft = (await records(page)).drafts[0]; await page.reload(); await page.getByRole('button', { name: /^Resume Alpha/ }).click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('42')
   await button(page, 'Save').click(); await button(page, 'Save partial session').click(); expect((await records(page)).sessions[0].occurrenceKey).toBe(draft.occurrenceKey); expect((await records(page)).profiles[0].selectedPlanIds).toEqual(selected)
-  await button(page, 'Settings').click(); await button(page, 'Light').click(); await field(page, 'New profile name').fill('Other'); await button(page, 'Create profile').click(); await expect(page.locator('input[name="name"]')).toHaveValue('Other')
+  await button(page, 'Settings').click(); await button(page, 'Light').click(); await createNamedProfile(page, 'Other'); await expect(page.locator('input[name="name"]')).toHaveValue('Other')
   await button(page, 'Train').click(); await expect(page.getByText('No active plan(s) selected.')).toBeVisible()
   await button(page, 'Settings').click(); await field(page, 'Active profile').selectOption({ label: 'Guest' }); await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await button(page, 'Review session').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('42 kg')
   await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').focus(); await expect(adjacent.locator('.calendar-event')).toBeFocused(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -85,7 +86,7 @@ test('schedule-local status refreshes at midnight and old runs retain their save
   await schedule(page, 'Alpha', '2025-01-06'); await button(page, 'Train').click(); await card(page, 'Alpha').getByRole('button').click(); await button(page, 'Next week').click()
   await expect(page.locator('.training-day-card')).toContainText('Pending'); await page.clock.fastForward(31000); await expect(page.locator('.training-day-card')).toContainText('Due Today')
   await page.clock.setSystemTime(new Date('2025-01-07T00:00:01Z')); await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await expect(page.locator('.training-day-card')).toContainText('Past Due')
-  const original = (await records(page)).schedules[0]; await zone(page, 'Pacific/Honolulu'); await page.reload(); await expect(field(page, 'Time zone')).toHaveValue('Pacific/Honolulu')
+  const original = (await records(page)).schedules[0]; await zone(page, 'Pacific/Honolulu'); await page.reload(); await expect(field(page, 'Time zone')).toHaveCount(0)
   await button(page, 'Calendar').click(); await button(page, 'Today').click(); await expect(field(page, 'Calendar date')).toHaveValue('2025-01-06'); expect((await records(page)).schedules[0]).toEqual(original)
   await manageRun(page, 'End'); await page.getByRole('dialog', { name: 'Ending a Plan?' }).getByRole('button', { name: 'End', exact: true }).click(); await returnCalendar(page); await button(page, 'Train').click(); await schedule(page, 'Alpha', '2025-01-06'); const all = (await records(page)).schedules; expect(all).toHaveLength(2); expect(all.find(s => s.id !== original.id).timeZone).toBe('Pacific/Honolulu')
 })

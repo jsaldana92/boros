@@ -1,3 +1,4 @@
+import { confirmDownload } from './settings-actions'
 import 'fake-indexeddb/auto'
 import { planService } from '../../src/db/plans'
 import { expect, test, type Page } from '@playwright/test'
@@ -40,7 +41,7 @@ async function seed(page: Page) {
 
 test('instance/Overall metrics, repeated and superset occurrences, paired actual-date extrema, filter and Back restoration', async ({ page }, info) => {
   await seed(page); const address = page.url()
-  await expect(selection(page, 'Renamed press')).toHaveCount(1); await expect(selection(page, 'Renamed press')).toContainText(/Date Added: \d{2}\/\d{2}\/\d{4}/)
+  await expect(selection(page, 'Renamed press')).toHaveCount(1); await expect(selection(page, 'Renamed press')).toContainText(/Added: \d{2}\/\d{2}\/\d{4}/)
   await expect(page.getByText('Saved sessions', { exact: false })).toHaveCount(0)
   await page.evaluate(() => { (window as any).photoReads = 0; const get = IDBObjectStore.prototype.get; IDBObjectStore.prototype.get = function (...args) { if (this.name === 'photos') (window as any).photoReads++; return get.apply(this, args) } })
   const main = page.getByRole('region', { name: 'Exercises', exact: true }); await main.getByLabel('Search exercises', { exact: true }).fill('Renamed'); await selection(page, 'Renamed press').click()
@@ -70,8 +71,8 @@ test('Progress shares Previous Plans Hide/Unhide/Delete state, wording and resul
 })
 
 test('backup round trip, profile isolation, Clear invalidation and enlarged text preserve analytics', async ({ page, context }, info) => {
-  await seed(page); await b(page, 'Settings').click(); await page.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
-  const download = page.waitForEvent('download'); await b(page, 'Download data').click(); const buffer = await readFile((await (await download).path())!)
+  await seed(page); await b(page, 'Settings').click();
+  const download = page.waitForEvent('download'); await confirmDownload(page); const buffer = await readFile((await (await download).path())!)
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'progress.zip', mimeType: 'application/zip', buffer }); await expect(page.getByRole('heading', { name: /^Validated backup:/ })).toBeVisible()
   await page.getByRole('combobox', { name: 'Import choice', exact: true }).selectOption('new'); await page.getByLabel('Imported profile name', { exact: true }).fill('Progress restored'); await b(page, 'Preview import').click(); await page.getByRole('checkbox', { name: /^I confirm/ }).check(); await b(page, 'Confirm and save').click(); await expect(page.getByText(/Changes are saved locally\./)).toBeVisible(); await page.reload()
   await b(page, 'Progress').click(); await expect(page.locator('.weight-point')).toHaveCount(3); await selection(page, 'Renamed press').click(); await expect(b(page, 'Weight Max: 61 kg')).toBeVisible(); await b(page, 'Back').click()

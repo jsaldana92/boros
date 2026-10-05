@@ -19,13 +19,14 @@ export function weeklyService(database: BorosDatabase) {
     return value
   }
   const activate = async (profileId: string, planId: string) => {
-    const profile = await owner(profileId), plan = await database.plans.get([profileId, planId])
+    await owner(profileId)
+    const plan = await database.plans.get([profileId, planId])
     if (!plan || plan.archivedAt) throw new Error('Choose an active plan.')
     const existing = await database.schedules.where('[profileId+planId]').equals([profileId, planId]).toArray()
     const logs = await database.sessions.where('profileId').equals(profileId).toArray()
     const open = existing.filter((run) => !runLifecycle(run, logs).previous)
     if (open.length) return open
-    const timeZone = profile.timeZone ?? browserZone(), startWeek = monday(localToday(timeZone)), now = new Date().toISOString()
+    const timeZone = browserZone(), startWeek = monday(localToday(timeZone)), now = new Date().toISOString()
     const value: Schedule = { id: createId(), profileId, planId, revision: 1, kind: 'unscheduled', identity: 'program-week', timeZone, startWeek, createdAt: now, updatedAt: now, ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks, endDate: programEnd(startWeek, plan.durationWeeks) }), revisions: [{ id: createId(), effectiveFrom: startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), mapping: plan.days.map((day, weekday) => ({ dayId: day.id, weekday })) }] }
     await database.schedules.add(value); return [value]
   }

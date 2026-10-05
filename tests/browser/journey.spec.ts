@@ -1,3 +1,5 @@
+import { confirmDownload } from './settings-actions'
+import { createNamedProfile } from './settings-actions'
 import { addCalendarPlan } from './calendar-actions'
 import { waitForDraft } from './train-actions'
 import { cardAction, occurrenceAction } from './create-actions'
@@ -10,8 +12,8 @@ const button = (p: Page, name: string) => p.getByRole('button', { name, exact: t
 const field = (p: Page, name: string) => ['Active profile', 'Weight unit', 'Training days per week', 'Schedule plan', 'Import choice'].includes(name) ? p.getByRole('combobox', { name, exact: true }) : p.getByLabel(name, { exact: true })
 const planCard = (p: Page, name: string) => p.getByRole('article', { name: `Plan ${name}`, exact: true })
 async function download(p: Page) {
-  await p.getByRole('checkbox', { name: 'I understand this exports saved data only.' }).check()
-  const ready = p.waitForEvent('download'); await button(p, 'Download data').click()
+
+  const ready = p.waitForEvent('download'); await confirmDownload(p)
   const bytes = await readFile((await (await ready).path())!)
   const zip = await JSZip.loadAsync(bytes, { checkCRC32: true })
   return { bytes, zip, data: JSON.parse(await zip.file('data.json')!.async('string')) }
@@ -39,7 +41,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await field(page, 'Weight unit').selectOption('lb')
   await button(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
   expect(await field(page, 'Active profile').inputValue()).toBe(guest)
-  await field(page, 'New profile name').fill('Untouched neighbour'); await button(page, 'Create profile').click()
+  await createNamedProfile(page, 'Untouched neighbour')
   await expect(page.locator('input[name="name"]')).toHaveValue('Untouched neighbour')
   const other = await download(page)
   await field(page, 'Active profile').selectOption(guest)

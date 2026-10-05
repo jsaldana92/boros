@@ -20,6 +20,7 @@ async function setup(t: TestContext, zone = 'UTC') {
   const db = new BorosDatabase(`boros-test-display-${crypto.randomUUID()}`); t.after(() => db.delete())
   const profiles = profileService(db), id = (await profiles.initialize()).activeProfileId
   await db.profiles.update(id, { timeZone: zone })
+  const resolved = Intl.DateTimeFormat.prototype.resolvedOptions; t.mock.method(Intl.DateTimeFormat.prototype, 'resolvedOptions', function () { return { ...resolved.call(this), timeZone: zone } })
   const plans = planService(db), weekly = weeklyService(db), sessions = sessionService(db), calendar = scheduleService(db), activity = calendarActivityService(db)
   const plan = await plans.save(id, { name: 'Display', durationWeeks: 3, days: Array.from({ length: 4 }, (_, i) => ({ ...newDay(i + 1), exercises: [copyExercise({ name: 'Press', tagNames: [], sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 5, max: 5 } }] })] })) })
   const [run] = await weekly.activate(id, plan.id)

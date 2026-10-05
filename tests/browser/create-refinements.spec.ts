@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { startWeekly, closeTimer } from './train-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { copyExercise } from '../../src/schemas/plan'
@@ -39,7 +40,7 @@ test('existing plans repair into standalone templates; library notes save direct
   const repaired = (await records(page))[0]
   expect(repaired.updatedAt).toBe(plan.updatedAt); expect(repaired.revision).toBe(2)
   const a = catalog.getByRole('article', { name: 'A', exact: true })
-  await expect(a.getByRole('button')).toHaveText('A')
+  await expect(a.getByRole('button').locator('strong')).toHaveText('A'); await expect(a.getByRole('button').locator('small')).toHaveText(/Added: \d{2}\/\d{2}\/\d{4}/)
   await cardAction(page, a, 'Edit')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Create > Exercise')
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused()
@@ -70,7 +71,7 @@ test('existing plans repair into standalone templates; library notes save direct
   await b(page, 'Upper').click(); await expect(catalog.getByRole('article')).toHaveCount(1)
   await b(page, 'Tags (2)').click(); await expect(catalog.getByRole('article')).toHaveCount(1)
   await b(page, 'Clear').click()
-  await b(page, 'Settings').click(); await f(page, 'New profile name').fill('Private'); await b(page, 'Create profile').click()
+  await b(page, 'Settings').click(); await createNamedProfile(page, 'Private')
   await expect(page.locator('input[name=name]')).toHaveValue('Private'); await b(page, 'Create').click()
   await expect(catalog.getByRole('article')).toHaveCount(0); await expect(planCard(page)).toHaveCount(0)
   expect(await records(page, 'exercises')).toEqual(templates); expect(page.url()).toBe(address)

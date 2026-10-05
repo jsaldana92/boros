@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { addCalendarPlan, manageRun, returnCalendar, runPage, stagePlan } from './calendar-actions'
 
@@ -34,7 +35,7 @@ test('atomic batch write failure keeps staging and unload guard; retry saves all
   const unload = page.waitForEvent('dialog'); await page.evaluate(() => { setTimeout(() => location.reload(), 0) }); const warning = await unload; expect(warning.type()).toBe('beforeunload'); await warning.dismiss()
   await page.evaluate(() => (window as any).restoreWrites()); await b(page, 'Save').click(); await expect(b(page, 'Calendar menu')).toBeVisible(); const saved = await rows(page, 'schedules'); expect(saved).toHaveLength(2)
   await page.reload(); await expect(b(page, 'Calendar menu')).toBeVisible(); expect(await rows(page, 'schedules')).toEqual(saved)
-  await b(page, 'Settings').click(); await f(page, 'New profile name').fill('Other'); await b(page, 'Create profile').click(); await b(page, 'Calendar').click(); await runPage(page); await expect(page.getByText('No current plans.', { exact: true })).toBeVisible()
+  await b(page, 'Settings').click(); await createNamedProfile(page, 'Other'); await b(page, 'Calendar').click(); await runPage(page); await expect(page.getByText('No current plans.', { exact: true })).toBeVisible()
 })
 
 test('competing staging tabs reject duplicate activation without partial saves or losing pending configuration', async ({ page, context }) => {
@@ -67,13 +68,13 @@ test('Previous Plans searches and sorts all run types, caps scrolling at five ca
   await page.reload(); await b(page, 'Week').click(); await f(page, 'Calendar date').fill('2026-10-12'); await runPage(page, 'Previous Plans'); await expect(page.getByRole('article')).toHaveCount(12); await f(page, 'Sort plans').selectOption('newest'); await expect(page.getByRole('article').first()).toContainText('History 11'); await f(page, 'Sort plans').selectOption('oldest'); await expect(page.getByRole('article').first()).toContainText('History 00'); await f(page, 'Sort plans').selectOption('az'); await expect(page.getByRole('article').first()).toContainText('History 00'); await expect(page.getByRole('article').nth(1)).toContainText('Non-Scheduled')
   await f(page, 'Search plans').fill('History 1'); await expect(page.getByRole('article')).toHaveCount(2); await f(page, 'Sort plans').selectOption('za'); await expect(page.getByRole('article').first()).toContainText('History 11'); await f(page, 'Search plans').fill('')
   await page.setViewportSize({ width: 1440, height: 4000 }); const list = page.locator('.previous-plan-list'); await expect.poll(() => list.evaluate(el => { const first = el.children[0].getBoundingClientRect(), fifth = el.children[4].getBoundingClientRect(); return el.clientHeight <= fifth.bottom - first.top + 9 && el.scrollHeight > el.clientHeight })).toBe(true)
-  await page.setViewportSize({ width: 390, height: 844 }); await b(page, 'Cancel').focus(); await page.keyboard.press('Enter'); await expect(b(page, 'Calendar menu')).toBeFocused(); await expect(b(page, 'Week')).toHaveAttribute('aria-pressed', 'true'); await expect(f(page, 'Calendar date')).toHaveValue('2026-10-12')
+  await page.setViewportSize({ width: 390, height: 844 }); await b(page, 'Back').focus(); await page.keyboard.press('Enter'); await expect(b(page, 'Calendar menu')).toBeFocused(); await expect(b(page, 'Week')).toHaveAttribute('aria-pressed', 'true'); await expect(f(page, 'Calendar date')).toHaveValue('2026-10-12')
 })
 
 test('calendar backgrounds, Today and selection survive both themes; bounded lists/search/sort and phone/tablet layout', async ({ page }, info) => {
   await setup(page); await page.evaluate(async () => { const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('boros'); r.onsuccess = () => resolve(r.result) }); const plans: any[] = await new Promise(resolve => { const r = db.transaction('plans').objectStore('plans').getAll(); r.onsuccess = () => resolve(r.result) }); await new Promise<void>((resolve, reject) => { const tx = db.transaction('plans', 'readwrite'); for (let i = 0; i < 30; i++) { const name = `Extra ${String(i).padStart(2, '0')}`; tx.objectStore('plans').add({ ...plans[0], id: crypto.randomUUID(), name, nameKey: name.toLowerCase(), activeNameKey: name.toLowerCase() }) } tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error) }); db.close() })
   for (const theme of ['Dark', 'Light']) {
-    await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Calendar').click(); await f(page, 'Calendar date').fill('2026-10-05')
+    await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Calendar').click(); await b(page, 'Month').click(); await f(page, 'Calendar date').fill('2026-10-05')
     const colors = await page.evaluate(() => { const root = getComputedStyle(document.documentElement); return { inside: root.getPropertyValue('--surface').trim(), outside: root.getPropertyValue('--bg').trim() } })
     const color = async (selector: string) => page.locator(selector).first().evaluate(el => getComputedStyle(el).backgroundColor)
     expect(await color('.calendar-day:not(.adjacent-month)')).toBe(theme === 'Dark' ? 'rgb(32, 32, 32)' : 'rgb(242, 242, 242)'); expect(await color('.adjacent-month')).toBe(theme === 'Dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'); expect(colors.inside).not.toBe(colors.outside)

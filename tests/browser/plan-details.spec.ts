@@ -1,3 +1,4 @@
+import { createNamedProfile } from './settings-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { cardAction } from './create-actions'
 
@@ -83,7 +84,7 @@ test('instructions survive manual create, edits, failed/stale saves, reload and 
   await cardAction(page, card(page, 'Manual'), 'Archive'); await page.getByRole('dialog', { name: 'Archive plan?' }).getByRole('button', { name: 'Archive', exact: true }).click()
   await expect(card(page, 'Manual')).toHaveCount(0); await f(page, 'Show archived plans').check(); await cardAction(page, card(page, 'Manual'), 'Restore'); await expect(card(page, 'Manual')).toHaveCount(0)
   await f(page, 'Show archived plans').uncheck(); await expect(card(page, 'Manual')).toBeVisible()
-  await b(page, 'Settings').click(); await f(page, 'New profile name').fill('Other'); await b(page, 'Create profile').click(); await expect(page.locator('input[name=name]')).toHaveValue('Other'); await b(page, 'Create').click()
+  await b(page, 'Settings').click(); await createNamedProfile(page, 'Other'); await expect(page.locator('input[name=name]')).toHaveValue('Other'); await b(page, 'Create').click()
   await expect(card(page, 'Manual')).toHaveCount(0); expect((await records(page)).find((p) => p.id === source.id).instructions).toBe('Concurrent edit')
 })
 

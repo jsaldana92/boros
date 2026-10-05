@@ -1,3 +1,4 @@
+import { deviceZone, createNamedProfile } from './settings-actions'
 import { expect, test, type Page } from '@playwright/test'
 import { addCalendarPlan, manageRun, returnCalendar, runPage } from './calendar-actions'
 
@@ -13,7 +14,7 @@ async function rows(page: Page, name: string) {
 async function setup(page: Page, names = ['Display']) {
   await page.clock.setFixedTime(new Date('2026-10-08T12:00:00Z')); await page.goto('./'); await expect(b(page, 'Settings')).toBeVisible()
   if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
-  await b(page, 'Settings').click(); await f(page, 'Time zone').fill('UTC'); await b(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
+  await deviceZone(page, 'UTC')
   for (const name of names) {
     await b(page, 'Create').click(); await b(page, 'Import AI Output').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name, durationWeeks: 3, trainingDaysPerWeek: 3, days: ['Upper', 'Lower', 'Pull'].map(name => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(planCard(page, name)).toBeVisible()
   }
@@ -41,7 +42,7 @@ test('unscheduled weekly layout is visual only; full, partial and manual activit
   await b(page, 'Calendar').click(); await page.locator('.calendar-event').filter({ hasText: 'Pull' }).click(); await expect(page.getByRole('dialog')).toContainText('Manually completed'); await page.keyboard.press('Escape')
   await page.reload(); await expect(page.locator('.calendar-event')).toHaveCount(3); expect(page.url()).toBe(address)
   const saved = (await rows(page, 'schedules'))[0]; expect(saved.id).toBe(original.id); expect(saved.kind).toBe('unscheduled'); expect(saved.revisions).toEqual(original.revisions)
-  await b(page, 'Settings').click(); await f(page, 'New profile name').fill('Other'); await b(page, 'Create profile').click(); await b(page, 'Calendar').click(); await expect(page.locator('.calendar-event')).toHaveCount(0)
+  await b(page, 'Settings').click(); await createNamedProfile(page, 'Other'); await b(page, 'Calendar').click(); await expect(page.locator('.calendar-event')).toHaveCount(0)
 })
 
 test('Train card week follows progression and gaps independently of the browsed week and respects finite boundaries', async ({ page }) => {
