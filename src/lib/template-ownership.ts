@@ -13,7 +13,7 @@ export function materializeTemplates(profileId: string, records: { plans: Plan[]
   const addedExercises: Exercise[] = [], addedTags: Tag[] = [], changedPlans: Plan[] = []
   if ([...plans, ...exercises, ...tags].some((item) => item.profileId !== profileId)) throw new Error('Template repair cannot cross profile ownership.')
   const byId = new Map(exercises.map((item) => [item.id, item])), active = new Map<string, Exercise>(), tagKeys = new Map(tags.map((tag) => [tag.nameKey, tag]))
-  for (const item of exercises.filter((e) => !e.archivedAt)) {
+  for (const item of exercises.filter((e) => !e.archivedAt && !e.mergedIntoId)) {
     const key = nameKey(item.name)
     if (active.has(key)) throw new Error(`Ambiguous exercise name "${item.name}". Resolve the conflicting library identities before repairing plans.`)
     active.set(key, item)

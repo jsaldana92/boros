@@ -9,12 +9,12 @@ export function canonicalSnapshot(snapshot: ProfileSnapshot): BackupData {
 // Checks required for restoring unique indexes and derived identity fields. The
 // export validator remains compatible with historical v1 exports.
 export function validateRestoreRecords(data: BackupData) {
-  const names = (records: { id: string; name: string; nameKey: string; archivedAt?: string; activeNameKey?: string }[], label: string, archive = false) => {
+  const names = (records: { id: string; name: string; nameKey: string; archivedAt?: string; activeNameKey?: string; mergedIntoId?: string }[], label: string, archive = false) => {
     const active = new Set<string>()
     for (const record of records) {
       const key = nameKey(record.name)
-      if (!key || record.nameKey !== key || (archive && record.activeNameKey !== (record.archivedAt ? undefined : key))) throw new Error(`Invalid normalized ${label} name: ${record.name}`)
-      if (!archive || !record.archivedAt) { if (active.has(key)) throw new Error(`Duplicate normalized ${label} name: ${record.name}`); active.add(key) }
+      if (!key || record.nameKey !== key || (archive && record.activeNameKey !== (record.archivedAt || record.mergedIntoId ? undefined : key))) throw new Error(`Invalid normalized ${label} name: ${record.name}`)
+      if (!archive || (!record.archivedAt && !record.mergedIntoId)) { if (active.has(key)) throw new Error(`Duplicate normalized ${label} name: ${record.name}`); active.add(key) }
     }
   }
   names([data.profile], 'profile'); if (data.profile.name.trim().length > 80) throw new Error('Profile name exceeds 80 characters.')

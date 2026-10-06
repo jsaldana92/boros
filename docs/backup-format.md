@@ -1,9 +1,31 @@
-# Boros profile backup, schema 11 (schemas 1-10 supported)
+# Boros profile backup, schema 12 (schemas 1-11 supported)
 
-Current exports pair **backup v11 / database v6**. Strict backup v1-v10 /
-database v5 archives remain readable: original JSON, inventory, CSV headers,
-photo bytes and SHA-256 checksums are validated before adding an empty workout
-collection to the in-memory envelope. No existing plan workouts are extracted.
+Current exports pair **backup v12 / database v6**. V12 adds optional `mergedIntoId`,
+`mergedAt`, and `mergeOperationId` to retained library exercise records and columns
+of `csv/library_exercises.csv`. All original prescription/text/tag/timestamp fields
+remain on the retired source. There are still 32 CSV tables. No database migration
+or data rewrite is needed: these are optional record fields in the existing store.
+
+Merge relationships are profile-owned, explicit stable-ID redirects. Sources are
+excluded from normal library/archive selection and cannot be edited/restored as
+active records. Readers follow chains (A into B, B into C resolves A/B to C) without
+rewriting historical names, prescriptions, occurrence/set IDs, notes or results.
+Validation rejects self-links, cycles, missing/foreign destinations and incomplete
+merge metadata. Profile clear includes these records in the existing exercise store.
+
+Exercise restore matching now uses **IDs only**, for every supported input version.
+An unrelated same-name exercise is not an identity match; conflicting active names
+require a separate profile or name resolution. Plans/workouts/tags keep their existing
+matching rules. Matching exercise IDs use reviewed precedence; an existing retired
+device identity is never reactivated by a pre-merge imported record. Its redirect
+survives even when imported metadata wins. If selected redirects would create a
+cycle, restore rejects the preview rather than silently breaking a relationship.
+Replacing a plan family never removes unrelated library redirects or standalone history.
+
+Strict backup v1-v10/database v5 and v11/database v6 archives remain readable. Original
+JSON, inventory, CSV headers, photo bytes and SHA-256 checksums validate before
+promotion to v12. Only v1-v10 receive an empty workout collection; v11 workouts and
+standalone sessions stay intact. Older schemas reject the new merge fields.
 
 V11 adds `workouts`: profile-owned, revisioned, archivable templates with normalized
 active names, stable root/occurrence/group/set IDs, timestamps, ordered exercise
@@ -32,7 +54,7 @@ clears another. Checksums and photo verification are unchanged.
 
 Export was implemented in Phase 8; reviewed restore and profile Clear Data in
 Phase 9. These formats are separate from AI v5. The following older format notes
-remain historical descriptions; v11 includes their supported fields.
+remain historical descriptions; v12 includes their supported fields.
 
 Group 4 Progress statistics are derived from the existing canonical sessions,
 prescription snapshots, source references and measurements. Graph selection,
@@ -157,7 +179,7 @@ plan/run ID, schedule revision ID, week UUID/order, and day UUID/order.
 snapshots leave it blank. Existing assignment rows join to definitions through
 their day IDs. Original v1-v9 fields, table inventories and columns remain frozen;
 v9 rejects cycle-only fields. Validation of original bytes, CRC, SHA-256, CSVs
-and photos happened before promotion to v10 (now to v11 as described above). Restore
+and photos happened before promotion to v10 (now to v12 as described above). Restore
 retains whole-plan-family precedence and internal references; no browser data is
 cleared or eagerly rewritten. The cycle revision kept `boros` v5; the Workout
 revision now adds only the v6 workout store. Timers and navigation preferences remain excluded.
@@ -253,7 +275,7 @@ fields rather than write null. Record timestamps/revisions are not regenerated.
 
 `src/schemas/backup.ts` defines the executable payload/manifest schema and required
 reference checks. Exporting itself performs no migrations or writes. The current
-manifest records backup schema `11`, database schema `6`,
+manifest records backup schema `12`, database schema `6`,
 and the real `package.json` app name/version (`boros`, currently `0.0.0`). That
 package value is not an invented release number.
 
@@ -347,11 +369,11 @@ validated in increasing Monday order and select the applicable boundary without
 rewriting earlier occurrences. Started/completed exceptions remain valid beyond
 a later end date. Plan edits do not alter the frozen schedule boundary.
 
-Upload accepts versions 1-11 with matching manifest/data versions: v1-v10
-require database v5, and v11 requires database v6. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
+Upload accepts versions 1-12 with matching manifest/data versions: v1-v10
+require database v5, and v11-v12 require database v6. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
 before validating records against the version-specific strict field set, linked
 references, CSV inventory/counts and original assets. Only after all checks pass,
-v1-v10 canonical data is cloned with a v11 envelope and empty workouts; no group/duration/preference,
+v1-v11 canonical data is cloned with a v12 envelope (empty workouts only for v1-v10); no group/duration/preference,
 historical week, closure, hidden flag, exception or plan instructions are invented and
 the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
 The returned manifest remains the original validated version for provenance.
@@ -479,7 +501,7 @@ permissions and physical mobile save-sheet behavior still need manual checks.
 
 ## Upload validation and limits (Phase 9)
 
-Settings → Data → **Backup ZIP** accepts an original Boros schema 1-10/database v5 or schema 11/database v6
+Settings → Data → **Backup ZIP** accepts an original Boros schema 1-10/database v5 or schema 11-12/database v6
 export. Unsupported versions explain that the user must update Boros or choose a
 supported export. Import never guesses at a future schema or reads AI interchange
 as a backup. Parsing, hashing, CSV row checks and image decoding run in a worker,
@@ -538,7 +560,7 @@ count as replaced. All operations require the confirmation checkbox and **Confir
 and save**. Cancel, navigating away or switching profiles before commit writes
 nothing. Dirty Settings edits must be saved or discarded first.
 
-Plans/library exercises match by stable ID first, normalized name second. If they
+Plans match by stable ID first, normalized name second. Library exercises match by stable ID only (see the v12 rules above). If they
 point to different candidates, names have multiple archived candidates, or multiple
 incoming records identify one target, preview reports ambiguity; use an independent
 new name or resolve the records first. Tags use their profile-scoped normalized
@@ -648,7 +670,7 @@ remove them. Do not delete the source to test a move.
    actual original ZIP is present/readable on disk; “Download started” cannot
    confirm filesystem success. Repeat separately for each desired profile.
 2. At the verified target address, use Settings → Data → Backup ZIP. Select the
-   original schema 1-10/database v5 or schema 11/database v6 ZIP; do not unpack/repackage it or import CSVs.
+   original schema 1-10/database v5 or schema 11-12/database v6 ZIP; do not unpack/repackage it or import CSVs.
    Review validation and counts. Prefer **Import under a new name** with an unused
    name if a name conflict exists; merge/replace have the destructive whole-family
    semantics documented above. Review, acknowledge and Confirm and save.

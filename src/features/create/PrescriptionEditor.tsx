@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { blankSet, parseForm, toForm, type SetFields } from './form'
 
-export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save exercise', initialDirty = false, onDirty, onSubmit, onClose, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void }) {
+export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save exercise', initialDirty = false, onDirty, onSubmit, onClose, onMerge, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void; onMerge?: (input: ExerciseInput) => void }) {
   const [form, setForm] = useState(() => toForm(initial))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
@@ -84,7 +84,7 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
           <div className="actions"><Field label="New tag" value={tag} maxLength={80} error={errors.tag || errors.tagNames} onChange={(e) => setTag(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tag) } }} /><button type="button" onClick={() => addTag(tag)}>Add</button></div>
         </fieldset>
         {error && <p role="alert">{error}</p>}
-        <div className="actions"><button type="submit" className="primary">{busy ? 'Saving...' : saveLabel}</button><button type="button" onClick={() => {
+        <div className="actions"><button type="submit" className="primary">{busy ? 'Saving...' : saveLabel}</button>{onMerge && <button type="button" onClick={() => { const parsed = parseForm(form); setErrors(parsed.errors); if (parsed.value) onMerge(parsed.value); else requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()) }}>Merge</button>}<button type="button" onClick={() => {
           if (dirty) setConfirm({ title: 'Discard unsaved exercise?', message: 'Your unsaved exercise changes will be lost.', action: onClose }); else onClose()
         }}>Cancel</button></div>
       </fieldset>

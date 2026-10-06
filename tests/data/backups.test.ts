@@ -25,7 +25,7 @@ test('complete archive independently reopens with exact records, photo bytes, id
   const { bytes, filename } = await generateBackup(snapshot, version), zip = await JSZip.loadAsync(bytes, { checkCRC32: true })
   const manifest = JSON.parse(await zip.file('manifest.json')!.async('string')), data = JSON.parse(await zip.file('data.json')!.async('string'))
   manifestSchema.parse(manifest); backupDataSchema.parse(data)
-  assert.equal(manifest.app.version, version); assert.equal(manifest.databaseSchemaVersion, 6); assert.equal(manifest.backupSchemaVersion, 11)
+  assert.equal(manifest.app.version, version); assert.equal(manifest.databaseSchemaVersion, 6); assert.equal(manifest.backupSchemaVersion, 12)
   assert.equal(manifest.profile.id, fixture.id); assert.equal(manifest.snapshotAt, snapshot.capturedAt); assert.equal(manifest.snapshotPolicy, SNAPSHOT_POLICY)
   assert.deepEqual(manifest.counts, { workouts: 0, profiles: 1, tags: 2, exercises: 2, plans: 1, schedules: 1, drafts: 3, sessions: 2, measurements: 3, assets: 2, outcomes: 0, excludedWeeks: 0 })
   const { databaseVersion, capturedAt, photos, ...canonical } = snapshot; assert.equal(databaseVersion, 6); assert.ok(capturedAt)

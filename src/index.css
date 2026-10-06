@@ -462,3 +462,11 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 .create-carousel button { min-width: 0; overflow-wrap: anywhere; }
 .imported-button { margin-top: 12px; }
 .workout-library-grid button { aspect-ratio: 1.2; }
+
+/* Stable result geometry across debounce/autosave and partial numeric entry. */
+.draft-save-status { min-height: 1.5em; }
+.training-fields .reserved-error { display: block; min-height: 6em; font-size: 12px; line-height: 1.5; }
+.skip-row { display: block; }
+.skip-row .skip-control { display: inline-flex; width: auto; min-height: 44px; padding: 4px 8px; }
+.merge-direction { display: grid; justify-items: center; gap: 12px; margin-block: 24px; overflow-wrap: anywhere; }
+.exercise-selection-card[aria-pressed='true'] { outline: 2px solid var(--focus); outline-offset: -2px; }

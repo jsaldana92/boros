@@ -1,3 +1,4 @@
+import { exerciseResolver } from './exercise-identity.ts'
 import type { Schedule } from '../schemas/schedule.ts'
 import { resolvedDays, runProgress } from './run-progress.ts'
 import { nameKey } from '../schemas/profile.ts'
@@ -32,6 +33,8 @@ const validActual = (set: RecordedSet): set is ActualSet => !set.skipped && Numb
 
 export function deriveProgress(profileId: string, _allPlans: Plan[], allExercises: Exercise[], allSessions: CompletedSession[], schedules: Schedule[] = [], drafts: SessionDraft[] = []): ProgressAnalytics {
   const library = allExercises.filter((e) => e.profileId === profileId), runs = schedules.filter((r) => r.profileId === profileId)
+  const resolve = exerciseResolver(profileId, library)
+  const identity = (planId: string | undefined, dayId: string, exercise: PlanExercise) => { const key = exerciseIdentity(planId, dayId, exercise); return key.startsWith('library:') ? `library:${resolve(key.slice(8))}` : key }
   const sessions = allSessions.filter((s) => s.profileId === profileId).sort(sessionOrder), performances: Performance[] = [], outcomes = new Map<string, ExerciseOutcome>()
   const catalogs = new Map<string, Map<string, ProgressItem>>()
   const collect = (instanceId: string, day: TrainingDay, createdAt: string) => {
@@ -50,7 +53,7 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
     for (const [index, occurrence] of session.day.exercises.entries()) {
       const results = session.exercises.find((e) => e.id === occurrence.id)?.sets ?? []
       const sets = results.flatMap((result, s) => validActual(result) ? [{ id: `${session.id}:${occurrence.id}:${session.structure?.exercises[index]?.sets[s]?.id ?? s}`, index: s, result }] : [])
-      const itemKey = occurrenceItemKey(session.day.id, occurrence.id), exerciseKey = exerciseIdentity(session.sourcePlanId, session.day.id, occurrence)
+      const itemKey = occurrenceItemKey(session.day.id, occurrence.id), exerciseKey = identity(session.sourcePlanId, session.day.id, occurrence)
       const id = `${instanceId}:${session.occurrence?.key ?? session.id}:${occurrence.id}`
       const prior = outcomes.get(id), count = occurrence.prescription.sets.length
       const explicit = savedDraft?.input.exercises.find((e) => e.id === occurrence.id)?.sets
@@ -72,7 +75,7 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
         const id = `${run.id}:${marker.ref.key}:${exercise.id}`, old = outcomes.get(id)
         // A saved partial performance is not a wholly skipped exercise.
         if (old?.completed || performances.some((p) => p.instanceId === run.id && p.session.occurrence?.key === marker.ref.key && p.occurrence.id === exercise.id)) continue
-        outcomes.set(id, { id, instanceId: run.id, itemKey: occurrenceItemKey(marker.day.id, exercise.id), exerciseKey: exerciseIdentity(run.planId, marker.day.id, exercise), completed: false, skipped: true })
+        outcomes.set(id, { id, instanceId: run.id, itemKey: occurrenceItemKey(marker.day.id, exercise.id), exerciseKey: identity(run.planId, marker.day.id, exercise), completed: false, skipped: true })
       }
     }
   }
@@ -89,7 +92,7 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
     planSummaries.push({ id, sourcePlanId, name: history.at(-1)?.planName ?? 'Historical plan', legacy: true, sessions: history, timesCompleted: 0, daysCompleted: resolved.completed.size, daysSkipped: 0, manualCompletions: 0, exercisesCompleted: [...outcomes.values()].filter((o) => o.instanceId === id && o.completed).length, items: sorted(catalogs.get(id)!.values()) })
   }
   return { sessions, performances, outcomes: [...outcomes.values()], runs, plans: planSummaries,
-    items: sorted(library.map((e) => ({ key: `library:${e.id}`, name: e.name, nameKey: e.nameKey, context: '', createdAt: e.createdAt, tagIds: e.tagIds }))) }
+    items: sorted(library.filter(e => !e.mergedIntoId).map((e) => ({ key: `library:${e.id}`, name: e.name, nameKey: e.nameKey, context: '', createdAt: e.createdAt, tagIds: e.tagIds }))) }
 }
 export function selectPerformances(data: ProgressAnalytics, key: string, instanceId?: string) {
   return data.performances.filter((p) => instanceId ? p.instanceId === instanceId && p.itemKey === key : p.exerciseKey === key)

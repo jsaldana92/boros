@@ -19,7 +19,7 @@ export function csvTables(data: BackupData) {
   table('profiles', 'id,kind,name,nameKey,age,heightCm,weightUnit,heightUnit,photoId,revision,createdAt,updatedAt' + (data.backupSchemaVersion >= 3 ? ',timeZone' : ''), [data.profile as unknown as Row])
   if (data.backupSchemaVersion >= 3) table('train_selections', 'profileId,planId,selectionOrder', (data.profile.selectedPlanIds ?? []).map((planId, i) => ({ profileId: data.profile.id, planId, selectionOrder: i + 1 })))
   table('tags', 'profileId,id,name,nameKey,archivedAt,createdAt,updatedAt', data.tags as unknown as Row[])
-  const libraries = table('library_exercises', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl,createdAt,updatedAt')
+  const libraries = table('library_exercises', `profileId,id,name,nameKey,activeNameKey,revision,archivedAt,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl,createdAt,updatedAt${data.backupSchemaVersion >= 12 ? ',mergedIntoId,mergedAt,mergeOperationId' : ''}`)
   const librarySets = table('library_sets', 'profileId,libraryExerciseId,setOrder,repsMin,repsMax,rirMin,rirMax')
   const tagLinks = table('exercise_tags', 'profileId,libraryExerciseId,tagId,tagOrder')
   table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : '') + (weekly ? ',notes' : '') + (data.backupSchemaVersion >= 7 ? ',instructions' : ''), data.plans as unknown as Row[])

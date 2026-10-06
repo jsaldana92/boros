@@ -30,7 +30,7 @@ export async function validateGeneratedArchive(bytes: Uint8Array, expected: Back
 }
 export async function generateBackup(snapshot: ProfileSnapshot, appVersion: string, progress: (message: string) => void = () => {}) {
   progress('Validating saved records and references')
-  if (![5, 6].includes(snapshot.databaseVersion)) throw new Error('This database version is not supported by backup schema 11. Update Boros before exporting.')
+  if (![5, 6].includes(snapshot.databaseVersion)) throw new Error('This database version is not supported by backup schema 12. Update Boros before exporting.')
   const { databaseVersion: _databaseVersion, capturedAt: _capturedAt, photos, ...records } = snapshot
   const data: BackupData = { format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, ...records, workouts: records.workouts ?? [], assets: photos.map(({ blob, ...asset }) => ({ ...asset, mediaType: blob.type as 'image/jpeg' | 'image/png' | 'image/webp', bytes: blob.size, path: `photos/${asset.id}.${blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]}` })) }
   validateBackupData(data)

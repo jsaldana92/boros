@@ -113,3 +113,13 @@ instruction prose, not schema v4 or its strict older readers. `days`, `dayId`,
 `trainingDaysPerWeek` and the legacy standalone-exercise `kind: "workout"` value
 retain their published meanings. Examples/IDs and user-authored text are not
 rewritten. Backup schema v10 and IndexedDB v5 are unchanged.
+
+
+### Exercise merges (2026-10-06)
+
+AI v5 is unchanged. Normalized-name matching for new imports uses only active,
+surviving library templates. Retired merge-source records are excluded from matching
+and picker choices. Existing explicit source references remain valid through the
+profile-owned redirect chain; importing/editing a prescription never rewrites older
+snapshots or infers a merge from its name. Library merging is a separate confirmed
+operation in Create > Exercises, documented in [merge verification](exercise-merge-verification.md).

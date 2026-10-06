@@ -143,7 +143,7 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
     assert.equal(templateReference(restored.plans[0].days[0].exercises[0]), original.days[0].exercises[0].id)
     assert.equal(restored.plans[0].createdAt, original.createdAt); assert.equal(restored.plans[0].updatedAt, original.updatedAt)
     const round = await readBackup((await generateBackup(restored, 'test')).bytes)
-    assert.equal(round.manifest.backupSchemaVersion, 11); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
+    assert.equal(round.manifest.backupSchemaVersion, 12); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
     // Merge the original old backup again into its matching original profile.
     let target = id
     for (let repeat = 0; repeat < 2; repeat++) { const merge = await service.preview(backup, 'import'); target = await service.commit(merge, true); assert.equal((await captureProfile(target, db)).exercises.length, 2) }

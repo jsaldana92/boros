@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-06
-Status: Reusable Workout library and standalone/custom sessions complete in available local verification environments. Earlier physical release gates and the production persistence investigation remain open.
-Current scope: independent workouts, safe plan copies, Train sources/custom Save, explicit partial-save completion, Calendar modal reviews, AI v5, additive database v6 and backup v11. No commit, push, deploy, hosting or dependency changes.
+Status: Exercise merge and input/editor fixes complete in available local verification environments. Physical keyboard/viewport acceptance, earlier release gates and the production persistence investigation remain open.
+Current scope: stable mobile result entry, compact Skip control, nested editor position/focus restoration, durable exercise identity merges, Overall history and backup v12 compatibility. Database remains boros v6 and AI remains v5. No commit, push, deploy, hosting or dependency changes.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -432,7 +432,7 @@ Never label the file automatically as `older` or this device as `newer`: either 
 
 ### Conflict and relationship rules
 
-- [x] Match plans/library exercises by stable ID first and normalized name second. If ID and name resolve to different candidates, report an ambiguity; do not guess.
+- [x] Original Phase 9: match plans/library exercises by stable ID first and normalized name second. The 2026-10-06 merge update supersedes exercise restore matching with stable IDs only; other named collections retain their rules. If ID and name resolve to different candidates, report an ambiguity; do not guess.
 - [x] For a conflicting plan, treat its days, exercise prescriptions, schedules, drafts, completed sessions, and associated notes as one plan family.
 - [x] Prefer this device: keep the entire local plan family and skip the matching imported family, including its unique session logs. This is the owner's requested whole-plan priority rule, not a union of session histories.
 - [x] Prefer imported file: remove the matching local plan family and restore the entire imported family, including its history. Preview how many local logs/drafts/schedules will be removed.
@@ -955,13 +955,17 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-06 | Explicit Save completes an occurrence, including historical partial logs | Workout completion is distinct from actual exercise results and explicit skips |
 | 2026-10-06 | DB v6 additive store, AI v5 kind dispatch, backup v11 | Preserve old records and frozen public contracts while adding reusable templates and standalone sources |
 | 2026-10-06 | Custom Save Yes commits template and session together; standalone merge by session ID | Prevent orphan templates, retry duplicates and name-based history merges |
+| 2026-10-06 | Retain merge sources as explicit redirects in exercise records | Preserve original metadata, immutable snapshots and chained identity without rewriting results |
+| 2026-10-06 | Exercise restore matches IDs only; existing retirement survives a pre-merge imported record | Avoid associating unrelated names or reactivating a retired identity; reviewed metadata precedence stays |
+| 2026-10-06 | Backup v12 on unchanged database v6, strict v1-v11 readers | Preserve redirects without migration/reset and keep old exports valid |
+| 2026-10-06 | Reserve result status/error geometry; restore nested editors by keyed occurrence | Avoid autosave layout jumps and autofocus-to-top while preserving validation and normal scrolling |
 
 ## 9. Current checkpoint
 
-- Reusable Workout update: **Complete in available local verification environments**. Phase 10 remains **Verification pending**, Phase 11 **In progress**; historical verification and prior handoffs are preserved.
-- Stable database name **boros**, additive **v6** workout store; **AI v5** distinguishes all three kinds while preserving v1-v4 meaning; **backup v11** reads strict v1-v10 archives.
-- Data **222/222**; build/typecheck/lint/diff pass. Broad Edge static matrix **588 passed / 4 failed**, all four corrected test selectors covered by final **96/96** affected checks at root/project desktop/phone. Focused Firefox **42/42**. Same-context cached-release/two-rebuild update matrix **6/6**. Exact commands, timing and limitations: [workout verification](docs/workout-library-verification.md).
-- Next: perform the disposable-profile physical-device owner check in the verification record. Physical phone, Safari, assistive technology, background timers, quota/save sheets and live Ko-fi checks remain unverified; the earlier production disappearance report remains unresolved.
+- Exercise merge/input/editor update: **Complete in available local verification environments**. Phase 10 remains **Verification pending**, Phase 11 **In progress**; historical verification and prior handoffs stay recorded.
+- Stable **boros v6** with optional retained-source merge fields, no database migration. **AI v5** unchanged. **Backup v12** validates strict original v1-v11 files before promotion.
+- Data **230/230**; build/typecheck/lint/diff pass. Affected Edge static matrix **240/240**, added picker checks **4/4**, Firefox **38/38** plus picker **2/2**. Same-origin/context cached-release/two-rebuild update matrix **6/6**. Final source-label/input/editor/merge/Progress checks pass **40/40 Edge + 20/20 Firefox**. Exact commands, timing and limitations: [merge verification](docs/exercise-merge-verification.md).
+- Next: perform the three disposable-profile owner checks in the verification record. Physical phone keyboard/viewport, Safari, assistive technology, background timers, quota/save sheets and live Ko-fi remain unverified. The earlier production disappearance report remains unresolved.
 
 ## 10. Handoff entry template
 
@@ -1833,3 +1837,18 @@ Fresh verification against the final build (isolated contexts/test databases):
 - [ ] Physical phone keyboard/gesture/safe-area checks; Safari/iOS Blob restore; real assistive technology; background/locked-device timer audio/vibration; real quota/eviction, OS save sheets/spreadsheet apps and live Ko-fi. Existing production data-disappearance report remains unresolved; local update preservation is not a claimed production diagnosis.
 - Preservation: prior uncommitted terminology/Create work retained. No dependencies installed, database cleared, owner data accessed, manifest/hosting edited, commit, push or deployment performed.
 - Next: follow the five disposable-profile owner checks in the verification record: library lifecycle, independent plan reuse, standalone partial Save/Calendar note modal, custom Cancel/No/Yes plus reload recovery, and backup restore under a new name. Repeat on a physical phone and with Safari/assistive technology before closing the outstanding release gates.
+
+
+### Handoff - Exercise merge and input/editor fixes (2026-10-06)
+
+- Status: **Complete in available local verification environments**. Physical keyboard/viewport acceptance and prior release gates stay open.
+- [x] Session status/error space remains stable across autosave and partially entered numbers. Shared focus clearance moves only the obscured distance on focus/viewport resize. DOM identity, focus/caret, values, blank/zero, units and recovery remain intact. Skip uses a compact >=44px label/control; empty row space does not toggle it.
+- [x] Parent title no longer remounts and focuses the top when a child closes. Shared per-builder keyed occurrence/parent/scroll/focus capture restores Apply/Cancel in Plan, saved Plan, unique weeks, library Workout and AI previews, preserving unsaved state and existing guards without long delays or cross-builder storage.
+- [x] Persisted library editor has Save exercise / Merge / Cancel. Single-selection picker reuses search/sort/tags/cards, excludes self/archived/retired items, preserves ordinary multi-select elsewhere, and retains selection/form on Cancel. Exact confirmation, thick icon, default Into direction and Switch are implemented with nested modal focus.
+- [x] Atomic merge validates captured profile/IDs/revisions and current form. Destination keeps ID/name/defaults; tags union without duplicates (existing 50-tag limit). Edited source metadata is retained when switched. Explicit retired-source redirects chain safely and cannot be edited/archive-restored back to active. Retry IDs, stale guards and injected-failure rollback protect all writes.
+- [x] Independent prescriptions, repeated/superset occurrences, snapshots, set IDs, results and notes are unchanged. Overall resolves canonical identity and counts each actual record once; plan-specific completion/performance and same-plan/occurrence/set hints retain scope. Other-tab session inputs, timers and pending autosave survive. Standalone Progress source labels omit absent plan names.
+- [x] Database name/schema **boros v6**, AI **v5**, deployment/manifest/configuration unchanged. **Backup v12** retains redirect metadata and original fields in JSON/library-exercise CSV, with strict v1-v11 readers. ID-only exercise restore matching rejects unrelated active name conflicts, preserves existing retirement against older imports, validates graph references/cycles and includes Clear Data without losing unrelated plan families/workouts/sessions.
+- [x] Data **230/230** and affected static Edge **240/240**, Firefox **38/38**, extra picker **4/4 Edge + 2/2 Firefox**, retained-context releases/two rebuilds **6/6**. Intermediate failures/corrections and exact commands are recorded in [verification](docs/exercise-merge-verification.md); final display/input/editor/merge/Progress checks pass **40/40 Edge + 20/20 Firefox**. Build/typecheck/lint/diff pass.
+- [ ] Physical phone software-keyboard/viewport behavior; Safari/iOS Blob restore; real assistive technology; background audio/vibration/timers; native file sheets/quota/eviction/spreadsheet apps and live Ko-fi. Emulation passes do not establish physical acceptance or diagnose the earlier production data-loss report.
+- Preservation: started clean at `59a9aeec88c83e65d1da3ca9f38c1849c625eceb`; no owner data accessed/cleared, dependency installation, commit, push, deploy or hosting change. Prior records/handoffs remain historical.
+- Next: disposable-phone result entry/Skip; Workout 4 Apply/Cancel and unique-week/Workout/AI return; merge two exercises with recorded results, test Switch/Cancel, then check Calendar/Overall/plan views and restore a backup under a new name. See the verification record for exact steps.

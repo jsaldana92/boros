@@ -68,7 +68,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   const localPlans = merging ? device!.plans : [], localExercises = merging ? device!.exercises : [], localTags = merging ? device!.tags : []
   const localWorkouts = merging ? device!.workouts : [], workoutMatches = matches(file.workouts, localWorkouts, 'workout')
   const workoutIds = new Map(file.workouts.map(w => [w.id, workoutMatches.get(w.id)?.id ?? w.id]))
-  const planMatches = matches(file.plans, localPlans, 'plan'), exerciseMatches = matches(file.exercises, localExercises, 'exercise'), tagMatches = matches(file.tags, localTags, 'tag')
+  const planMatches = matches(file.plans, localPlans, 'plan'), exerciseMatches = new Map(file.exercises.flatMap(row => { const found = localExercises.find(e => e.id === row.id); if (found && !found.mergedIntoId && !row.mergedIntoId && localExercises.some(e => e.id !== found.id && !e.mergedIntoId && nameKey(e.name) === nameKey(row.name))) throw new Error(`Ambiguous exercise "${row.name}": ID and name identify different records. Restore under a new profile name.`); return found ? [[row.id, found] as const] : [] })), tagMatches = matches(file.tags, localTags, 'tag')
   const planIds = new Map(file.plans.map((p) => [p.id, planMatches.get(p.id)?.id ?? p.id])), exerciseIds = new Map(file.exercises.map((e) => [e.id, exerciseMatches.get(e.id)?.id ?? e.id])), tagIds = new Map(file.tags.map((t) => [t.id, tagMatches.get(t.id)?.id ?? t.id]))
   for (const [label, found] of [['workout', workoutMatches], ['plan', planMatches], ['exercise', exerciseMatches], ['tag', tagMatches]] as const) for (const row of found.values()) conflicts.push(`${label}: ${row.name}`)
   const mergeNamed = <T extends Named>(incoming: T[], locals: T[], found: Map<string, T>, key: 'plans' | 'exercises' | 'tags' | 'workouts') => {
@@ -82,7 +82,17 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   const workouts = mergeNamed(file.workouts, localWorkouts, workoutMatches, 'workouts'); result.workouts = workouts.all
   result.tags = tags.all; result.exercises = exercises.all; result.plans = plans.all
   if (profile.selectedPlanIds) profile.selectedPlanIds = [...new Set(profile.selectedPlanIds.map((id) => choice === 'device' ? id : planIds.get(id)!).filter((id) => result.plans.some((p) => p.id === id)))]
-  for (const exercise of exercises.imported) exercise.tagIds = exercise.tagIds.map((id) => tagIds.get(id)!)
+  for (const exercise of exercises.imported) {
+    exercise.tagIds = exercise.tagIds.map((id) => tagIds.get(id)!)
+    if (exercise.mergedIntoId) exercise.mergedIntoId = exerciseIds.get(exercise.mergedIntoId) ?? exercise.mergedIntoId
+    const previous = localExercises.find(e => e.id === exercise.id)
+    // A pre-merge backup may update fields according to precedence, but cannot
+    // revive a retired identity used by retained device history.
+    if (previous?.mergedIntoId && !exercise.mergedIntoId) {
+      exercise.mergedIntoId = previous.mergedIntoId; exercise.mergedAt = previous.mergedAt; exercise.mergeOperationId = previous.mergeOperationId; exercise.activeNameKey = undefined
+      warnings.push(`Retain the existing merge for exercise "${previous.name}"; the older record cannot restore a separate selectable identity.`)
+    }
+  }
   const importedPlanIds = new Set(file.plans.filter((p) => preferImport || !planMatches.has(p.id)).map((p) => p.id)), removedLocalPlans = new Set(preferImport ? [...planMatches.values()].map((p) => p.id) : [])
   const retained = <T extends { sourcePlanId?: string }>(rows: T[]) => rows.filter((row) => (!row.sourcePlanId || !removedLocalPlans.has(row.sourcePlanId)))
   const incomingStandalone = new Set(file.drafts.filter(d => d.source).map(d => d.id))
@@ -156,6 +166,11 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     counts.drafts.added -= omitted
     counts.drafts.skipped += omitted
     warnings.push('Closed-run compatibility cleanup: omit ' + abandoned.length + ' unfinished drafts from explicitly left runs. Completed history stays unchanged.')
+  }
+  const activeExerciseNames = new Set<string>()
+  for (const exercise of result.exercises.filter(e => !e.archivedAt && !e.mergedIntoId)) {
+    if (activeExerciseNames.has(exercise.nameKey)) throw new Error('Different exercise identities share a name. Restore under a new profile name or resolve the names first; exercises are not merged by name.')
+    activeExerciseNames.add(exercise.nameKey)
   }
   const repaired = materializeTemplates(newId, result, at)
   result.plans = repaired.plans; result.exercises = repaired.exercises; result.tags = repaired.tags

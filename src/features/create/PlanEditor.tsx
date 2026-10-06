@@ -1,3 +1,4 @@
+import { useEditorReturn } from './use-editor-return'
 import { WorkoutPicker } from './WorkoutPicker'
 import { copyWorkout } from '../../schemas/workout'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -43,6 +44,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
   const heading = useRef<HTMLHeadingElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const trigger = useRef<HTMLElement | null>(null)
+  const captureReturn = useEditorReturn(formRef, !!picker || !!editing)
   useEffect(() => { if (initialDirty) setDirty(true); return () => setDirty(false) }, [setDirty, initialDirty])
   const entered = initial
     ? JSON.stringify(form) !== baseline || duration !== (initial.durationWeeks?.toString() ?? '') || unique !== !!initial.weeks || Object.keys(groupNumbers).length > 0
@@ -56,7 +58,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
   })
   const updateDay = (dayId: string, update: (day: TrainingDay) => TrainingDay) => days((items) => items.map((day) => day.id === dayId ? update(day) : day))
   const exerciseList = (dayId: string, update: (items: PlanExercise[]) => PlanExercise[]) => updateDay(dayId, (day) => compactGroups({ ...day, exercises: update(day.exercises) }))
-  const closeSubeditor = () => { setPicker(undefined); setEditing(undefined); setNestedDirty(false); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : heading.current)?.focus()) }
+  const closeSubeditor = () => { setPicker(undefined); setEditing(undefined); setNestedDirty(false) }
   const count = (value: number, weekId?: string) => {
     const current = planWeeks(form).find((week) => week.id === weekId)!.days
     const apply = () => days((items) => Array.from({ length: value }, (_, index) => items[index] ?? newDay(index + 1)), weekId)
@@ -78,7 +80,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
   }
   const divisors = uniqueWeekCounts(Number(duration))
   return <section className="plan-editor" aria-label={workoutMode ? "Workout editor" : "Plan editor"}><CreateLeaveGuard kind={workoutMode ? "workout" : "plan"} />
-    {!picker && !editing && <EditorTitle path={['Create', workoutMode ? 'Workout' : 'Plan']} headingRef={heading} />}
+    <div hidden={!!picker || !!editing}><EditorTitle path={['Create', workoutMode ? 'Workout' : 'Plan']} headingRef={heading} /></div>
     {!picker && !editing && original?.archivedAt && <p className="muted">Archived {workoutMode ? "workout" : "plan"}. Rename here to resolve a conflict, then restore from the library.</p>}
     {picker && <ExercisePicker path={['Create', workoutMode ? 'Workout' : 'Plan', 'Exercise']} choices={choices} remaining={100 - (form.days.find((day) => day.id === picker)?.exercises.length ?? 0)} onClose={closeSubeditor} onChoose={(selected) => { exerciseList(picker, (items) => items.length + selected.length <= 100 ? [...items, ...selected.map((choice) => copyExercise(choice.prescription, choice.source))] : items); closeSubeditor() }} />}
     {editing && <PrescriptionEditor path={['Create', workoutMode ? 'Workout' : 'Plan', 'Exercise']} initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply" onDirty={setNestedDirty} onClose={closeSubeditor} onSubmit={async (prescription) => { exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription, ...(item.setIds ? { setIds: prescription.sets.map((_, i) => item.setIds?.[i] ?? createId()) } : {}) } : item)); closeSubeditor() }} />}
@@ -123,7 +125,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
           <h4>{i + 1}. {exercise.prescription.name}</h4><p className="muted">{exercise.prescription.sets.length} sets; {exercise.prescription.tagNames.join(', ') || 'No tags'}</p>
           <label className="check-label"><input type="checkbox" checked={!!exercise.groupId} onChange={(e) => { setGroupNumbers((values) => { const next = { ...values }; delete next[exercise.id]; return next }); updateDay(day.id, (current) => joinGroup(current, exercise.id, e.target.checked ? current.groups?.find((group) => positiveInteger.safeParse(group.number).success)?.number ?? 1 : undefined)) }} />Superset</label>
           {exercise.groupId && <Field label="Superset group number" inputMode="numeric" value={groupNumbers[exercise.id] ?? day.groups?.find((item) => item.id === exercise.groupId)?.number ?? ''} onChange={(e) => { const value = e.target.value; setGroupNumbers((values) => ({ ...values, [exercise.id]: value })); if (positiveInteger.safeParse(Number(value)).success) { updateDay(day.id, (current) => joinGroup(current, exercise.id, Number(value))); setGroupNumbers((values) => { const next = { ...values }; delete next[exercise.id]; return next }) } }} />}
-          <div className="actions occurrence-controls"><span className="movement-controls"><button type="button" disabled={i === 0} onClick={() => updateDay(day.id, (current) => moveOccurrence(current, exercise.id, -1))} aria-label="Move exercise up" title="Move exercise up">↑</button><button type="button" disabled={i === day.exercises.length - 1} onClick={() => updateDay(day.id, (current) => moveOccurrence(current, exercise.id, 1))} aria-label="Move exercise down" title="Move exercise down">↓</button></span><button type="button" aria-label={'Actions for ' + exercise.prescription.name} aria-haspopup="dialog" onClick={() => { trigger.current = document.activeElement as HTMLElement; setMenu({ dayId: day.id, exercise }) }}>☰</button></div>
+          <div className="actions occurrence-controls"><span className="movement-controls"><button type="button" disabled={i === 0} onClick={() => updateDay(day.id, (current) => moveOccurrence(current, exercise.id, -1))} aria-label="Move exercise up" title="Move exercise up">↑</button><button type="button" disabled={i === day.exercises.length - 1} onClick={() => updateDay(day.id, (current) => moveOccurrence(current, exercise.id, 1))} aria-label="Move exercise down" title="Move exercise down">↓</button></span><button type="button" aria-label={'Actions for ' + exercise.prescription.name} aria-haspopup="dialog" onClick={() => { trigger.current = document.activeElement as HTMLElement; captureReturn(trigger.current); setMenu({ dayId: day.id, exercise }) }}>☰</button></div>
         </li>
         {group && day.exercises[i + 1]?.groupId !== group.id && <li className="superset-footer"><fieldset className="superset-settings" aria-label={`Superset ${group.number} settings`}><legend>Superset {group.number}</legend>
           <p>{trainingBlocks(day).find((block) => block.id === group.id)?.members.map((item) => item.prescription.name).join(' · ')}</p>
@@ -133,7 +135,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
           <button className="danger" type="button" onClick={() => setConfirm({ title: `Delete Superset ${group.number}?`, label: 'Delete', message: 'This removes the grouping and keeps every exercise and prescription. Saved session history is unchanged.', action: () => updateDay(day.id, (current) => dissolveGroup(current, group.id)) })}>Delete</button>
         </fieldset></li>}
         </Fragment> })}</ol>
-        <button className="plan-add-button" type="button" disabled={day.exercises.length >= 100} onClick={() => { trigger.current = document.activeElement as HTMLElement; setPicker(day.id) }}>Add exercise</button>
+        <button className="plan-add-button" type="button" disabled={day.exercises.length >= 100} onClick={() => { trigger.current = document.activeElement as HTMLElement; captureReturn(trigger.current); setPicker(day.id) }}>Add exercise</button>
       </section>)}
       <>{!workoutMode && <button className="plan-add-button" type="button" disabled={week.days.length === 7} onClick={() => setAddingWorkout({ weekId: week.id })}>Add workout</button>}</></section>)}
       {error && <p role="alert">{error}</p>}

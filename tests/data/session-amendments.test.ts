@@ -62,7 +62,7 @@ test('unequal supersets append one final round, stable identities, independent r
   const progress = await progressService(db).read(id), analytics = progress.plans.find(p=>p.id===run.id)!
   assert.equal(analytics.daysCompleted, 1); assert.equal(analytics.exercisesCompleted, 5); assert.equal(analytics.items.length,5)
   const backup = await generateBackup(await captureProfile(id,db),'amend-test'), bytes = backup.bytes, read = await readBackup(bytes,async()=>{})
-  assert.equal(read.data.backupSchemaVersion, 11); assert.deepEqual(read.data.sessions[0].structure,ids)
+  assert.equal(read.data.backupSchemaVersion, 12); assert.deepEqual(read.data.sessions[0].structure,ids)
   assert.equal(backup.manifest.csvRows['csv/session_structure.csv'],22)
   const restored = await buildRestorePlan(read,undefined,'new',crypto.randomUUID(),'Restored',new Date().toISOString())
   validateBackupData(canonicalSnapshot(restored.result)); assert.deepEqual(restored.result.sessions[0].structure,ids)

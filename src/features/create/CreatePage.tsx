@@ -60,7 +60,7 @@ function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPl
   const visible = data ? filterExercises(data.exercises, search, sort, filterTags, archived) : []
   return <>
     {!editor && !planOpen && <h1>Create</h1>}
-    {editor && <ExerciseEditor key={editor.key} profileId={profileId} initial={editor.draft} original={editor.original} tags={data?.tags ?? []} onClose={close} onSaved={(name) => { close(); setStatus(`Saved ${name}.`) }} />}
+    {editor && <ExerciseEditor key={editor.key} profileId={profileId} initial={editor.draft} original={editor.original} tags={data?.tags ?? []} onClose={close} onMerged={record => { close(); setSelected(record); setStatus(`Saved ${record.name}.`) }} onSaved={(name) => { close(); setStatus(`Saved ${name}.`) }} />}
     <div hidden={!!editor || planOpen}>
       <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button id="create-workout" aria-label="Create workout" onClick={onWorkout}>Workout</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button></div><button className="imported-button" id="import-output-trigger" disabled={busy} onClick={onImport}>Imported</button>
     </div>

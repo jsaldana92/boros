@@ -121,7 +121,7 @@ test('v11 ZIP, all restore choices and repeated merges preserve independent work
  for (let i=0;i<2;i++) { const d=await sessions.startStandalone(id,workout.id); await sessions.complete(id,d.id,d.revision,filled(d),false) }
  await sessions.startStandalone(id)
  const snapshot = await captureProfile(id,db), zip=await generateBackup(snapshot,'workouts'), backup=await readBackup(zip.bytes)
- assert.equal(backup.data.backupSchemaVersion,11); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
+ assert.equal(backup.data.backupSchemaVersion,12); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
  for (const choice of ['new','replace','device','import'] as const) {
   const plan=await buildRestorePlan(backup,choice==='new'?undefined:snapshot,choice,uid(),choice==='new'?'Copy':'Guest',new Date().toISOString())
   assert.equal(plan.result.workouts.length,1); assert.equal(plan.result.sessions.length,2); assert.equal(plan.result.drafts.length,3)

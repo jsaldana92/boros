@@ -121,7 +121,7 @@ test('weekly gaps, outcomes, saved results, notes and statistics survive ZIP and
   assert.equal(stats.daysCompleted, 1); assert.equal(stats.daysSkipped, 1); assert.equal(stats.exercisesCompleted, 0)
   assert.equal(dayStatus((await calendar.events(id, secondWeek, addDays(secondWeek, 6)))[0]), 'Skipped')
   const snapshot = await captureProfile(id, db), backup = await readBackup((await generateBackup(snapshot, 'weekly-test')).bytes)
-  assert.equal(backup.data.backupSchemaVersion, 11); assert.deepEqual(backup.data.schedules, snapshot.schedules)
+  assert.equal(backup.data.backupSchemaVersion, 12); assert.deepEqual(backup.data.schedules, snapshot.schedules)
   for (const choice of ['new', 'replace', 'device', 'import'] as const) {
     const restored = await buildRestorePlan(backup, choice === 'new' ? undefined : snapshot, choice, crypto.randomUUID(), snapshot.profile.name, new Date().toISOString())
     assert.deepEqual(restored.result.schedules.map(({ profileId: _id, ...row }) => row), snapshot.schedules.map(({ profileId: _id, ...row }) => row))

@@ -173,7 +173,7 @@ test('v6 closed state and completed history round-trip; reviewed restore removes
   const { db, id, run, record, open, actions } = await setup(t), completed = await record(0), abandoned = await open(1)
   await actions.leave(await actions.preview(id, run.id, run.revision)); await db.drafts.add(abandoned)
   const snapshot = await captureProfile(id, db), zip = await generateBackup(snapshot, 'train-refinement'), backup = await readBackup(zip.bytes)
-  assert.equal(backup.data.backupSchemaVersion, 11)
+  assert.equal(backup.data.backupSchemaVersion, 12)
   for (const choice of ['new', 'replace', 'device', 'import'] as const) {
     const restored = await buildRestorePlan(backup, choice === 'new' ? undefined : snapshot, choice, crypto.randomUUID(), snapshot.profile.name, new Date().toISOString())
     assert.ok(restored.result.schedules[0].closedAt); assert.equal(restored.result.sessions[0].id, completed.id)

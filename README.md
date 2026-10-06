@@ -37,7 +37,7 @@ no Train Saved sessions entry point. Unfinished drafts still recover after reloa
 
 The database is still named `boros`; additive **v6** creates only the workout store.
 AI **v5** distinguishes Plan, Workout and Exercise while reading strict v1-v4
-contracts (legacy `workout` still means one exercise). Backup **v11** includes
+contracts (legacy `workout` still means one exercise). Backup **v12** includes
 workouts and standalone/custom records and reads strict v1-v10 archives. See
 [AI format](docs/ai-formatting.md), [backup format](docs/backup-format.md), and
 [workout verification](docs/workout-library-verification.md).
@@ -65,6 +65,26 @@ backup v8 reads strict v1–v7 archives. See
 [plan-details verification](docs/plan-details-verification.md) for exact results
 and remaining device checks. The earlier [deployment-persistence investigation](docs/deployment-persistence-verification.md)
 is still unresolved. This candidate has not been published.
+
+## Exercise merge and editing fixes (2026-10-06)
+
+Edit a saved exercise from Create > Exercises to use **Merge**. The edited exercise
+is the default destination; **Switch** reverses it. Final confirmation saves valid
+current edits and the merge atomically. The destination keeps its identity/name/defaults,
+tags combine, and the retired source keeps its original metadata. Cancel retains
+unsaved input. Nested prescriptions and new unsaved exercises have no Merge action.
+
+Explicit redirects combine Overall history without changing saved results or independent
+plan/workout prescriptions, repeated occurrences, or plan completion. Chained merges
+resolve to the final destination. Stale edits and unavailable sources are rejected.
+Backups use v12 on the unchanged database v6, retaining strict v1-v11 import support.
+Exercise restore matches IDs, never unrelated records by display name.
+
+Session autosave/validation now keeps result geometry stable; focused fields receive
+only necessary clearance when the viewport changes. Skip has a compact touch target.
+Returning from a child exercise editor restores the parent occurrence and focus without
+resetting its form. Physical software-keyboard verification is still required.
+See [verification and owner checks](docs/exercise-merge-verification.md).
 
 ## Local development
 

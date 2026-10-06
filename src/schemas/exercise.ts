@@ -38,6 +38,9 @@ export interface Exercise extends Omit<ExerciseInput, 'tagNames'> {
   updatedAt: string
   archivedAt?: string
   revision: number
+  mergedIntoId?: string
+  mergedAt?: string
+  mergeOperationId?: string
 }
 export interface Tag {
   id: string

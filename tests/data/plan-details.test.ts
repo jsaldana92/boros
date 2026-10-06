@@ -122,7 +122,7 @@ test('backup v7 JSON/CSV and all restore choices preserve distinct plan instruct
   await sessions.complete(id, draft!.id, draft!.revision, results, false)
   await plans.save(id, { ...planToInput(plan), instructions: 'Current plan instructions' }, plan)
   const snapshot = await captureProfile(id, db), archive = await generateBackup(snapshot, 'test'), backup = await readBackup(archive.bytes)
-  assert.equal(backup.data.backupSchemaVersion, 11); assert.equal(backup.data.plans[0].instructions, 'Current plan instructions')
+  assert.equal(backup.data.backupSchemaVersion, 12); assert.equal(backup.data.plans[0].instructions, 'Current plan instructions')
   for (const record of [...backup.data.drafts, ...backup.data.sessions, ...backup.data.schedules[0].revisions, ...backup.data.schedules[0].outcomes!]) assert.equal(record.planInstructions, text)
   const tables = csvTables(backup.data)
   for (const name of ['plans', 'schedule_revisions', 'occurrence_outcomes', 'drafts', 'sessions']) {

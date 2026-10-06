@@ -4,6 +4,7 @@ import { resolveTags } from './tags.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { exerciseInputSchema, type Exercise, type ExerciseInput, type Tag } from '../schemas/exercise.ts'
 import { nameKey } from '../schemas/profile.ts'
+import { exerciseResolver } from '../lib/exercise-identity.ts'
 
 export function exerciseService(database: BorosDatabase) {
   const tables = [database.profiles, database.exercises, database.tags]
@@ -16,6 +17,7 @@ export function exerciseService(database: BorosDatabase) {
     return record
   }
   const checkRevision = (record: Exercise, revision: number) => {
+    if (record.mergedIntoId) throw new Error('This exercise was merged. Your input is kept. Cancel and reopen the surviving exercise.')
     if (record.revision !== revision) throw new Error('This exercise changed in another tab. Your input is kept. Reload the saved exercise before trying again.')
   }
   const checkName = async (profileId: string, name: string, ownId?: string) => {
@@ -27,7 +29,36 @@ export function exerciseService(database: BorosDatabase) {
     async library(profileId: string) {
       return database.transaction('r', tables, async () => {
         await owner(profileId)
-        return { exercises: await database.exercises.where('profileId').equals(profileId).toArray(), tags: await database.tags.where('profileId').equals(profileId).toArray() }
+        return { exercises: (await database.exercises.where('profileId').equals(profileId).toArray()).filter(e => !e.mergedIntoId), tags: await database.tags.where('profileId').equals(profileId).toArray() }
+      })
+    },
+    async merge(profileId: string, edited: { id: string; revision: number; input: ExerciseInput }, other: { id: string; revision: number }, sourceId: string, operationId: string) {
+      const input = exerciseInputSchema.parse(edited.input)
+      z.string().uuid().parse(operationId)
+      if (edited.id === other.id || ![edited.id, other.id].includes(sourceId)) throw new Error('Select two different exercises in this profile.')
+      return database.transaction('rw', tables, async () => {
+        await owner(profileId)
+        const current = await get(profileId, edited.id), selected = await get(profileId, other.id)
+        const source = sourceId === current.id ? current : selected, destination = source === current ? selected : current
+        if (source.mergeOperationId === operationId && source.mergedIntoId === destination.id) {
+          const all = await database.exercises.where('profileId').equals(profileId).toArray()
+          return get(profileId, exerciseResolver(profileId, all)(destination.id))
+        }
+        checkRevision(current, edited.revision); checkRevision(selected, other.revision)
+        if (current.archivedAt || selected.archivedAt) throw new Error('An exercise was archived. Your input is kept. Cancel and reopen the merge picker.')
+        const now = new Date().toISOString(), tagIds = await resolveTags(database, profileId, input.tagNames, now)
+        const { tagNames: _tags, ...fields } = input
+        const updated = { ...current, ...fields, nameKey: nameKey(input.name), activeNameKey: nameKey(input.name), tagIds }
+        const from = source === current ? updated : source, into = destination === current ? updated : destination
+        const combinedTags = [...new Set([...into.tagIds, ...from.tagIds])]
+        if (combinedTags.length > 50) throw new Error('The combined exercise exceeds 50 tags. Remove some tags before merging.')
+        // Release the source name before checking the survivor's name. Transaction
+        // rollback also rolls back tag creation and retirement on any failure.
+        await database.exercises.put({ ...from, activeNameKey: undefined, mergedIntoId: into.id, mergedAt: now, mergeOperationId: operationId, updatedAt: now, revision: from.revision + 1 })
+        await checkName(profileId, into.name, into.id)
+        const saved = { ...into, tagIds: combinedTags, updatedAt: now, revision: into.revision + 1 }
+        await database.exercises.put(saved)
+        return saved
       })
     },
     async save(profileId: string, raw: ExerciseInput, existing?: { id: string; revision: number }, creationId?: string) {

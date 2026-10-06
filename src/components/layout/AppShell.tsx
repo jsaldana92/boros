@@ -1,3 +1,4 @@
+import { useFocusClearance } from "./use-focus-clearance";
 import { useEffect, useRef } from "react";
 import { Outlet } from "react-router";
 import { useScreenNavigation } from "../../app/navigation-context";
@@ -13,6 +14,7 @@ export function AppShell() {
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(pathname);
   const pointerFocus = useRef(false);
+  const revealFocus = useFocusClearance();
   const workspace = useWorkspace();
   useEffect(() => {
     document.title = `${pathname === "/settings" ? "Settings" : (pages.find((page) => page.path === pathname)?.label ?? "Page not found")} | Boros`;
@@ -93,22 +95,7 @@ export function AppShell() {
           // Moving a pointer-focused button between down/up loses its click.
           // Fields still need keyboard clearance; keyboard-focused buttons do too.
           if (control.matches("button") && pointerFocus.current) return;
-          // Native focus scrolling does not consistently honor scroll-margin in
-          // every engine. Keep focused fields above the fixed actions/navigation.
-          requestAnimationFrame(() => {
-            if (document.activeElement !== control) return;
-            const rect = control.getBoundingClientRect();
-            const boundary =
-              document.querySelector(".session-actions") ??
-              document.querySelector(".main-nav");
-            const bottom = Math.min(
-              boundary?.getBoundingClientRect().top ?? innerHeight,
-              (visualViewport?.height ?? innerHeight) +
-                (visualViewport?.offsetTop ?? 0),
-            );
-            if (rect.bottom > bottom - 8 || rect.top < 0)
-              control.scrollIntoView({ block: "center" });
-          });
+          revealFocus(control);
         }}
       >
         {!workspace.noticeAccepted && <StorageNotice />}

@@ -122,14 +122,14 @@ test('exercise ID/name ambiguity rejects instead of choosing another reusable li
   const before = await all(db); await assert.rejects(service.preview(backup, 'import'), /Ambiguous exercise/); assert.deepEqual(await all(db), before)
 })
 
-test('name matches remap plan/exercise/tag IDs and preserve references and nested snapshot identities', async (t) => {
+test('name matches remap plans/tags while distinct archived exercise IDs and their references stay independent', async (t) => {
   const { original, backup } = await setup(t), file = structuredClone(backup), oldPlan = file.data.plans[0].id, oldExercise = file.data.plans[0].days[0].exercises[0].source!.id, oldTag = file.data.tags[0].id
   const newPlan = crypto.randomUUID(), newExercise = crypto.randomUUID(), newTag = crypto.randomUUID()
   file.data = JSON.parse(JSON.stringify(file.data).replaceAll(oldPlan, newPlan).replaceAll(oldExercise, newExercise).replaceAll(oldTag, newTag))
   const p = await buildRestorePlan(file, original, 'import', crypto.randomUUID(), '', '2026-10-02T00:00:00.000Z')
   assert.equal(p.result.plans[0].id, oldPlan); assert.ok(p.result.exercises.some((e) => e.id === oldExercise)); assert.ok(p.result.tags.some((tag) => tag.id === oldTag))
   assert.equal(p.result.schedules[0].planId, oldPlan); assert.ok(p.result.sessions.every((s) => s.sourcePlanId === oldPlan)); assert.equal(p.result.plans[0].days[0].id, original.plans[0].days[0].id)
-  assert.ok(p.result.plans[0].days[0].exercises.some((e) => e.source?.id === oldExercise))
+  assert.ok(p.result.plans[0].days[0].exercises.some((e) => e.source?.id === newExercise)); assert.ok(p.result.exercises.some(e => e.id === newExercise))
 })
 
 test('cross-family schedule/draft collisions remap consistently and repeated merges add no copies', async (t) => {

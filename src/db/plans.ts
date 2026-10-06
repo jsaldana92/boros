@@ -37,7 +37,7 @@ export function planService(database: BorosDatabase) {
         const tags = await database.tags.where('profileId').equals(profileId).toArray()
         const library = await database.exercises.where('profileId').equals(profileId).toArray()
         const choices: PrescriptionChoice[] = []
-        for (const exercise of library.filter((item) => !item.archivedAt)) {
+        for (const exercise of library.filter((item) => !item.archivedAt && !item.mergedIntoId)) {
           const prescription = exerciseToInput(exercise, tags)
           choices.push({ id: `exercise:${exercise.id}`, nameKey: exercise.nameKey, createdAt: exercise.createdAt, tagIds: prescription.tagNames.map(nameKey), label: `Library: ${exercise.name}`, prescription, source: { kind: 'exercise', id: exercise.id } })
         }
