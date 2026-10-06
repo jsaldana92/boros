@@ -1,1 +1,0 @@
-function e(e,t){return new Intl.DateTimeFormat(void 0,{dateStyle:`medium`,timeStyle:`short`,...t?{timeZone:t}:{}}).format(new Date(e))}export{e as t};
