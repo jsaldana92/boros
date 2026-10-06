@@ -116,7 +116,7 @@ test('one plain-text title path through nested editors; Cancel keeps unsaved inp
   await b(page, 'Cancel').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click(); await title(page, 'Create > Plan')
   await b(page, 'Save plan').click(); await title(page, 'Create')
   await b(page, 'Create exercise').click(); await title(page, 'Create > Exercise'); await b(page, 'Cancel').click()
-  await b(page, 'Import AI Output').click(); await title(page, 'Create > AI'); await b(page, 'Close').click(); await title(page, 'Create')
+  await b(page, 'Imported').click(); await title(page, 'Create > AI'); await b(page, 'Close').click(); await title(page, 'Create')
 })
 
 test('invalid saved tutorial never mounts a player; blocked embed leaves details and Close available', async ({ page, context }) => {

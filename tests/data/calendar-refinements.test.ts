@@ -166,7 +166,7 @@ test('end, hide/unhide and delete preserve other runs/profiles and templates; hi
   await assert.rejects(sessions.openOccurrence(id, run.id, run.revisions[0].days[1].id, '2026-10-13'), /left/)
   ended = await actions.setHidden(id, run.id, ended.revision, true)
   const backup = await readBackup((await generateBackup(await captureProfile(id, db), 'test')).bytes)
-  assert.equal(backup.data.backupSchemaVersion, 10); assert.equal(csvTables(backup.data).length, 31)
+  assert.equal(backup.data.backupSchemaVersion, 11); assert.equal(csvTables(backup.data).length, 32)
   const restored = await buildRestorePlan(backup, undefined, 'new', crypto.randomUUID(), 'Restored', new Date().toISOString())
   const historical = restored.result.schedules.find((s) => s.id === run.id)!
   assert.equal(historical.hiddenAt, ended.hiddenAt); assert.equal(historical.kind, undefined); assert.equal(historical.closedAt, ended.closedAt)
@@ -219,13 +219,13 @@ test('a corrected pending marker does not pin the old unscheduled date; stale re
 
 for (const version of [7, 8, 9] as const) test(`strict v${version} archive validates original checksums and CSV before v10 promotion, without inventing run metadata`, async (t) => {
   const { db, id, batch, stage, complete } = await setup(t), [run] = await batch.addBatch(id, [stage()]); await complete(run)
-  const snapshot = await captureProfile(id, db), generated = await generateBackup(snapshot, 'v7-fixture'), data = canonicalSnapshot(snapshot); data.backupSchemaVersion = version; for (const record of [...data.drafts, ...data.sessions]) delete record.structure; validateBackupData(data)
+  const snapshot = await captureProfile(id, db), generated = await generateBackup(snapshot, 'v7-fixture'), data = canonicalSnapshot(snapshot); data.backupSchemaVersion = version; delete (data as any).workouts; for (const record of [...data.drafts, ...data.sessions]) delete record.structure; validateBackupData(data)
   const zip = new JSZip(), tables = csvTables(data), payload = [['data.json', JSON.stringify(data)], ...tables.map((table) => [table.path, table.text])]
   assert.equal(tables.length, version === 7 ? 28 : version === 8 ? 29 : 30)
-  const manifest = { ...generated.manifest, backupSchemaVersion: version, counts: recordCounts(data), csvRows: Object.fromEntries(tables.map((table) => [table.path, table.rows])), inventory: await Promise.all(payload.map(async ([path, text]) => ({ path, bytes: new TextEncoder().encode(text).length, sha256: await sha256(new TextEncoder().encode(text)), mediaType: path.endsWith('json') ? 'application/json' : 'text/csv; charset=utf-8' }))) }
+  const manifest = { ...generated.manifest, backupSchemaVersion: version, databaseSchemaVersion: 5, counts: recordCounts(data), csvRows: Object.fromEntries(tables.map((table) => [table.path, table.rows])), inventory: await Promise.all(payload.map(async ([path, text]) => ({ path, bytes: new TextEncoder().encode(text).length, sha256: await sha256(new TextEncoder().encode(text)), mediaType: path.endsWith('json') ? 'application/json' : 'text/csv; charset=utf-8' }))) }
   for (const [path, text] of payload) zip.file(path, text, { createFolders: false }); zip.file('manifest.json', JSON.stringify(manifest))
   const bytes = await zip.generateAsync({ type: 'uint8array' }), checksum = await sha256(bytes), imported = await readBackup(bytes)
-  assert.equal(imported.manifest.backupSchemaVersion, version); assert.equal(imported.data.backupSchemaVersion, 10); assert.equal(await sha256(bytes), checksum)
+  assert.equal(imported.manifest.backupSchemaVersion, version); assert.equal(imported.data.backupSchemaVersion, 11); assert.equal(await sha256(bytes), checksum)
   assert.deepEqual(imported.data.schedules, JSON.parse(JSON.stringify(snapshot.schedules))); assert.equal(imported.data.schedules[0].hiddenAt, undefined); assert.equal(imported.data.schedules[0].occurrenceExceptions, undefined)
   zip.file('data.json', JSON.stringify({ ...data, schedules: [] })); await assert.rejects(readBackup(await zip.generateAsync({ type: 'uint8array' })), /checksum/)
 })

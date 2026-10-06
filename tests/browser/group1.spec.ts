@@ -73,7 +73,7 @@ test('UUID fallback does not conceal missing secure context, checksum APIs or cl
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'fixture.zip', mimeType: 'application/zip', buffer: Buffer.from('not trusted') })
   await expect(page.locator('.backup-restore [role=alert]')).toContainText('Checksums cannot be skipped')
   expect(downloads).toEqual([]); expect(await records(page)).toEqual(before)
-  await button(page, 'Create').click(); await button(page, 'Import AI Output').click()
+  await button(page, 'Create').click(); await button(page, 'Imported').click()
   await button(page, 'Copy').click()
   await expect(page.getByText('Clipboard unavailable.', { exact: false })).toBeVisible()
   await expect(page.getByLabel('Formatting instructions', { exact: true })).toBeFocused()

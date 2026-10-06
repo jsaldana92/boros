@@ -9,7 +9,7 @@ import JSZip from 'jszip'
 
 test.setTimeout(120000)
 const button = (p: Page, name: string) => p.getByRole('button', { name, exact: true })
-const field = (p: Page, name: string) => ['Active profile', 'Weight unit', 'Training days per week', 'Schedule plan', 'Import choice'].includes(name) ? p.getByRole('combobox', { name, exact: true }) : p.getByLabel(name, { exact: true })
+const field = (p: Page, name: string) => ['Active profile', 'Weight unit', 'Workouts per week', 'Schedule plan', 'Import choice'].includes(name) ? p.getByRole('combobox', { name, exact: true }) : p.getByLabel(name, { exact: true })
 const planCard = (p: Page, name: string) => p.getByRole('article', { name: `Plan ${name}`, exact: true })
 async function download(p: Page) {
 
@@ -60,7 +60,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await field(page, 'New tag').fill('Journey legs'); await button(page, 'Add').click()
   await button(page, 'Save exercise').click(); await expect(page.getByRole('article', { name: 'Journey squat', exact: true })).toBeVisible()
   await button(page, 'Create Plan').click(); await field(page, 'Plan name').fill('Manual four'); await field(page, 'Duration (weeks)').fill('104')
-  await field(page, 'Training days per week').selectOption('4')
+  await field(page, 'Workouts per week').selectOption('4')
   for (let i = 0; i < 4; i++) {
     await page.locator('.plan-day').nth(i).getByRole('button', { name: 'Add exercise', exact: true }).click()
     await button(page, 'Add Journey squat').click()
@@ -93,7 +93,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit')
   await field(page, 'Exercise name').fill('Edited plan squat'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
   await expect(planCard(page, 'Manual four')).toBeVisible()
-  await button(page, 'Import AI Output').click()
+  await button(page, 'Imported').click()
   await field(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 1, kind: 'plan', plan: { name: 'AI plan', trainingDaysPerWeek: 1, days: [{ name: 'AI day', exercises: [{ name: 'AI row', sets: [{ reps: { min: 8, max: 12 } }], tags: ['Back'] }] }] } }))
   await button(page, 'Validate and preview').click()
   await field(page, 'Duration (weeks)').fill('104')
@@ -103,7 +103,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await page.locator('.calendar-event').filter({ hasText: /AI plan.*AI day/ }).click()
   await field(page, 'AI row set 1 Weight (lb)').fill('50'); await field(page, 'AI row set 1 Repetitions').fill('10')
   await note(page, 'Session Note', 'AI uses the shared history'); await button(page, 'Save').click()
-  await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('AI uses the shared history')
+  await button(page, 'Session Note').click(); await expect(page.getByRole('dialog')).toContainText('AI uses the shared history'); await button(page, 'Close note').click()
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-06')
   await page.locator('.calendar-event').filter({ hasText: /Manual four.*Day 3/ }).click()
   await field(page, 'Journey squat set 1 Weight (lb)').fill('12.')

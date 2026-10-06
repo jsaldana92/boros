@@ -155,7 +155,7 @@ test('v1 to current migration preserves every existing store and profile selecti
   const upgraded = new BorosDatabase(dbName)
   t.after(() => upgraded.delete())
   await upgraded.open()
-  assert.equal(upgraded.verno, 5)
+  assert.equal(upgraded.verno, 6)
   assert.deepEqual(await upgraded.profiles.get(id), profile)
   assert.deepEqual(await upgraded.settings.get('workspace'), settings)
   assert.deepEqual(await upgraded.measurements.get([id, 'weight']), measurement)

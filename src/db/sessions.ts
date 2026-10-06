@@ -1,3 +1,8 @@
+import { workoutService } from './workouts.ts'
+import { copyWorkout } from '../schemas/workout.ts'
+import { duplicateDay } from '../schemas/plan.ts'
+import { nameKey } from '../schemas/profile.ts'
+import { browserZone } from '../lib/calendar-dates.ts'
 import { initialStructure, sessionRounds, validateAmendment, type SessionSnapshot } from '../schemas/session-structure.ts'
 import { planInstructionsSnapshot } from '../schemas/plan.ts'
 import { previousResults } from '../lib/previous-results.ts'
@@ -11,7 +16,7 @@ import { occurrences, occurrenceKey, dateSchema, programWeek } from '../schemas/
 import { assessSession, blankSession, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
 
 export function sessionService(database: BorosDatabase) {
-  const tables = [database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises]
+  const tables = [database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises, database.tags, database.workouts]
   const owner = async (profileId: string) => { const profile = await database.profiles.get(profileId); if (!profile) throw new Error('This profile is unavailable. Nothing was saved.'); return profile }
   const draft = async (profileId: string, id: string) => { const value = await database.drafts.get([profileId, id]); if (!value) throw new Error('This draft is unavailable in this profile.'); return value }
   const editable = async (value: SessionDraft, revision: number) => {
@@ -27,7 +32,7 @@ export function sessionService(database: BorosDatabase) {
       return database.transaction('rw', [...tables, database.schedules], async () => {
         const profile = await owner(profileId), schedule = await database.schedules.get([profileId, scheduleId])
         if (!schedule) throw new Error('This program is unavailable.')
-        if (expectedRunRevision !== undefined && schedule.revision !== expectedRunRevision) throw new Error('This program changed. Reopen the training day.')
+        if (expectedRunRevision !== undefined && schedule.revision !== expectedRunRevision) throw new Error('This program changed. Reopen the workout.')
         const event = schedule && occurrences(schedule, date, date).find((item) => item.ref.dayId === dayId)
         const key = event?.ref.key ?? occurrenceKey(scheduleId, dayId, date, schedule.identity ? programWeek(schedule, monday(date)) : undefined)
         if (schedule?.outcomes?.some((item) => item.ref.key === key && item.status !== 'pending')) throw new Error('This day has an explicit outcome. Correct its marker in Train before starting a session.')
@@ -61,10 +66,19 @@ export function sessionService(database: BorosDatabase) {
         const existing = await database.drafts.where('[profileId+activeSourceKey]').equals([profileId, key]).first()
         if (existing) return existing
         const plan = await database.plans.get([profileId, planId]), source = plan?.days.find((day) => day.id === dayId)
-        if (!plan || plan.archivedAt || !source) throw new Error('This saved training day is unavailable. Choose an active plan.')
+        if (!plan || plan.archivedAt || !source) throw new Error('This saved workout is unavailable. Choose an active plan.')
         const day = daySchema.parse(structuredClone(source)), now = new Date().toISOString()
         const result: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: planId, sourceDayId: dayId, activeSourceKey: key, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), day, structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
         await database.drafts.add(result); return result
+      })
+    },
+    async startStandalone(profileId: string, workoutId?: string) {
+      return database.transaction('rw', tables, async () => {
+        const profile = await owner(profileId), source = workoutId ? await database.workouts.get([profileId, workoutId]) : undefined
+        if (workoutId && (!source || source.archivedAt)) throw new Error('This workout is unavailable. Choose an active workout.')
+        const day = source ? copyWorkout(source) : { id: createId(), name: 'Workout', exercises: [] }, now = new Date().toISOString()
+        const value: SessionDraft = { id: createId(), profileId, revision: 1, source: source ? { kind: 'workout', workoutId: source.id } : { kind: 'custom' }, sourceDayId: day.id, timeZone: browserZone(), day, structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
+        await database.drafts.add(value); return value
       })
     },
     async update(profileId: string, id: string, revision: number, raw: SessionInput, snapshot?: SessionSnapshot) {
@@ -98,7 +112,7 @@ export function sessionService(database: BorosDatabase) {
         await stopOwned(profileId, id); await database.drafts.put(result); return result
       })
     },
-    async complete(profileId: string, id: string, revision: number, raw: SessionInput, allowPartial: boolean, completedAt = new Date().toISOString()) {
+    async complete(profileId: string, id: string, revision: number, raw: SessionInput, allowPartial: boolean, completedAt = new Date().toISOString(), library?: { name: string }) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
         const committed = await database.sessions.get([profileId, id]); if (committed) return committed
@@ -114,9 +128,25 @@ export function sessionService(database: BorosDatabase) {
           const existing = await database.sessions.where('[profileId+occurrenceKey]').equals([profileId, value.occurrenceKey]).first()
           if (existing) return existing
         }
-        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, sourcePlanId: value.sourcePlanId, sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), planName: value.planName, ...planInstructionsSnapshot(value.planInstructions), day: structuredClone(value.day), ...(value.structure ? { structure: structuredClone(value.structure) } : {}), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
+        let savedDay = structuredClone(value.day), source = value.source
+        if (library && source?.kind !== 'custom') throw new Error('Only a custom workout can be added to the library here.')
+        if (source?.kind === 'custom') {
+          let name = 'Custom Workout'
+          if (library) {
+            name = library.name.trim()
+            if (!name) {
+              let number = 1
+              while (await database.workouts.where('[profileId+activeNameKey]').equals([profileId, nameKey(`Custom Workout (${number})`)]).first()) number++
+              name = `Custom Workout (${number})`
+            }
+            const template = await workoutService(database).save(profileId, { ...duplicateDay(value.day), name })
+            source = { kind: 'custom', workoutId: template.id }
+          }
+          savedDay = { ...savedDay, name }
+        }
+        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, ...(source ? { source, timeZone: value.timeZone } : { sourcePlanId: value.sourcePlanId, planName: value.planName }), sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), ...planInstructionsSnapshot(value.planInstructions), day: savedDay, ...(value.structure ? { structure: structuredClone(value.structure) } : {}), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
         await database.sessions.add(result)
-        await database.drafts.put({ ...value, input, finalizedAt: completedAt, activeSourceKey: undefined, updatedAt: loggedAt, revision: value.revision + 1 })
+        await database.drafts.put({ ...value, ...(source ? { source } : {}), day: savedDay, input, finalizedAt: completedAt, activeSourceKey: undefined, updatedAt: loggedAt, revision: value.revision + 1 })
         await stopOwned(profileId, id); return result
       })
     },

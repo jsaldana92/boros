@@ -1,3 +1,4 @@
+import type { Workout } from '../schemas/workout.ts'
 import Dexie, { type Table } from 'dexie'
 import type { Measurement, PhotoAsset, Profile, WorkspaceSettings } from '../schemas/profile.ts'
 import type { Plan } from '../schemas/plan.ts'
@@ -13,6 +14,7 @@ export class BorosDatabase extends Dexie {
   exercises!: Table<Exercise, [string, string]>
   tags!: Table<Tag, [string, string]>
   plans!: Table<Plan, [string, string]>
+  workouts!: Table<Workout, [string, string]>
   drafts!: Table<SessionDraft, [string, string]>
   sessions!: Table<CompletedSession, [string, string]>
   restTimers!: Table<RestTimer, string>
@@ -47,6 +49,8 @@ export class BorosDatabase extends Dexie {
       drafts: '[profileId+id], profileId, &[profileId+activeSourceKey], &[profileId+occurrenceKey]',
       sessions: '[profileId+id], profileId, &[profileId+draftId], &[profileId+occurrenceKey]',
     })
+    // Additive v6: never extract plan copies or rewrite existing records.
+    this.version(6).stores({ workouts: '[profileId+id], profileId, &[profileId+activeNameKey]' })
   }
 }
 

@@ -51,7 +51,7 @@ test('Settings downloads complete isolated archives with truthful feedback, unch
   const fixture = await seed(page), before = await records(page), address = page.url()
   const { zip, data, manifest } = await download(page)
   await expect(page.getByText('Download started for', { exact: false })).toContainText('cannot confirm that the file was saved')
-  expect(data.profile.id).toBe(fixture.id); expect(manifest.counts).toEqual({ profiles: 1, tags: 2, exercises: 2, plans: 1, schedules: 1, drafts: 3, sessions: 2, measurements: 3, assets: 2, outcomes: 0, excludedWeeks: 0 })
+  expect(data.profile.id).toBe(fixture.id); expect(manifest.counts).toEqual({ workouts: 0, profiles: 1, tags: 2, exercises: 2, plans: 1, schedules: 1, drafts: 3, sessions: 2, measurements: 3, assets: 2, outcomes: 0, excludedWeeks: 0 })
   expect(data.exercises.find((e) => e.id === fixture.exercise.id).instructions).toBe(strangeText)
   for (const store of before.filter((s) => !['profiles', 'settings', 'photos', 'restTimers'].includes(s.name))) expect(data[store.name]).toEqual(store.records.filter((r) => r.profileId === fixture.id))
   for (const asset of data.assets) { const source = before.find((s) => s.name === 'photos')!.records.find((r) => r.id === asset.id)!; expect(Array.from(await zip.file(asset.path)!.async('uint8array'))).toEqual((source.blob as { bytes: number[] }).bytes) }

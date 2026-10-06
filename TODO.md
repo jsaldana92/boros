@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
-Updated: 2026-10-05
-Status: Unique-week cycles are implemented and pass available local verification: build/typecheck/lint, 213/213 data tests, 564/564 static browser checks, Firefox 20/20 and retained-context updates 6/6. Physical release gates and production persistence investigation remain open.
-Current scope: repeating unique-week definitions throughout Create/Calendar/Train/Progress, AI v4, backup v10 and custom Create navigation warnings. Preserve earlier uncommitted amendments; no commit, push, deploy or hosting changes.
+Updated: 2026-10-06
+Status: Reusable Workout library and standalone/custom sessions complete in available local verification environments. Earlier physical release gates and the production persistence investigation remain open.
+Current scope: independent workouts, safe plan copies, Train sources/custom Save, explicit partial-save completion, Calendar modal reviews, AI v5, additive database v6 and backup v11. No commit, push, deploy, hosting or dependency changes.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -42,14 +42,19 @@ The user can create everything manually. For AI assistance, Boros supplies forma
 
 ### Terminology
 
-| Term                      | Meaning                                                                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Exercise / custom workout | A reusable movement, such as High Bar Squats or Big Cheek Pulls. The UI may retain the requested label `Create Workout`. |
-| Training day              | An ordered group of exercises within a plan.                                                                             |
-| Plan                      | A named collection of training days, such as Get Buff for the Summer.                                                    |
-| Session                   | A performed training day with actual weights, repetitions, notes, and timestamps.                                        |
-| Scheduled occurrence      | One training day assigned to a specific calendar date and schedule.                                                      |
-| Profile                   | A local data owner; it is not an authenticated account.                                                                  |
+| Term | Meaning |
+| ---- | ------- |
+| Exercise | One individual movement and its prescription. |
+| Workout | An ordered exercise collection, reusable in its own library or copied into plans and sessions. |
+| Plan | A named collection of workouts and weeks. |
+| Session | A performed workout with actual weights, repetitions, notes, and timestamps. |
+| Scheduled occurrence | One workout assigned to a specific calendar date and schedule. |
+| Profile | A local data owner; it is not an authenticated account. |
+
+UI wording does not rename persisted fields or public payload keys. AI's legacy
+`kind: "workout"` and `workout` payload still mean one individual exercise;
+`trainingDaysPerWeek`, `days`, `dayId` and related identities remain unchanged.
+User-authored names/text and historical handoffs retain their original wording.
 
 ## 3. Initial defaults and data rules
 
@@ -70,7 +75,7 @@ These defaults make implementation concrete. They are design choices, not additi
 
 ### Prescriptions, drafts, and history
 
-- A repeating plan contains 1-7 ordered training days. A unique-week plan has ordered definitions with 1-7 days each and a finite duration divisible by its definition count (at least two). Rest days are `7 - trainingDaysPerWeek` for that definition; variable compact counts use numeric ranges.
+- A repeating plan contains 1-7 ordered workouts. A unique-week plan has ordered definitions with 1-7 workouts each and a finite duration divisible by its definition count (at least two). Rest days are `7 - trainingDaysPerWeek` for that definition; variable compact counts use numeric ranges.
 - An exercise requires a name and at least one prescribed set. Set count and repetition targets are the only mandatory numeric inputs.
 - Each prescribed set has positive integer `reps.min` and `reps.max`; equal values mean a fixed target. Reject reversed ranges.
 - Each set may have an RIR range with nonnegative integer bounds. RIR 0 is valid. Missing RIR is unknown, not 0.
@@ -88,12 +93,12 @@ These defaults make implementation concrete. They are design choices, not additi
 - Weeks run Monday–Sunday. Compute date keys using calendar-aware operations, not elapsed milliseconds divided by seven days.
 - A schedule records the browser's IANA time zone when created, its start-week date, and its training-day-to-weekday mapping. Retain it internally across device imports; do not add timezone annotations to the current UI.
 - New plans require duration in weeks. New schedules repeat for that many Monday–Sunday weeks anchored to their selected start week, unless stopped earlier. Existing records without duration remain unbounded. A duration mentioned in a name is never interpreted as a schedule length. Existing schedule durations change only through explicit preview/confirmation; earlier missed dates and started/completed sessions remain.
-- Map each training day once per week to a distinct weekday within that schedule; remaining weekdays are rest days. Separate schedules may coexist.
-- Identify occurrences by schedule ID, stable training day ID, and scheduled local date. Store the scheduled week/date separately from the actual completion timestamp.
+- Map each workout once per week to a distinct weekday within that schedule; remaining weekdays are rest days. Separate schedules may coexist.
+- Identify occurrences by schedule ID, stable workout ID, and scheduled local date. Store the scheduled week/date separately from the actual completion timestamp.
 - `Save` from a scheduled occurrence completes that occurrence only. An unscheduled session does not silently complete a calendar item.
 - Completion is derived from saved sessions for the occurrence. A new week has new occurrences; never erase last week's logs or reset a global completion flag.
 - Store actual event timestamps in UTC and retain relevant time-zone/date context. Distinguish `startedAt`, `completedAt`, and `loggedAt`, even when the latter two happen almost together.
-- Editing scheduled plan contents preserves prior session snapshots. If training day IDs/count change, require the schedule mapping to be repaired before generating affected future occurrences; do not silently drop assignments.
+- Editing scheduled plan contents preserves prior session snapshots. If workout IDs/count change, require the schedule mapping to be repaired before generating affected future occurrences; do not silently drop assignments.
 
 ## 4. Architecture and dependencies
 
@@ -140,7 +145,7 @@ Do not create empty placeholder source files for every future feature. Create re
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Profile           | ID, name/name key, optional demographics, current weight, units, profile photo reference, settings, timestamps              |
 | Exercise template | Profile scope, ID, name, ordered sets, rest values, instructions, optional tutorial, tags, timestamps, archive state        |
-| Plan              | Profile scope, ID, name, ordered training days and exercise snapshots, revision, timestamps, archive state                  |
+| Plan              | Profile scope, ID, name, ordered workouts and exercise snapshots, revision, timestamps, archive state                  |
 | Tag               | Profile scope, ID, display name/name key; references resolve within the profile                                             |
 | Session draft     | Profile scope, ID, source plan/day/occurrence, prescription snapshot, entered results, notes, timestamps, revision          |
 | Completed session | Stable ID, profile scope, immutable snapshot, actual sets and units, notes, occurrence reference, completion/log timestamps |
@@ -781,6 +786,14 @@ and hash-routing handoffs remain evidence of their original revisions.
 - [x] Full production browser matrix 564/564, focused Firefox 20/20 and final same-context update/rebuild checks 6/6; final-source results recorded.
 - [ ] Physical phone keyboard/gestures, Safari, assistive technology, background timers/audio/vibration and live Ko-fi; prior production data-loss cause remains unresolved.
 
+### Terminology and Create controls (2026-10-05)
+
+- [x] Workout wording across labels, summaries, errors, accessible names and AI instructions; individual movements remain exercises. Stored keys, versions and user-authored text are unchanged.
+- [x] Exact Unique training weeks? label with Yes/No; left/right groups share a row; 18px top-level field spacing and centered 80% Add exercise/Add workout controls. Nested spacing stays unchanged.
+- [x] Shared compact, alphabetically ordered tag pills with pressed state and keyboard focus; draft-only multi-selection, normalized tag creation, collapse/scroll and existing save/cancel boundaries.
+- [x] Final build/typecheck/lint/diff; data 213/213; affected Edge 308/308; Firefox 28/28; retained-context update/rebuild regression 6/6. Exact commands and intermediate corrections recorded.
+- [ ] Physical phone keyboards/gestures, Safari, screen-reader checks and previously open release gates.
+
 ## 7. Inputs needed later
 
 These do not block Phase 0 unless the owner changes the scope.
@@ -933,12 +946,22 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-05 | AI v4 and backup v10; strict earlier contracts frozen; no IndexedDB migration | Add unambiguous cycles/set identities without reinterpreting old wire formats or resetting data |
 | 2026-10-05 | Create registers an in-app leave guard for the whole editor | Nested and AI input survives Cancel; Train retains its separate Settings detour |
 
+| Date | Decision | Reason |
+| ---- | -------- | ------ |
+| 2026-10-05 | Workout is the UI term; stored day keys and legacy AI workout exercise kind stay unchanged | Preserve published payloads, existing records and authored text without migration |
+| 2026-10-05 | Shared tag pills bind normalized names only inside the draft | Match library visuals while retaining profile ownership, plan independence and save/cancel boundaries |
+| 2026-10-05 | One 18px top-level Plan spacing token and scoped 80% add-button class | Consistent fields and phone reachability without changing nested editor spacing |
+| 2026-10-06 | Independent profile-owned workouts; plan/session copies get independent execution IDs | Reuse prescriptions without live template mutation or fabricated plan ownership |
+| 2026-10-06 | Explicit Save completes an occurrence, including historical partial logs | Workout completion is distinct from actual exercise results and explicit skips |
+| 2026-10-06 | DB v6 additive store, AI v5 kind dispatch, backup v11 | Preserve old records and frozen public contracts while adding reusable templates and standalone sources |
+| 2026-10-06 | Custom Save Yes commits template and session together; standalone merge by session ID | Prevent orphan templates, retry duplicates and name-based history merges |
+
 ## 9. Current checkpoint
 
-- Unique-week cycles complete in available local verification. Phase 10 remains **Verification pending**, Phase 11 **In progress**; earlier verified phases/handoffs preserved.
-- Database **boros v5**, AI **v4**, backup **v10** (strict v1-v9; 31 CSV tables). No dependencies, manifest/hosting changes or user-record reset.
-- Build/typecheck/lint/diff and data **213/213** pass. Full static Edge **564/564** (9.8 m), focused Firefox **20/20** (1.6 m), same-context four-stage persistence **6/6** (2.1 m), all on the final source. See [cycle verification](docs/unique-weeks-verification.md).
-- Next: the recorded disposable-profile physical-phone, Safari and assistive-technology checks; carry forward background timers/audio/vibration and live Ko-fi. Local update success does not resolve the owner's production data-loss incident.
+- Reusable Workout update: **Complete in available local verification environments**. Phase 10 remains **Verification pending**, Phase 11 **In progress**; historical verification and prior handoffs are preserved.
+- Stable database name **boros**, additive **v6** workout store; **AI v5** distinguishes all three kinds while preserving v1-v4 meaning; **backup v11** reads strict v1-v10 archives.
+- Data **222/222**; build/typecheck/lint/diff pass. Broad Edge static matrix **588 passed / 4 failed**, all four corrected test selectors covered by final **96/96** affected checks at root/project desktop/phone. Focused Firefox **42/42**. Same-context cached-release/two-rebuild update matrix **6/6**. Exact commands, timing and limitations: [workout verification](docs/workout-library-verification.md).
+- Next: perform the disposable-profile physical-device owner check in the verification record. Physical phone, Safari, assistive technology, background timers, quota/save sheets and live Ko-fi checks remain unverified; the earlier production disappearance report remains unresolved.
 
 ## 10. Handoff entry template
 
@@ -1781,3 +1804,32 @@ Fresh verification against the final build (isolated contexts/test databases):
 - Final verification: build/typecheck/lint/diff pass; data **213/213** (11.85 s); complete static Edge root/project-subpath desktop/phone **564/564** (9.8 m); focused Firefox desktop/phone **20/20** (1.6 m); final-source retained-context updates **6/6** (2.1 m). Four-stage updates retain the same context/origin through two historical release archives and two current builds, preserving original IDs, records, selection and photo bytes plus a new cycle/outcome/postponement between rebuilds. Desktop and phone screenshots were inspected. Intermediate failures and corrections are documented, not counted as passes.
 - Scope: retained the preceding uncommitted Calendar/Support/Train/Progress work at HEAD `6179937de8523885d9d8ba6c15d300a397044b36`. No dependencies installed, commit, push, deploy, manifest/hosting edit or owner-data access. The production disappearance report remains unresolved; these local upgrades do not establish a production cause or fix.
 - Next/manual: on a disposable profile on a physical phone, build a four-week/two-definition plan with four/three training days, assign weekdays independently, verify weeks 3/4 repeat 1/2 and Progress totals 14, then test a single completion and a postponed week. Check keyboard/gesture reachability and Cancel/Leave from a nested editor. Repeat focus/announcement checks with Safari and assistive technology. Carry forward locked-device timers/audio/vibration and live Ko-fi checks; exact steps are in the verification record.
+
+
+### Handoff - Workout terminology and Create refinements (2026-10-05)
+
+- Status: complete in available local verification; physical release acceptance remains pending. Phase 10/11 and historical handoff statuses are preserved.
+- Implemented: workout wording across Create/Train/Calendar/Progress, dialogs, validation, summaries and accessible names; exercise remains one movement. AI instruction prose clarifies legacy literal `kind: "workout"` while preserving keys/values. Saved names, instructions, notes and imported text are not renamed.
+- Create: exact Unique training weeks? control now shows Yes/No and aligns right of Duration; one 18px token spaces only top-level Plan fields. Add exercise/Add workout buttons are centered at 80% of their immediate containers. Shared tag pills provide sorted compact selected/unselected states, keyboard focus/pressed state, collapse/scroll, multi-selection and normalized local tag entry. Assignment changes stay in drafts until their existing save boundary; plan snapshots remain independent of the library.
+- Preservation: started clean at `b9b89ba787a8b64a7672e51edbc9c4b8d02f4409`. Database **boros v5**, AI **v4**, backup **v10**, internal day identifiers and strict older contracts are unchanged. No migration, dependency installation, manifest/hosting edit, commit, push, deploy or owner-data access.
+- Files: PlanEditor, PrescriptionEditor, shared TagPills/LibraryFilters and scoped CSS; affected display/error messages and AI prompt prose; new Create interaction/layout tests and adapted existing assertions; README, AI/backup docs, TODO and [verification record](docs/create-terminology-verification.md).
+- Final verification: build/typecheck/lint/diff pass; data **213/213** (10.360 s), affected Edge root/project-subpath desktop/phone **308/308** (6.4 m), focused Firefox **28/28** (2.0 m), same-origin/context old releases and two rebuilds **6/6** (2.3 m). Tests verify saved records/IDs/photos/active selection, user text, cycle behavior, stale/failed saves, tag assignment/cancellation/reload, plan/library independence and isolation. Measured 18px field gaps, 80% add buttons and no overflow at 1440/390/320px; inspected dark phone Plan and light desktop/phone Exercise screenshots. The full unrelated browser suite was not repeated.
+- Intermediate results: first focused **21/25** found two exact-label failures and two outdated assertions; explicit select naming and updated move/error expectations passed the **15/15** focused rerun and final matrix. One npx executable-resolution failure occurred before tests started; installed direct CLI ran the matrix. Exact commands and artifacts are recorded.
+- Audit: remaining literal training-day source matches are internal CSS selectors, not visible labels; camelCase stored fields/types and published AI fields remain intentionally unchanged. Historical documentation keeps its original wording/results.
+- Next/manual: on a disposable physical-phone profile, check Duration/Yes-No and nested Add controls with the keyboard open; create a four-week/two-definition plan, populate Week 2 and cancel switching to No. Select/deselect/create normalized-duplicate tags, save/reload, then change and Cancel; repeat nested/AI editors and swipe a large tag list. Verify Safari/VoiceOver/TalkBack switch/pill states, focus and reachability. Carry forward background timers/audio/vibration/live Ko-fi checks. The prior production loss incident remains unresolved; local update passes establish no production diagnosis or fix.
+
+
+### Handoff - Reusable Workout library and standalone/custom sessions (2026-10-06)
+
+- Status: **Complete in available local verification environments**. Earlier Phase 10 **Verification pending**, Phase 11 **In progress**, historical handoffs and manual release gates are preserved.
+- [x] Independent profile-owned Workout library with normalized names, optimistic revisions, create/edit/duplicate/archive/restore, ordered repeated exercises, supersets and bounded searchable/sortable cards. Standalone builder reuses existing prescription controls and exact dirty-leave confirmation.
+- [x] Create Plan / Workout / Exercise and full-width Imported; independent library copies into the selected unique-week section, including remapped execution identities and source provenance. Editing library, plan copies and session snapshots stays independent.
+- [x] Train active plans plus Existing/Custom Workout, explicit source types, persistent empty/custom drafts, additions/sets, recovery, Settings detours, timers and guarded departure. Removed Saved sessions entry without removing saved records or shared review.
+- [x] Custom Save No/Yes/Cancel with default No, optional validated/numbered name, atomic template plus completion transaction, rollback/retry/idempotency and finalized-autosave protection. Private notes/results stay in history; prescriptions stay reusable.
+- [x] Shared explicit-save completion interpretation, including old partial logs; actual exercise results remain accurate. Calendar standalone cards use captured completion dates and distinct IDs; shared review/nested historical notes retain Calendar state, scroll and focus. No fake plans, future standalone obligations or new Progress category.
+- [x] Additive **boros v6** store migration; **AI v5** three-kind contracts with strict original v1-v4 workout-as-exercise readers; **backup v11 / 32 CSV tables** with strict v1-v10 compatibility, complete sources, reference remapping, restore/merge/clear scope and unchanged checksums/photos. Standalone history merges only by session identity, independently of plan families.
+- [x] Data **222/222**, typecheck/lint/production build/diff. Broad Edge static matrix **588 passed / 4 failed** (new test locator ambiguity); corrected final affected matrix **96/96**, root/project-subpath desktop/phone. Focused Firefox **42/42**. Same-origin/context cached releases and two rebuilt versions **6/6**, retaining profiles/IDs/selection/records/Blob bytes and new workout/session/draft records. No fresh-context substitution for upgrade checks.
+- [x] Updated README, AI/backup contracts and [verification record](docs/workout-library-verification.md), including exact commands, failed intermediate runs, final scope and captured-layout inspection. Final small guard/reference/restore-count changes received data and affected browser coverage; full 592-case matrix and update matrix were not repeated afterward.
+- [ ] Physical phone keyboard/gesture/safe-area checks; Safari/iOS Blob restore; real assistive technology; background/locked-device timer audio/vibration; real quota/eviction, OS save sheets/spreadsheet apps and live Ko-fi. Existing production data-disappearance report remains unresolved; local update preservation is not a claimed production diagnosis.
+- Preservation: prior uncommitted terminology/Create work retained. No dependencies installed, database cleared, owner data accessed, manifest/hosting edited, commit, push or deployment performed.
+- Next: follow the five disposable-profile owner checks in the verification record: library lifecycle, independent plan reuse, standalone partial Save/Calendar note modal, custom Cancel/No/Yes plus reload recovery, and backup restore under a new name. Repeat on a physical phone and with Safari/assistive technology before closing the outstanding release gates.

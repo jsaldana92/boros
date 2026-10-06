@@ -1,3 +1,5 @@
+import { WorkoutPicker } from './WorkoutPicker'
+import { copyWorkout } from '../../schemas/workout'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { createId } from '../../lib/browser-crypto'
 import { CreateLeaveGuard } from './CreateLeaveGuard'
@@ -18,7 +20,7 @@ function reorder<T>(items: T[], index: number, offset: number) {
   const [item] = result.splice(index, 1); result.splice(index + offset, 0, item)
   return result
 }
-export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput) => Promise<{ name: string }>; initialDirty?: boolean }) {
+export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false, workoutMode = false }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput) => Promise<{ name: string }>; initialDirty?: boolean; workoutMode?: boolean }) {
   const { setDirty, dirty } = useWorkspace()
   const [form, setForm] = useState<PlanInput>(() => initial ? structuredClone(initial) : { name: '', days: [newDay(1)] })
   const [baseline] = useState(() => JSON.stringify(form))
@@ -34,6 +36,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
   const [menu, setMenu] = useState<{ dayId: string; exercise: PlanExercise }>()
   const [busy, setBusy] = useState(false)
   const submitting = useRef(false)
+  const [addingWorkout, setAddingWorkout] = useState<{ weekId?: string }>()
   const [picker, setPicker] = useState<string>()
   const [editing, setEditing] = useState<{ dayId: string; exercise: PlanExercise }>()
   const [confirm, setConfirm] = useState<{ title: string; action: () => void; message?: string; label?: string }>()
@@ -57,7 +60,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
   const count = (value: number, weekId?: string) => {
     const current = planWeeks(form).find((week) => week.id === weekId)!.days
     const apply = () => days((items) => Array.from({ length: value }, (_, index) => items[index] ?? newDay(index + 1)), weekId)
-    if (value < current.length) setConfirm({ title: `Reduce to ${value} training days?`, action: apply }); else apply()
+    if (value < current.length) setConfirm({ title: `Reduce to ${value} ${value === 1 ? 'workout' : 'workouts'}?`, action: apply }); else apply()
   }
   const populated = (list: TrainingDay[]) => list.some((day, index) => day.exercises.length || day.name !== `Day ${index + 1}`)
   const weekCount = (value: number) => {
@@ -74,21 +77,21 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
     if (planWeeks(form).slice(1).some((week) => populated(week.days))) setConfirm({ title: 'Turn off unique training weeks?', action: apply }); else apply()
   }
   const divisors = uniqueWeekCounts(Number(duration))
-  return <section className="plan-editor" aria-label="Plan editor"><CreateLeaveGuard kind="plan" />
-    {!picker && !editing && <EditorTitle path={['Create', 'Plan']} headingRef={heading} />}
-    {!picker && !editing && original?.archivedAt && <p className="muted">Archived plan. Rename here to resolve a conflict, then restore from the plan list.</p>}
-    {picker && <ExercisePicker choices={choices} remaining={100 - (form.days.find((day) => day.id === picker)?.exercises.length ?? 0)} onClose={closeSubeditor} onChoose={(selected) => { exerciseList(picker, (items) => items.length + selected.length <= 100 ? [...items, ...selected.map((choice) => copyExercise(choice.prescription, choice.source))] : items); closeSubeditor() }} />}
-    {editing && <PrescriptionEditor path={['Create', 'Plan', 'Exercise']} initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply" onDirty={setNestedDirty} onClose={closeSubeditor} onSubmit={async (prescription) => { exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription, ...(item.setIds ? { setIds: prescription.sets.map((_, i) => item.setIds?.[i] ?? createId()) } : {}) } : item)); closeSubeditor() }} />}
+  return <section className="plan-editor" aria-label={workoutMode ? "Workout editor" : "Plan editor"}><CreateLeaveGuard kind={workoutMode ? "workout" : "plan"} />
+    {!picker && !editing && <EditorTitle path={['Create', workoutMode ? 'Workout' : 'Plan']} headingRef={heading} />}
+    {!picker && !editing && original?.archivedAt && <p className="muted">Archived {workoutMode ? "workout" : "plan"}. Rename here to resolve a conflict, then restore from the library.</p>}
+    {picker && <ExercisePicker path={['Create', workoutMode ? 'Workout' : 'Plan', 'Exercise']} choices={choices} remaining={100 - (form.days.find((day) => day.id === picker)?.exercises.length ?? 0)} onClose={closeSubeditor} onChoose={(selected) => { exerciseList(picker, (items) => items.length + selected.length <= 100 ? [...items, ...selected.map((choice) => copyExercise(choice.prescription, choice.source))] : items); closeSubeditor() }} />}
+    {editing && <PrescriptionEditor path={['Create', workoutMode ? 'Workout' : 'Plan', 'Exercise']} initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply" onDirty={setNestedDirty} onClose={closeSubeditor} onSubmit={async (prescription) => { exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription, ...(item.setIds ? { setIds: prescription.sets.map((_, i) => item.setIds?.[i] ?? createId()) } : {}) } : item)); closeSubeditor() }} />}
     <form ref={formRef} hidden={!!picker || !!editing} noValidate onSubmit={async (event) => {
       event.preventDefault(); if (submitting.current) return; setError('')
       const durationWeeks = duration.trim() ? Number(duration) : undefined
       const badGroups = form.days.flatMap((day) => day.exercises.filter((item) => item.groupId && groupNumbers[item.id] !== undefined && !positiveInteger.safeParse(Number(groupNumbers[item.id])).success))
       if (badGroups.length) { setError('Enter a positive whole superset number for each enabled occurrence.'); return }
       if (unique && (!form.weeks || !divisors.includes(form.weeks.length))) { setErrors({ weeks: 'Choose a unique-week count that divides the duration evenly.' }); return }
-      const prepared = { ...form, durationWeeks, ...(unique ? { days: identifySets(form.days) } : {}) }
+      const prepared = { ...form, durationWeeks, ...(unique ? { days: identifySets(form.days) } : {}), ...(workoutMode ? { days: [{ ...form.days[0], name: form.name, instructions: form.instructions, notes: form.notes }] } : {}) }
       setForm(prepared)
       const parsed = planInputSchema.safeParse(prepared)
-      const missingDuration = (!original || original.durationWeeks !== undefined) && durationWeeks === undefined
+      const missingDuration = !workoutMode && (!original || original.durationWeeks !== undefined) && durationWeeks === undefined
       if (!parsed.success || missingDuration) {
         setErrors({ ...Object.fromEntries(parsed.success ? [] : parsed.error.issues.map((issue) => [issue.path.join('.'), issue.message])), ...(missingDuration ? { durationWeeks: 'Enter a positive whole duration in weeks.' } : {}) })
         requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"]')?.focus()); return
@@ -97,23 +100,25 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       try { const saved = await (onSave ? onSave(parsed.data) : plans.save(profileId, parsed.data, original)); setDirty(false); onSaved(saved.name) }
       catch (e) { setError((e as Error).message) } finally { submitting.current = false; setBusy(false) }
     }}><fieldset disabled={busy}>
-      <legend className="sr-only">Plan details</legend>
-      <Field label="Plan name" required maxLength={120} value={form.name} error={errors.name} onChange={(e) => change((current) => ({ ...current, name: e.target.value }))} />
-      <div className="duration-row"><Field label="Duration (weeks)" required={!original || original.durationWeeks !== undefined} inputMode="numeric" value={duration} error={errors.durationWeeks} onChange={(e) => { setDuration(e.target.value); setErrors({}) }} /><div className="unique-toggle"><span id="unique-weeks-label">Unique training weeks?</span><button type="button" role="switch" aria-labelledby="unique-weeks-label" aria-checked={unique} disabled={!unique && Number(duration) === 1} onClick={toggleUnique}>{unique ? 'On' : 'Off'}</button></div></div>
+      <legend className="sr-only">{workoutMode ? "Workout details" : "Plan details"}</legend>
+      <div className="plan-top-fields">
+      <Field label={workoutMode ? "Workout name" : "Plan name"} required maxLength={120} value={form.name} error={errors.name} onChange={(e) => change((current) => ({ ...current, name: e.target.value }))} />
+      {!workoutMode && <div className="duration-row"><Field label="Duration (weeks)" required={!original || original.durationWeeks !== undefined} inputMode="numeric" value={duration} error={errors.durationWeeks} onChange={(e) => { setDuration(e.target.value); setErrors({}) }} /><div className="unique-toggle"><span id="unique-weeks-label">Unique training weeks?</span><button type="button" role="switch" aria-labelledby="unique-weeks-label" aria-checked={unique} disabled={!workoutMode && !unique && Number(duration) === 1} onClick={toggleUnique}>{unique ? 'Yes' : 'No'}</button></div></div>}
       {unique && <label>Number of Unique weeks<select aria-label="Number of Unique weeks" aria-invalid={!!errors.weeks} value={form.weeks?.length ?? ''} onChange={(e) => weekCount(Number(e.target.value))}><option value="" disabled>Choose</option>{form.weeks && !divisors.includes(form.weeks.length) && <option value={form.weeks.length} disabled>{form.weeks.length}</option>}{divisors.map((value) => <option key={value} value={value}>{value}</option>)}</select>{errors.weeks && <span role="alert">{errors.weeks}</span>}</label>}
-      {original?.durationWeeks === undefined && original && <p className="muted">Legacy plan: blank keeps its unbounded duration. Enter weeks to set a duration for new schedules. Existing schedules change only through their duration preview.</p>}
-      {!unique && <label>Training days per week<select value={form.days.length} onChange={(e) => count(Number(e.target.value))}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>}
+      {!workoutMode && original?.durationWeeks === undefined && original && <p className="muted">Legacy plan: blank keeps its unbounded duration. Enter weeks to set a duration for new schedules. Existing schedules change only through their duration preview.</p>}
+      {!workoutMode && !unique && <label>Workouts per week<select aria-label="Workouts per week" value={form.days.length} onChange={(e) => count(Number(e.target.value))}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>}
       <TextareaField label="Instructions" maxLength={20000} value={form.instructions ?? ''} error={errors.instructions} onChange={(e) => change((current) => ({ ...current, instructions: e.target.value }))} />
       <TextareaField label="Note (optional):" maxLength={20000} value={form.notes ?? ''} onChange={(e) => change((current) => ({ ...current, notes: e.target.value }))} />
-      {!unique && <p role="status">{form.days.length} training days · {7 - form.days.length} rest days</p>}
+      </div>
+      {!workoutMode && !unique && <p role="status">{form.days.length} {form.days.length === 1 ? 'workout' : 'workouts'} · {7 - form.days.length} rest days</p>}
       {planWeeks(form).map((week, weekIndex) => <section key={week.id ?? 'repeating'} aria-label={unique ? `Week ${weekIndex + 1}` : undefined}>
-      {unique && <><hr /><h3 className="unique-week-heading">Week {weekIndex + 1}</h3><label>Training days for Week {weekIndex + 1}<select aria-label={`Training days for Week ${weekIndex + 1}`} value={week.days.length} onChange={(e) => count(Number(e.target.value), week.id)}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></>}
-      {week.days.map((day, index) => <section className="plan-day" key={day.id} aria-label={`Day ${index + 1}: ${day.name}`} data-day-id={day.id}>
-        <h3>Training day {index + 1}</h3>
-        <Field label={`Day ${index + 1} name`} required maxLength={120} value={day.name} error={errors[`days.${form.days.indexOf(day)}.name`]} onChange={(e) => updateDay(day.id, (item) => ({ ...item, name: e.target.value }))} />
-        <div className="actions"><span className="movement-controls"><button type="button" disabled={index === 0} onClick={() => days((items) => reorder(items, index, -1), week.id)} aria-label="Move day up" title="Move day up">Day ↑</button><button type="button" disabled={index === week.days.length - 1} onClick={() => days((items) => reorder(items, index, 1), week.id)} aria-label="Move day down" title="Move day down">Day ↓</button></span><button className="danger" type="button" disabled={week.days.length === 1} onClick={() => setConfirm({ title: `Remove ${day.name || 'this day'}?`, action: () => days((items) => items.filter((item) => item.id !== day.id), week.id) })} aria-label="Delete day">Delete</button></div>
+      {unique && <><hr /><h3 className="unique-week-heading">Week {weekIndex + 1}</h3><label>Workouts for Week {weekIndex + 1}<select aria-label={`Workouts for Week ${weekIndex + 1}`} value={week.days.length} onChange={(e) => count(Number(e.target.value), week.id)}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></>}
+      {week.days.map((day, index) => <section className={workoutMode ? "standalone-workout-builder" : "plan-day"} key={day.id} aria-label={`Workout ${index + 1}: ${day.name}`} data-day-id={day.id}>
+        {!workoutMode && <><h3>Workout {index + 1}</h3>
+        <Field label={`Workout ${index + 1} name`} required maxLength={120} value={day.name} error={errors[`days.${form.days.indexOf(day)}.name`]} onChange={(e) => updateDay(day.id, (item) => ({ ...item, name: e.target.value }))} />
+        <div className="actions"><span className="movement-controls"><button type="button" disabled={index === 0} onClick={() => days((items) => reorder(items, index, -1), week.id)} aria-label="Move workout up" title="Move workout up">Workout ↑</button><button type="button" disabled={index === week.days.length - 1} onClick={() => days((items) => reorder(items, index, 1), week.id)} aria-label="Move workout down" title="Move workout down">Workout ↓</button></span><button className="danger" type="button" disabled={week.days.length === 1} onClick={() => setConfirm({ title: `Remove ${day.name || 'this workout'}?`, action: () => days((items) => items.filter((item) => item.id !== day.id), week.id) })} aria-label="Delete workout">Delete</button></div></>}
         {errors[`days.${form.days.indexOf(day)}.exercises`] && <p role="alert" tabIndex={-1}>{errors[`days.${form.days.indexOf(day)}.exercises`]}</p>}
-        {!day.exercises.length && <p className="muted">No exercises in this day.</p>}
+        {!day.exercises.length && <p className="muted">No exercises in this workout.</p>}
         <ol className="plan-exercises">{day.exercises.map((exercise, i) => { const group = day.groups?.find((item) => item.id === exercise.groupId); return <Fragment key={exercise.id}><li data-occurrence-id={exercise.id} aria-label={`Exercise ${i + 1}: ${exercise.prescription.name}`}>
           <h4>{i + 1}. {exercise.prescription.name}</h4><p className="muted">{exercise.prescription.sets.length} sets; {exercise.prescription.tagNames.join(', ') || 'No tags'}</p>
           <label className="check-label"><input type="checkbox" checked={!!exercise.groupId} onChange={(e) => { setGroupNumbers((values) => { const next = { ...values }; delete next[exercise.id]; return next }); updateDay(day.id, (current) => joinGroup(current, exercise.id, e.target.checked ? current.groups?.find((group) => positiveInteger.safeParse(group.number).success)?.number ?? 1 : undefined)) }} />Superset</label>
@@ -128,13 +133,14 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
           <button className="danger" type="button" onClick={() => setConfirm({ title: `Delete Superset ${group.number}?`, label: 'Delete', message: 'This removes the grouping and keeps every exercise and prescription. Saved session history is unchanged.', action: () => updateDay(day.id, (current) => dissolveGroup(current, group.id)) })}>Delete</button>
         </fieldset></li>}
         </Fragment> })}</ol>
-        <button type="button" disabled={day.exercises.length >= 100} onClick={() => { trigger.current = document.activeElement as HTMLElement; setPicker(day.id) }}>Add exercise</button>
+        <button className="plan-add-button" type="button" disabled={day.exercises.length >= 100} onClick={() => { trigger.current = document.activeElement as HTMLElement; setPicker(day.id) }}>Add exercise</button>
       </section>)}
-      <button type="button" disabled={week.days.length === 7} onClick={() => count(week.days.length + 1, week.id)}>Add training day</button></section>)}
+      <>{!workoutMode && <button className="plan-add-button" type="button" disabled={week.days.length === 7} onClick={() => setAddingWorkout({ weekId: week.id })}>Add workout</button>}</></section>)}
       {error && <p role="alert">{error}</p>}
       {Object.entries(errors).filter(([path]) => path.includes('.groups.') || path.includes('.groupId') || path.includes('.prescription.') || path.includes('.setIds')).map(([path, text]) => <p role="alert" tabIndex={-1} key={path}>{path}: {text}</p>)}
-      <div className="actions"><button className="primary" type="submit">{busy ? 'Saving...' : 'Save plan'}</button><button type="button" onClick={() => dirty ? setConfirm({ title: 'Discard unsaved plan?', action: onClose }) : onClose()}>Cancel</button></div>
+      <div className="actions"><button className="primary" type="submit">{busy ? 'Saving...' : workoutMode ? 'Save workout' : 'Save plan'}</button><button type="button" onClick={() => dirty ? setConfirm({ title: workoutMode ? 'Leaving workout creation' : 'Discard unsaved plan?', ...(workoutMode ? { label: 'Leave', message: 'Leaving this page will lose all information entered.' } : {}), action: onClose }) : onClose()}>Cancel</button></div>
     </fieldset></form>
+    {addingWorkout && <WorkoutPicker profileId={profileId} onClose={() => setAddingWorkout(undefined)} onEmpty={() => { count((planWeeks(form).find(w => w.id === addingWorkout.weekId)?.days.length ?? 0) + 1, addingWorkout.weekId); setAddingWorkout(undefined) }} onChoose={value => { days(items => items.length < 7 ? [...items, copyWorkout(value)] : items, addingWorkout.weekId); setAddingWorkout(undefined) }} />}
     {menu && <ActionDialog title={menu.exercise.prescription.name + ' actions'} onClose={() => setMenu(undefined)}>
       <div className="occurrence-menu">
         <button type="button" onClick={() => { setMenu(undefined); setEditing(menu) }}>Edit</button>
@@ -144,8 +150,8 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       </div>
     </ActionDialog>}
     {moving && <ActionDialog title="Move exercise" onClose={() => setMoving(undefined)} actions={<button onClick={() => setMoving(undefined)}>Cancel</button>}>
-      <p>Choose a destination. Moving to another day removes this occurrence from its superset.</p>
-      <div className="destination-list">{form.days.filter((day) => day.id !== moving.dayId).map((day) => <button key={day.id} disabled={day.exercises.length >= 100} onClick={() => { const occurrence = form.days.find((item) => item.id === moving.dayId)?.exercises.find((item) => item.id === moving.exerciseId); if (!occurrence) return; days((items) => items.map((item) => item.id === moving.dayId ? compactGroups({ ...item, exercises: item.exercises.filter((entry) => entry.id !== occurrence.id) }) : item.id === day.id ? { ...item, exercises: [...item.exercises, { ...occurrence, groupId: undefined }] } : item)); setMoving(undefined); requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>(`[data-occurrence-id="${occurrence.id}"] button[aria-haspopup]`)?.focus()) }}>Day {form.days.indexOf(day) + 1}: {day.name}{day.exercises.length >= 100 ? ' (full)' : ''}</button>)}</div>
+      <p>Choose a destination. Moving to another workout removes this occurrence from its superset.</p>
+      <div className="destination-list">{form.days.filter((day) => day.id !== moving.dayId).map((day) => <button key={day.id} disabled={day.exercises.length >= 100} onClick={() => { const occurrence = form.days.find((item) => item.id === moving.dayId)?.exercises.find((item) => item.id === moving.exerciseId); if (!occurrence) return; days((items) => items.map((item) => item.id === moving.dayId ? compactGroups({ ...item, exercises: item.exercises.filter((entry) => entry.id !== occurrence.id) }) : item.id === day.id ? { ...item, exercises: [...item.exercises, { ...occurrence, groupId: undefined }] } : item)); setMoving(undefined); requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>(`[data-occurrence-id="${occurrence.id}"] button[aria-haspopup]`)?.focus()) }}>Workout {form.days.indexOf(day) + 1}: {day.name}{day.exercises.length >= 100 ? ' (full)' : ''}</button>)}</div>
     </ActionDialog>}
     {confirm && <ConfirmDialog title={confirm.title} confirmLabel={confirm.label ?? "Confirm"} onCancel={() => setConfirm(undefined)} onConfirm={() => { confirm.action(); setConfirm(undefined); requestAnimationFrame(() => { if (document.activeElement === document.body) heading.current?.focus() }) }}><p>{confirm.message ?? "This discards the affected unsaved input. Saved source exercises and other plans are unchanged."}</p></ConfirmDialog>}
   </section>

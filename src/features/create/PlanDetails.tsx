@@ -1,7 +1,7 @@
 import { planSubtitle } from './plan-subtitle'
 import { useState } from 'react'
 import { ActionDialog } from '../../components/ui/ConfirmDialog'
-import { planWeeks, trainingBlocks, type Plan, type PlanExercise } from '../../schemas/plan'
+import { planWeeks, trainingBlocks, type Plan, type PlanExercise, type TrainingDay } from '../../schemas/plan'
 import { DetailsActions, DetailsActionsButton } from './DetailsActions'
 import { prescriptionSummary } from './prescription-summary'
 
@@ -37,4 +37,8 @@ export function PlanDetails({ plan, busy, error, onClose, onEdit, onDuplicate, o
     </ActionDialog>
     {actions && <DetailsActions title="Plan actions" busy={busy} archived={!!plan.archivedAt} error={error} onClose={() => setActions(false)} onEdit={onEdit} onDuplicate={onDuplicate} onArchive={onArchive} />}
   </>
+}
+
+export function WorkoutSummary({ day }: { day: TrainingDay }) {
+  return <>{trainingBlocks(day).map(block => block.group ? <section className="plan-details-superset" key={block.id}><h3>Superset {block.group.number}</h3><div className="plan-superset-members">{block.members.map(exercise => <ExerciseSummary key={exercise.id} exercise={exercise} grouped />)}</div></section> : <ExerciseSummary key={block.id} exercise={block.members[0]} />)}{day.instructions?.trim() && <section><h3>Instructions</h3><p className="plain-text">{day.instructions}</p></section>}{day.notes?.trim() && <section><h3>Note</h3><p className="plain-text">{day.notes}</p></section>}</>
 }

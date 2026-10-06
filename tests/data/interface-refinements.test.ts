@@ -59,7 +59,7 @@ test('new activations resolve the current device zone, retain existing runs and 
   const [second] = await weekly.activate(id, b.id); assert.equal(second.timeZone, 'Asia/Tokyo')
   assert.deepEqual((await weekly.activate(id, a.id))[0], first)
   const before = await profiles.getProfile(id); await profiles.select(id); await profiles.initialize(); assert.deepEqual(await profiles.getProfile(id), before)
-  assert.equal(before.timeZone, 'Pacific/Honolulu'); assert.equal(db.verno, 5)
+  assert.equal(before.timeZone, 'Pacific/Honolulu'); assert.equal(db.verno, 6)
 })
 
 test('Calendar preference validates values, reads without writes and tolerates denied storage', () => {

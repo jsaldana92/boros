@@ -35,7 +35,7 @@ test('instance counts keep repeated and superset occurrences distinct, partial s
   input.exercises[2].sets.forEach((s) => { s.skipped = true })
   await sessions.complete(id, draft.id, draft.revision, input, true)
   let data = await progress.read(id), summary = data.plans[0], key = `library:${exercise.id}`
-  assert.equal(summary.items.length, 3); assert.equal(summary.exercisesCompleted, 1); assert.equal(summary.daysCompleted, 0)
+  assert.equal(summary.items.length, 3); assert.equal(summary.exercisesCompleted, 1); assert.equal(summary.daysCompleted, 1)
   assert.deepEqual(exerciseCounts(data, key), { completed: 1, skipped: 1 })
   assert.equal(performanceStats(selectPerformances(data, key)).maximum!.result.reps, 12)
   assert.equal(performanceStats(selectPerformances(data, key)).minimum!.result.weightKg, 0)
@@ -45,7 +45,7 @@ test('instance counts keep repeated and superset occurrences distinct, partial s
   const deduplicated = deriveProgress(id, [], await db.exercises.toArray(), await db.sessions.toArray(), [legacyDuplicate], await db.drafts.toArray())
   assert.deepEqual(exerciseCounts(deduplicated, key), { completed: 1, skipped: 4 })
   changed = await weekly.outcome(id, events[1].ref, changed.revision, 'completed')
-  data = await progress.read(id); assert.equal(data.plans[0].exercisesCompleted, 1); assert.equal(data.plans[0].daysCompleted, 1); assert.equal(data.plans[0].timesCompleted, 0)
+  data = await progress.read(id); assert.equal(data.plans[0].exercisesCompleted, 1); assert.equal(data.plans[0].daysCompleted, 2); assert.equal(data.plans[0].timesCompleted, 1)
   assert.deepEqual(exerciseCounts(data, key), { completed: 1, skipped: 1 })
   // Legacy blank-to-skip serialization without retained explicit input remains unknown.
   await db.drafts.delete([id, draft.id]); data = await progress.read(id); assert.deepEqual(exerciseCounts(data, key), { completed: 1, skipped: 0 })

@@ -14,7 +14,7 @@ async function start(p: Page) {
   await expect(p.getByRole('button', { name: /^Saved sessions/ })).toHaveCount(0)
 }
 async function importPlan(p: Page, name: string) {
-  await button(p, 'Create').click(); await button(p, 'Import AI Output').click()
+  await button(p, 'Create').click(); await button(p, 'Imported').click()
   await field(p, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 2, kind: 'plan', plan: { name, durationWeeks: 1, trainingDaysPerWeek: 1, days: [{ name: 'Workout', exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 8 } }, { reps: { min: 5, max: 8 } }] }] }] } }))
   await button(p, 'Validate and preview').click(); await button(p, 'Save plan').click(); await expect(p.getByRole('article', { name: `Plan ${name}`, exact: true })).toBeVisible()
 }
@@ -53,14 +53,14 @@ test('immediate multi-plan selection, scheduling existing run, exact calendar oc
   const subtitle = page.getByRole('region', { name: 'Program week', exact: true }).locator(':scope > p.muted')
   await expect(subtitle).toContainText('Scheduled')
   const selected = (await records(page)).profiles[0].selectedPlanIds
-  await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').click(); await expect(page.getByRole('region', { name: 'Training session', exact: true })).toContainText('Alpha')
+  await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').click(); await expect(page.getByRole('heading', { level: 1 })).toHaveText('Alpha')
   await field(page, 'Press set 1 Weight (kg)').fill('42'); await field(page, 'Press set 1 Repetitions').fill('6'); await waitForDraft(page)
   const draft = (await records(page)).drafts[0]; await page.reload(); await page.getByRole('button', { name: /^Resume Alpha/ }).click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('42')
   await button(page, 'Save').click(); await button(page, 'Save partial session').click(); expect((await records(page)).sessions[0].occurrenceKey).toBe(draft.occurrenceKey); expect((await records(page)).profiles[0].selectedPlanIds).toEqual(selected)
   await button(page, 'Settings').click(); await button(page, 'Light').click(); await createNamedProfile(page, 'Other'); await expect(page.locator('input[name="name"]')).toHaveValue('Other')
   await button(page, 'Train').click(); await expect(page.getByText('No active plan(s) selected.')).toBeVisible()
-  await button(page, 'Settings').click(); await field(page, 'Active profile').selectOption({ label: 'Guest' }); await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await button(page, 'Review session').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('42 kg')
-  await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').focus(); await expect(adjacent.locator('.calendar-event')).toBeFocused(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await button(page, 'Settings').click(); await field(page, 'Active profile').selectOption({ label: 'Guest' }); await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('42 kg')
+  await page.getByRole('dialog', { name: 'Completed workout' }).getByRole('button', { name: 'Close', exact: true }).click(); await adjacent.locator('.calendar-event').focus(); await expect(adjacent.locator('.calendar-event')).toBeFocused(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath('group3-calendar-light.png'), fullPage: true }); expect(page.url()).toBe(address)
 })
 

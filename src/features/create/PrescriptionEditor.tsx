@@ -1,7 +1,7 @@
 import { EditorTitle } from './EditorTitle'
-import { TagDropdown } from './TagDropdown'
+import { TagPills } from './TagPills'
 import { RestInput } from '../../components/ui/RestInput'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { tagNameSchema, type ExerciseInput, type Tag } from '../../schemas/exercise'
 import { nameKey } from '../../schemas/profile'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -15,6 +15,10 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
   const [busy, setBusy] = useState(false)
   const submitting = useRef(false)
   const [tag, setTag] = useState('')
+  const [localTags, setLocalTags] = useState(initial?.tagNames ?? [])
+  const [tagsExpanded, setTagsExpanded] = useState(true)
+  const tagsId = useId()
+  const availableTags = [...new Map([...tags.filter((item) => !item.archivedAt).map((item) => item.name), ...localTags].map((name) => [nameKey(name), name])).entries()].map(([id, name]) => ({ id, name }))
   const [baseline] = useState(() => JSON.stringify(toForm(initial)))
   const dirty = initialDirty || JSON.stringify(form) !== baseline || !!tag.trim()
   useEffect(() => { onDirty(dirty) }, [dirty, onDirty])
@@ -32,8 +36,13 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
   const addTag = (name: string) => {
     const parsed = tagNameSchema.safeParse(name)
     if (!parsed.success) { setErrors((current) => ({ ...current, tag: parsed.error.issues[0].message })); return }
-    if (form.tagNames.length >= 50) { setErrors((current) => ({ ...current, tag: 'Use at most 50 tags.' })); return }
-    if (!form.tagNames.some((existing) => nameKey(existing) === nameKey(name))) { setForm((current) => ({ ...current, tagNames: [...current.tagNames, parsed.data] })) }
+    if (!form.tagNames.some((existing) => nameKey(existing) === nameKey(parsed.data))) {
+      if (form.tagNames.length >= 50) { setErrors((current) => ({ ...current, tag: 'Use at most 50 tags.' })); return }
+      const canonical = availableTags.find((item) => item.id === nameKey(parsed.data))?.name ?? parsed.data
+      setLocalTags((current) => current.some((item) => nameKey(item) === nameKey(canonical)) ? current : [...current, canonical])
+      setForm((current) => ({ ...current, tagNames: [...current.tagNames, canonical] }))
+    }
+    setTagsExpanded(true)
     setTag(''); setErrors((current) => ({ ...current, tag: '' }))
   }
   return <section className="exercise-editor" aria-label={title}>
@@ -66,9 +75,13 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
         <TextareaField label="Notes (optional)" maxLength={20000} value={form.notes} error={errors.notes} onChange={(e) => change('notes', e.target.value)} />
         <Field label="YouTube tutorial URL (optional)" type="url" value={form.tutorialUrl} error={errors.tutorialUrl} onChange={(e) => change('tutorialUrl', e.target.value)} />
         <p className="muted">HTTPS YouTube video links only. Videos are never loaded automatically.</p>
-        <fieldset className="tag-editor"><legend>Tags (optional)</legend><TagDropdown tags={tags} selected={form.tagNames} onChoose={addTag} />
+        <fieldset className="tag-editor"><legend>Tags (optional)</legend>
+          <div className="tag-filter-heading"><button type="button" aria-expanded={tagsExpanded} aria-controls={tagsId} onClick={() => setTagsExpanded((current) => !current)}>Tags{form.tagNames.length ? ` (${form.tagNames.length})` : ''}</button></div>
+          <div id={tagsId} hidden={!tagsExpanded}><TagPills tags={availableTags} selected={form.tagNames.map(nameKey)} onToggle={(id) => {
+            if (form.tagNames.some((name) => nameKey(name) === id)) { setForm((current) => ({ ...current, tagNames: current.tagNames.filter((name) => nameKey(name) !== id) })); setErrors((current) => ({ ...current, tag: '' })) }
+            else addTag(availableTags.find((item) => item.id === id)!.name)
+          }} /></div>
           <div className="actions"><Field label="New tag" value={tag} maxLength={80} error={errors.tag || errors.tagNames} onChange={(e) => setTag(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tag) } }} /><button type="button" onClick={() => addTag(tag)}>Add</button></div>
-          <p className="muted">Tags are saved with this prescription.</p><div className="tag-list">{form.tagNames.map((name) => <button key={nameKey(name)} type="button" aria-label={`Remove tag ${name}`} onClick={() => { setForm((current) => ({ ...current, tagNames: current.tagNames.filter((value) => value !== name) })) }}>{name} ×</button>)}</div>
         </fieldset>
         {error && <p role="alert">{error}</p>}
         <div className="actions"><button type="submit" className="primary">{busy ? 'Saving...' : saveLabel}</button><button type="button" onClick={() => {

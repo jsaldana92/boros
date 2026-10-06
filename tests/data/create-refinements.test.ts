@@ -19,7 +19,7 @@ async function setup(t) {
 }
 
 test('initial AI prompts require a complete fenced contract; smart delimiters fail without changing valid Unicode strings', () => {
-  for (const kind of ['plan', 'workout'] as const) {
+  for (const kind of ['plan', 'exercise'] as const) {
     const prompt = formattingInstructions(kind)
     assert.match(prompt, /Return the complete result inside exactly one ```json code block\./)
     assert.match(prompt, /straight ASCII double quotes \(U\+0022\)/)
@@ -33,7 +33,7 @@ test('initial AI prompts require a complete fenced contract; smart delimiters fa
   assert.match(prompt, /A × 20 → B × 8 → rest between rounds/)
   assert.match(prompt, /A × 20 → B × 8 → rest after the group/)
   assert.match(prompt, /shorter members simply stop/)
-  assert.doesNotMatch(formattingInstructions('workout'), /Superset:|Round 1:|PlanExercise:/)
+  assert.doesNotMatch(formattingInstructions('exercise'), /Superset:|Round 1:|PlanExercise:/)
   const value = workoutFixture(); value.workout.instructions = '“Breathe” — don’t rush. 肩'
   assert.deepEqual(parseInterchange(JSON.stringify(value)).value, value)
   const bad = JSON.stringify(value).replace('"schemaVersion"', '“schemaVersion”')

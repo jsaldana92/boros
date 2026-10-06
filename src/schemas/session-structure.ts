@@ -8,7 +8,7 @@ import type { PrescriptionChoice } from '../db/plans.ts'
 // Session-only identity and execution order. Plan/AI prescriptions stay unchanged.
 export const sessionStructureSchema = z.object({
   amended: z.boolean(),
-  exercises: z.array(z.object({ id: z.string().uuid(), sets: z.array(z.object({ id: z.string().uuid(), round: z.number().int().min(1).max(100) }).strict()).min(1).max(100) }).strict()).min(1).max(100),
+  exercises: z.array(z.object({ id: z.string().uuid(), sets: z.array(z.object({ id: z.string().uuid(), round: z.number().int().min(1).max(100) }).strict()).min(1).max(100) }).strict()).min(0).max(100),
 }).strict()
 export type SessionStructure = z.infer<typeof sessionStructureSchema>
 export interface SessionSnapshot { day: TrainingDay; structure?: SessionStructure }
@@ -32,7 +32,7 @@ export function validateStructure(day: TrainingDay, structure?: SessionStructure
   for (const block of trainingBlocks(day)) if (sessionRounds(block.members, structure).some((round) => !round.length)) throw new Error('Session rounds must not contain empty rounds.')
 }
 export function validateAmendment(old: SessionSnapshot, next: SessionSnapshot) {
-  planInputSchema.parse({ name: 'Session', days: [next.day] }); validateStructure(next.day, next.structure)
+  if (next.day.exercises.length) planInputSchema.parse({ name: 'Session', days: [next.day] }); validateStructure(next.day, next.structure)
   const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
   if (old.day.id !== next.day.id || old.day.name !== next.day.name || !equal(old.day.groups, next.day.groups) || next.day.exercises.length < old.day.exercises.length) throw new Error('A session amendment can only append exercises or sets.')
   old.day.exercises.forEach((e, i) => {

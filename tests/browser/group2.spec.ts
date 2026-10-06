@@ -18,7 +18,7 @@ async function open(p: Page) {
   if (await button(p, 'Understood').isVisible()) await button(p, 'Understood').click()
 }
 async function importPlan(p: Page) {
-  await open(p); await button(p, 'Import AI Output').click(); await field(p, 'AI output JSON').fill(JSON.stringify(groupedAI()))
+  await open(p); await button(p, 'Imported').click(); await field(p, 'AI output JSON').fill(JSON.stringify(groupedAI()))
   await button(p, 'Validate and preview').click(); await expect(field(p, 'Duration (weeks)')).toHaveValue('2')
   await button(p, 'Save plan').click(); await expect(card(p)).toBeVisible()
 }
@@ -95,7 +95,7 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await expect(field(page, 'Squat occurrence 1 set 1 Weight (kg)')).toHaveValue('10'); await expect(field(page, 'Squat occurrence 2 set 1 Weight (kg)')).toHaveValue('40')
   await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
   await button(page, 'Stop').click(); await button(page, 'Save').click(); await button(page, 'Save partial session').click()
-  const details = page.getByRole('region', { name: 'Saved session details' }); await expect(details).toContainText('Only grouped squat'); await expect(details.getByRole('region', { name: 'Saved superset 1' }).locator('.superset-round')).toHaveCount(3)
+  const details = page.getByRole('region', { name: 'Saved session details' }); await details.getByRole('region', { name: 'Saved superset 1' }).getByRole('button', { name: 'Note for Squat', exact: true }).click(); await expect(page.getByRole('dialog')).toContainText('Only grouped squat'); await button(page, 'Close note').click(); await expect(details.getByRole('region', { name: 'Saved superset 1' }).locator('.superset-round')).toHaveCount(3)
   const completed = (await records(page)).sessions[0]
   await button(page, 'Create').click(); await cardAction(page, card(page), 'Edit')
   await page.locator('.superset-settings').first().getByLabel('Superset name', { exact: true }).fill('7'); await button(page, 'Save plan').click()
@@ -111,14 +111,14 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await button(page, 'Settings').click();
   const pending = page.waitForEvent('download'); await confirmDownload(page)
   const bytes = await readFile((await (await pending).path())!), zip = await JSZip.loadAsync(bytes)
-  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(10)
+  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(11)
   expect(zip.file('csv/supersets.csv')).toBeTruthy()
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'groups.zip', mimeType: 'application/zip', buffer: bytes })
   await expect(page.getByRole('region', { name: 'Backup selection' })).toBeVisible()
   await page.getByLabel('Import choice').selectOption('new'); await page.getByLabel('Imported profile name').fill('Grouped restore')
   await button(page, 'Preview import').click(); await page.getByRole('checkbox', { name: /I confirm import under a new name/ }).check(); await button(page, 'Confirm and save').click()
   await expect(page.locator('input[name=name]')).toHaveValue('Grouped restore'); await page.reload()
-  await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await expect(page.getByRole('article', { name: 'Session Two-week supersets / Mixed day', exact: true })).toHaveCount(2)
+  await button(page, 'Calendar').click(); await button(page, 'Day').click(); await expect(page.locator('.calendar-event').filter({ hasText: 'Mixed day' })).toHaveCount(2)
 })
 
 test('finite run freezes its duration and scheduling edits preserve started/missed dates after template change', async ({ page }) => {
@@ -138,12 +138,12 @@ test('finite run freezes its duration and scheduling edits preserve started/miss
 })
 
 test('legacy AI asks for duration; rejected grouping retains input and imports stay bound to their owner', async ({ page, context }) => {
-  await open(page); await button(page, 'Import AI Output').click(); await field(page, 'AI output JSON').fill(JSON.stringify(planFixture()))
+  await open(page); await button(page, 'Imported').click(); await field(page, 'AI output JSON').fill(JSON.stringify(planFixture()))
   await button(page, 'Validate and preview').click(); await expect(field(page, 'Duration (weeks)')).toHaveValue('')
   await button(page, 'Save plan').click(); await expect(page.getByText('Enter a positive whole duration in weeks.', { exact: true })).toBeVisible()
   expect((await records(page)).plans).toHaveLength(0)
   await field(page, 'Duration (weeks)').fill('2'); await button(page, 'Save plan').click(); await expect(card(page, 'Four-day import')).toBeVisible()
-  await button(page, 'Import AI Output').click(); const invalid = groupedAI(); invalid.plan.days[0].exercises[1].superset = 99
+  await button(page, 'Imported').click(); const invalid = groupedAI(); invalid.plan.days[0].exercises[1].superset = 99
   await field(page, 'AI output JSON').fill(JSON.stringify(invalid)); await button(page, 'Validate and preview').click(); await expect(page.getByRole('alert')).toContainText('plan.days[0].exercises[1].superset')
   await field(page, 'AI output JSON').fill(JSON.stringify(groupedAI())); await button(page, 'Validate and preview').click()
   const second = await context.newPage(); await second.goto('./'); await button(second, 'Settings').click(); await createNamedProfile(second, 'Other')

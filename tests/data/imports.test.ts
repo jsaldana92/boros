@@ -35,7 +35,7 @@ test('optional defaults preserve absent values versus zero, Unicode, multiline p
   assert.equal(minimal.kind, 'workout')
   if (minimal.kind !== 'workout') return
   assert.deepEqual(minimal.workout, { name: 'A', sets: [{ reps: { min: 1, max: 1 }, rir: null }], restBetweenSetsSeconds: null, restAfterExerciseSeconds: null, instructions: '', youtubeUrl: null, tags: [] })
-  const value = draft('workout'); if (value.kind !== 'workout') return
+  const value = draft('workout'); if (value.kind !== 'exercise') return
   assert.equal(value.input.restBetweenSeconds, 0); assert.equal(value.input.restAfterSeconds, undefined)
   assert.deepEqual(value.input.sets[0].rir, { min: 0, max: 0 }); assert.equal(value.input.sets[1].rir, undefined)
   assert.equal(value.input.instructions, workoutFixture().workout.instructions)
@@ -87,7 +87,7 @@ test('parsing, validation, draft conversion and discarded sessions write nothing
 
 test('final imports resolve normalized profile tags atomically and plans create standalone library defaults', async (t) => {
   const { db, id, profiles } = await setup(t)
-  const plan = draft('plan'), workout = draft('workout'); if (plan.kind !== 'plan' || workout.kind !== 'workout') return
+  const plan = draft('plan'), workout = draft('workout'); if (plan.kind !== 'plan' || workout.kind !== 'exercise') return
   const other = await profiles.create('Other'); await profiles.select(other.id)
   const session = importSession(id, db)
   await session.savePlan(plan.input)

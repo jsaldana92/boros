@@ -20,7 +20,7 @@ export const sessionOrder = (a: CompletedSession, b: CompletedSession) => Date.p
 
 // Only frozen explicit provenance may link an occurrence to Overall. Never infer
 // identity from a name or a mutable source plan's current contents.
-export function exerciseIdentity(planId: string, dayId: string, exercise: PlanExercise) {
+export function exerciseIdentity(planId: string | undefined, dayId: string, exercise: PlanExercise) {
   const source = exercise.source
   if (source?.kind === 'exercise') return `library:${source.id}`
   if (source?.kind === 'plan' && source.libraryId) return `library:${source.libraryId}`
@@ -44,7 +44,7 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
   for (const run of runs) for (const revision of run.revisions) for (const day of revision.days) collect(run.id, day, revision.createdAt)
   for (const session of sessions) {
     const run = runs.find((r) => r.id === session.occurrence?.scheduleId && r.planId === session.sourcePlanId)
-    const instanceId = run?.id ?? legacyPlanKey(session.sourcePlanId)
+    const instanceId = run?.id ?? (session.source ? `standalone:${session.id}` : legacyPlanKey(session.sourcePlanId!))
     collect(instanceId, session.day, session.completedAt)
     const savedDraft = drafts.find((d) => d.profileId === profileId && d.id === session.draftId && d.finalizedAt && d.sourcePlanId === session.sourcePlanId && d.sourceDayId === session.sourceDayId)
     for (const [index, occurrence] of session.day.exercises.entries()) {

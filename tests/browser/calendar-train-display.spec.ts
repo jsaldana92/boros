@@ -16,7 +16,7 @@ async function setup(page: Page, names = ['Display']) {
   if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
   await deviceZone(page, 'UTC')
   for (const name of names) {
-    await b(page, 'Create').click(); await b(page, 'Import AI Output').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name, durationWeeks: 3, trainingDaysPerWeek: 3, days: ['Upper', 'Lower', 'Pull'].map(name => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(planCard(page, name)).toBeVisible()
+    await b(page, 'Create').click(); await b(page, 'Imported').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name, durationWeeks: 3, trainingDaysPerWeek: 3, days: ['Upper', 'Lower', 'Pull'].map(name => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(planCard(page, name)).toBeVisible()
   }
 }
 async function select(page: Page, name = 'Display') { await b(page, 'Train').click(); await b(page, 'Add Plan').click(); await page.getByRole('dialog').getByRole('article', { name: `Plan ${name}` }).getByRole('button').click(); await expect(page.getByRole('dialog')).toHaveCount(0) }
@@ -24,22 +24,22 @@ async function saveDay(page: Page, name: string, partial = false) {
   await day(page, name).click(); await b(page, 'Start').click()
   for (let i = 1; i <= (partial ? 1 : 2); i++) { await f(page, `Press set ${i} Weight (kg)`).fill('0'); await f(page, `Press set ${i} Repetitions`).fill('5') }
   await b(page, 'Save').click(); if (partial) await b(page, 'Save partial session').click()
-  await expect(page.getByRole('region', { name: 'Saved session details' })).toBeVisible(); await b(page, 'Back to training days').click()
+  await expect(page.getByRole('region', { name: 'Saved session details' })).toBeVisible(); await b(page, 'Back to workouts').click()
 }
 
 test('unscheduled weekly layout is visual only; full, partial and manual activity appears once on actual Thursday', async ({ page }) => {
   await setup(page); await select(page); const address = page.url(), original = (await rows(page, 'schedules'))[0]
-  await expect(planCard(page).locator('button > span')).toHaveText(['Week 1', '3 weeks · 3 training days · 4 rest days'])
+  await expect(planCard(page).locator('button > span')).toHaveText(['Week 1', '3 weeks · 3 workouts · 4 rest days'])
   await b(page, 'Calendar').click(); await expect(page.locator('.calendar-event')).toHaveCount(0)
   await b(page, 'Train').click(); await planCard(page).getByRole('button').click(); await expect(f(page, 'Program context')).toHaveCount(0)
   await expect(day(page, 'Upper')).toContainText('Monday'); await expect(day(page, 'Lower')).toContainText('Tuesday'); await expect(day(page, 'Pull')).toContainText('Wednesday'); await expect(page.locator('.rest-day-card')).toHaveCount(4)
-  await expect(page.getByRole('region', { name: 'Program week', exact: true }).locator(':scope > p.muted')).toHaveText('3 weeks · 3 training days · 4 rest days · Unscheduled')
+  await expect(page.getByRole('region', { name: 'Program week', exact: true }).locator(':scope > p.muted')).toHaveText('3 weeks · 3 workouts · 4 rest days · Unscheduled')
   await saveDay(page, 'Upper'); await saveDay(page, 'Lower', true); await day(page, 'Pull').click(); await b(page, 'Mark as Complete').click()
   await b(page, 'Calendar').click(); await b(page, 'Week').click(); await f(page, 'Calendar date').fill('2026-10-08')
   await expect(date(page, '2026-10-08').locator('.calendar-event')).toHaveCount(3); await expect(page.locator('.calendar-event')).toHaveCount(3); await expect(date(page, '2026-10-05').locator('.calendar-event')).toHaveCount(0)
-  for (const [name, status] of [['Upper', 'Completed'], ['Lower', 'Incomplete'], ['Pull', 'Completed']]) await expect(date(page, '2026-10-08').locator('.calendar-event').filter({ hasText: name }).locator('.status-pill')).toHaveText(status)
+  for (const [name, status] of [['Upper', 'Completed'], ['Lower', 'Completed'], ['Pull', 'Completed']]) await expect(date(page, '2026-10-08').locator('.calendar-event').filter({ hasText: name }).locator('.status-pill')).toHaveText(status)
   await date(page, '2026-10-08').locator('.calendar-event').filter({ hasText: 'Upper' }).click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toBeVisible()
-  await b(page, 'Calendar').click(); await page.locator('.calendar-event').filter({ hasText: 'Pull' }).click(); await expect(page.getByRole('dialog')).toContainText('Manually completed'); await page.keyboard.press('Escape')
+  await page.getByRole('dialog', { name: 'Completed workout' }).getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.calendar-event').filter({ hasText: 'Pull' }).click(); await expect(page.getByRole('dialog')).toContainText('Manually completed'); await page.keyboard.press('Escape')
   await page.reload(); await expect(page.locator('.calendar-event')).toHaveCount(3); expect(page.url()).toBe(address)
   const saved = (await rows(page, 'schedules'))[0]; expect(saved.id).toBe(original.id); expect(saved.kind).toBe('unscheduled'); expect(saved.revisions).toEqual(original.revisions)
   await b(page, 'Settings').click(); await createNamedProfile(page, 'Other'); await b(page, 'Calendar').click(); await expect(page.locator('.calendar-event')).toHaveCount(0)
@@ -117,7 +117,7 @@ test('month sections, stable colors, distinct rings, concise menus and keyboard 
 test('legacy multiple active instances bind to the clicked card without a context selector or silent fallback', async ({ page, context }) => {
   await setup(page); await select(page)
   await page.evaluate(async () => { const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('boros'); r.onsuccess = () => resolve(r.result) }); const runs: any[] = await new Promise(resolve => { const r = db.transaction('schedules').objectStore('schedules').getAll(); r.onsuccess = () => resolve(r.result) }); const clone = structuredClone(runs[0]); clone.id = crypto.randomUUID(); clone.revisions[0].planName = 'Other instance'; clone.durationWeeks = 8; clone.endDate = '2026-11-29'; await new Promise<void>((resolve, reject) => { const tx = db.transaction('schedules', 'readwrite'); tx.objectStore('schedules').add(clone); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error) }); db.close() })
-  await page.reload(); await expect(planCard(page, 'Other instance')).toContainText('8 weeks · 3 training days · 4 rest days'); await planCard(page, 'Other instance').getByRole('button').click(); await expect(page.getByRole('heading', { level: 1 })).toHaveText('Other instance'); await expect(f(page, 'Program context')).toHaveCount(0); await day(page).click(); await b(page, 'Skip').click()
+  await page.reload(); await expect(planCard(page, 'Other instance')).toContainText('8 weeks · 3 workouts · 4 rest days'); await planCard(page, 'Other instance').getByRole('button').click(); await expect(page.getByRole('heading', { level: 1 })).toHaveText('Other instance'); await expect(f(page, 'Program context')).toHaveCount(0); await day(page).click(); await b(page, 'Skip').click()
   const runs = await rows(page, 'schedules'); expect(runs.find(r => r.revisions[0].planName === 'Display').outcomes).toBeUndefined(); expect(runs.find(r => r.revisions[0].planName === 'Other instance').outcomes).toHaveLength(1)
   const peer = await context.newPage(); await peer.clock.setFixedTime(new Date('2026-10-08T12:00:00Z')); await peer.goto('./'); await b(peer, 'Calendar').click(); await manageRun(peer, 'End', 'Other instance'); await peer.getByRole('dialog', { name: 'Ending a Plan?' }).getByRole('button', { name: 'End', exact: true }).click(); await returnCalendar(peer); await runPage(peer, 'Previous Plans'); await peer.getByRole('article', { name: 'Run Other instance' }).getByRole('button').click(); await b(peer, 'Delete').click(); await peer.getByRole('dialog', { name: 'Delete Plan?' }).getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(page.getByText('This plan instance is unavailable. Return to Plans to choose one.')).toBeVisible(); await expect(page.locator('.training-day-card')).toHaveCount(0)

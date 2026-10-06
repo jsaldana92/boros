@@ -1,3 +1,4 @@
+import { WorkoutEditor } from './WorkoutEditor'
 import { CreateLeaveGuard } from './CreateLeaveGuard'
 import { EditorTitle } from './EditorTitle'
 import { useEffect, useRef, useState } from 'react'
@@ -30,11 +31,11 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
   useEffect(() => { setDirty(!!text.trim() || !!preview) }, [text, preview, setDirty])
   const instructions = formattingInstructions(kind)
   const cancelPreview = () => { setPreview(undefined); requestAnimationFrame(() => document.getElementById('validate-import')?.focus()) }
-  return <section className="import-panel" aria-label="Import AI Output"><CreateLeaveGuard kind={preview?.draft.kind === 'workout' ? 'exercise' : 'plan'} enabled={preview?.draft.kind !== 'plan'} />
+  return <section className="import-panel" aria-label="Import AI Output"><CreateLeaveGuard kind={preview?.draft.kind ?? 'plan'} enabled={!preview || preview.draft.kind === 'exercise'} />
     {!preview && <EditorTitle path={['Create', 'AI']} />}
     {!preview ? <>
       <p className="muted">Use these instructions with your own request in an external chatbot, then paste its JSON here. Boros does not connect to an AI service.</p>
-      <label htmlFor="instruction-kind">Formatting instructions for</label><select id="instruction-kind" value={kind} onChange={(event) => { setKind(event.target.value as ImportKind); setClipboard('') }}><option value="plan">Plan</option><option value="workout">Exercise</option></select>
+      <label htmlFor="instruction-kind">Formatting instructions for</label><select id="instruction-kind" value={kind} onChange={(event) => { setKind(event.target.value as ImportKind); setClipboard('') }}><option value="plan">Plan</option><option value="workout">Workout</option><option value="exercise">Exercise</option></select>
       <label htmlFor="formatting-instructions">Formatting instructions</label><textarea id="formatting-instructions" className="formatting-instructions" ref={instructionsRef} readOnly value={instructions} />
       <button type="button" onClick={async () => {
         try { await navigator.clipboard.writeText(instructions); setClipboard('Formatting instructions copied.') }
@@ -51,9 +52,9 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
     </> : <>
       <p className="storage-notice">Draft. Nothing is stored until you save. Plans keep every imported prescription. An existing exercise name reuses its library template without changing its defaults. For a new repeated name, the first occurrence becomes the library default. Rename a conflicting plan or standalone exercise before saving.</p>
       {result?.error && <p role="alert">Existing sources could not be loaded. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry sources</button></p>}
-      {preview.draft.kind === 'workout'
+      {preview.draft.kind === 'exercise'
         ? <PrescriptionEditor initial={preview.draft.input} title="Review exercise" tags={result?.data?.tags ?? []} initialDirty onDirty={() => setDirty(true)} onClose={cancelPreview} onSubmit={async (input) => { const saved = await preview.session.saveWorkout(input); setDirty(false); onClose(`Saved ${saved.name}.`) }} />
-        : <PlanEditor profileId={profileId} initial={preview.draft.input} initialDirty choices={result?.data?.choices ?? []} tags={result?.data?.tags ?? []} onSave={preview.session.savePlan} onClose={cancelPreview} onSaved={(name) => { setDirty(false); onClose(`Saved ${name}.`) }} />}
+        : preview.draft.kind === 'workout' ? <WorkoutEditor profileId={profileId} initial={preview.draft.input} initialDirty onClose={cancelPreview} onSave={preview.session.saveLibraryWorkout} onSaved={(name) => { setDirty(false); onClose(`Saved ${name}.`) }} /> : <PlanEditor profileId={profileId} initial={preview.draft.input} initialDirty choices={result?.data?.choices ?? []} tags={result?.data?.tags ?? []} onSave={preview.session.savePlan} onClose={cancelPreview} onSaved={(name) => { setDirty(false); onClose(`Saved ${name}.`) }} />}
     </>}
     {confirm && <ConfirmDialog title="Discard pasted input?" confirmLabel="Discard" onCancel={() => setConfirm(false)} onConfirm={() => onClose()}><p>Your pasted text will be lost. No imported records have been saved.</p></ConfirmDialog>}
   </section>

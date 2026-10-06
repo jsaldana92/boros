@@ -9,6 +9,7 @@ export function spreadsheetCell(value: unknown) {
   return typeof value === 'string' && /^[\s\uFEFF]*(?:[=+\-@＝＋－＠]|\t|\r|\n)/u.test(value) ? `'${value}` : value
 }
 export function csvTables(data: BackupData) {
+  const libraryWorkouts = data.backupSchemaVersion >= 11
   const current = data.backupSchemaVersion >= 2
   const weekly = data.backupSchemaVersion >= 5
   const snapshotInstructions = data.backupSchemaVersion >= 7 ? ',planInstructions' : ''
@@ -22,8 +23,9 @@ export function csvTables(data: BackupData) {
   const librarySets = table('library_sets', 'profileId,libraryExerciseId,setOrder,repsMin,repsMax,rirMin,rirMax')
   const tagLinks = table('exercise_tags', 'profileId,libraryExerciseId,tagId,tagOrder')
   table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : '') + (weekly ? ',notes' : '') + (data.backupSchemaVersion >= 7 ? ',instructions' : ''), data.plans as unknown as Row[])
+  if (libraryWorkouts) table('workouts', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt,instructions,notes', data.workouts as unknown as Row[])
   const definitions = data.backupSchemaVersion >= 10 ? table('unique_weeks', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,weekId,weekOrder,dayId,dayOrder') : []
-  const days = table('days', `${scope},name`)
+  const days = table('days', `${scope},name${libraryWorkouts ? ",sourceWorkoutId,instructions,notes" : ""}`)
   const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}${data.backupSchemaVersion >= 4 ? ',templateId' : ''}`)
   const groups = current ? table('supersets', `${scope},groupId,number,blockOrder,restBetweenRoundsSeconds,restAfterGroupSeconds`) : []
   const prescriptionSets = table('prescription_sets', `${scope},exerciseOccurrenceId,exerciseOrder,setOrder,repsMin,repsMax,rirMin,rirMax${data.backupSchemaVersion >= 10 ? ',setId' : ''}`)
@@ -41,9 +43,9 @@ export function csvTables(data: BackupData) {
   const assignments = table('schedule_assignments', 'profileId,scheduleId,scheduleRevisionId,assignmentOrder,dayId,weekday')
   const event = 'occurrenceKey,scheduleId,scheduleRevisionId,scheduledDate,scheduledWeek,timeZone'
   const structureSets = data.backupSchemaVersion >= 9 ? table('session_structure', 'profileId,ownerKind,ownerId,amended,exerciseOccurrenceId,setOrder,setId,round') : []
-  const drafts = table('drafts', `profileId,id,sourcePlanId,sourceDayId,planName,revision,activeSourceKey,startedAt,updatedAt,finalizedAt,${event}${snapshotInstructions}`)
+  const drafts = table('drafts', `profileId,id,sourcePlanId,sourceDayId,planName,revision,activeSourceKey,startedAt,updatedAt,finalizedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}`)
   const draftResults = table('draft_results', 'profileId,draftId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,loadText,repsText,rirText,unit,skipped')
-  const sessions = table('sessions', `profileId,id,draftId,sourcePlanId,sourceDayId,planName,revision,partial,startedAt,completedAt,loggedAt,${event}${snapshotInstructions}`)
+  const sessions = table('sessions', `profileId,id,draftId,sourcePlanId,sourceDayId,planName,revision,partial,startedAt,completedAt,loggedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}`)
   const sessionResults = table('session_results', 'profileId,sessionId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,skipped,weightKg,load,unit,reps,rir')
   const notes = table('notes', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,exerciseOccurrenceId,noteKind,text')
   table('progress', 'profileId,id,weightKg,measuredAt,measuredLocal,timeZone,offsetMinutes,loggedAt,updatedAt,revision,photoId,lastMutationId', data.measurements as unknown as Row[])
@@ -52,7 +54,7 @@ export function csvTables(data: BackupData) {
   const writeSets = (target: Row[], context: Row, sets: ExerciseInput['sets'], ids?: string[]) => sets.forEach((set, i) => target.push({ ...context, setOrder: i + 1, setId: ids?.[i], repsMin: set.reps.min, repsMax: set.reps.max, rirMin: set.rir?.min, rirMax: set.rir?.max }))
   const snapshotDays = (context: Row, list: TrainingDay[]) => list.forEach((day, d) => {
     const parent = { profileId: data.profile.id, ...context, dayId: day.id, dayOrder: d + 1 }
-    days.push({ ...parent, name: day.name })
+    days.push({ ...parent, name: day.name, sourceWorkoutId: day.sourceWorkoutId, instructions: day.instructions, notes: day.notes })
     const blocks = [...new Set(day.exercises.map((item) => item.groupId ?? item.id))]
     for (const group of day.groups ?? []) groups.push({ ...parent, ...group, groupId: group.id, blockOrder: blocks.indexOf(group.id) + 1 })
     day.exercises.forEach((exercise, e) => {
@@ -72,6 +74,7 @@ export function csvTables(data: BackupData) {
     if (data.backupSchemaVersion >= 10 && source.weeks) planWeeks(source).forEach((week, index) => week.days.forEach((day, d) => definitions.push({ profileId: data.profile.id, ...context, weekId: week.id, weekOrder: index + 1, dayId: day.id, dayOrder: d + 1 })))
     snapshotDays(context, source.days)
   }
+  for (const workout of data.workouts ?? []) snapshotDays({ ownerKind: 'workout', ownerId: workout.id }, [workout])
   for (const plan of data.plans) snapshotWeeks({ ownerKind: 'plan', ownerId: plan.id, sourcePlanId: plan.id }, plan)
   for (const schedule of data.schedules) schedule.revisions.forEach((revision, i) => {
     revisions.push({ ...revision, profileId: data.profile.id, scheduleId: schedule.id, planId: schedule.planId, revisionOrder: i + 1 })
@@ -81,7 +84,7 @@ export function csvTables(data: BackupData) {
   for (const [kind, records, target, results] of [['draft', data.drafts, drafts, draftResults], ['session', data.sessions, sessions, sessionResults]] as const) for (const record of records) {
     if (data.backupSchemaVersion >= 9) record.structure?.exercises.forEach((exercise) => exercise.sets.forEach((set, index) => structureSets.push({ profileId: data.profile.id, ownerKind: kind, ownerId: record.id, amended: record.structure!.amended, exerciseOccurrenceId: exercise.id, setOrder: index + 1, setId: set.id, round: set.round })))
     const ref = record.occurrence
-    target.push({ ...record, scheduleId: ref?.scheduleId, scheduleRevisionId: ref?.scheduleRevisionId, scheduledDate: ref?.scheduledDate, scheduledWeek: ref?.scheduledWeek, timeZone: ref?.timeZone })
+    target.push({ ...record, sourceKind: record.source?.kind, sourceWorkoutId: record.source?.workoutId, completionTimeZone: record.timeZone, scheduleId: ref?.scheduleId, scheduleRevisionId: ref?.scheduleRevisionId, scheduledDate: ref?.scheduledDate, scheduledWeek: ref?.scheduledWeek, timeZone: ref?.timeZone })
     const context = { profileId: data.profile.id, ownerKind: kind, ownerId: record.id, sourcePlanId: record.sourcePlanId, dayId: record.day.id }
     snapshotDays(context, [record.day])
     const input = 'input' in record ? record.input : record

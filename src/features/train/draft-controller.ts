@@ -88,11 +88,11 @@ export class DraftController {
       this.disposed = true; this.discarded = true; clearTimeout(this.timeout); this.persisted = this.sequence; this.status = 'saved'
     })
   }
-  complete(allowPartial: boolean) {
+  complete(allowPartial: boolean, library?: { name: string }) {
     const completedAt = new Date().toISOString()
     return this.command(async () => {
       await this.persist()
-      const result = await this.service.complete(this.record.profileId, this.record.id, this.record.revision, this.input, allowPartial, completedAt)
+      const result = await this.service.complete(this.record.profileId, this.record.id, this.record.revision, this.input, allowPartial, completedAt, library)
       this.record = { ...this.record, finalizedAt: result.completedAt }; this.persisted = this.sequence; this.status = 'saved'; return result
     })
   }

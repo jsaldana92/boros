@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useWorkspace } from '../../app/workspace-context'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 
-export function CreateLeaveGuard({ kind, enabled = true }: { kind: 'plan' | 'exercise'; enabled?: boolean }) {
+export function CreateLeaveGuard({ kind, enabled = true }: { kind: 'plan' | 'exercise' | 'workout'; enabled?: boolean }) {
   const { dirty, registerLeaveGuard } = useWorkspace(), current = useRef(dirty)
   useLayoutEffect(() => { current.current = dirty }, [dirty])
   const pending = useRef<((value: boolean) => void) | undefined>(undefined), [open, setOpen] = useState(false)

@@ -13,7 +13,7 @@ const fixture = () => ({ schemaVersion: 1, kind: 'plan', plan: { name: 'Training
 async function open(page: Page) {
   await page.goto('./'); await button(page, 'Create').click()
   const notice = button(page, 'Understood'); if (await notice.isVisible()) await notice.click()
-  await button(page, 'Import AI Output').click(); await input(page, 'AI output JSON').fill(JSON.stringify(fixture()))
+  await button(page, 'Imported').click(); await input(page, 'AI output JSON').fill(JSON.stringify(fixture()))
   await button(page, 'Validate and preview').click(); await input(page, 'Duration (weeks)').fill('2'); await button(page, 'Save plan').click()
   await expect(page.getByRole('article', { name: 'Plan Training plan', exact: true })).toBeVisible()
   await startWeekly(page, 'Training plan', 'Upper')
@@ -67,13 +67,13 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   await page.screenshot({ path: testInfo.outputPath('train-dark-320.png'), fullPage: true })
   await button(page, 'Save').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Complete session')
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('0 kg · 5 reps · 0 actual RIR')
-  await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Exercise note')
+  await button(page, 'Note for Press').click(); await expect(page.getByRole('dialog')).toContainText('Exercise note'); await button(page, 'Close note').click()
   expect(await recordCounts(page)).toEqual([1, 1]); await expect(page).toHaveURL(address)
   await button(page, 'Create').click(); const plan = page.getByRole('article', { name: 'Plan Training plan', exact: true })
   await cardAction(page, plan, 'Edit'); await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit')
   await input(page, 'Exercise name').fill('Changed source'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
   await cardAction(page, plan, 'Archive'); await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click()
-  await button(page, 'Train').click(); await page.getByRole('button', { name: /^Saved sessions/ }).click(); await button(page, 'Review session').click(); await expect(page.getByRole('heading', { name: 'Press', exact: true })).toBeVisible(); await expect(page.getByText('Changed source', { exact: true })).toHaveCount(0)
+  await button(page, 'Calendar').click(); await button(page, 'Day').click(); await page.locator('.calendar-event').filter({ hasText: 'Completed' }).first().click(); await expect(page.getByRole('heading', { name: 'Press', exact: true })).toBeVisible(); await expect(page.getByText('Changed source', { exact: true })).toHaveCount(0)
 })
 
 test('cancel Clear and partial Save preserve input; explicit skips and Clear affect only this draft', async ({ page }) => {
@@ -83,7 +83,7 @@ test('cancel Clear and partial Save preserve input; explicit skips and Clear aff
   await input(page, 'Row set 1 Weight (kg)').fill('-1'); await button(page, 'Save').click(); await expect(page.getByRole('alert')).toContainText('Correct invalid')
   await input(page, 'Skip Row set 1').check(); await button(page, 'Save').click(); await button(page, 'Save partial session').click()
   await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Partial session'); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Skipped')
-  await button(page, 'Back to training days').click(); await button(page, 'Next week').click(); await expect(page.locator('.training-day-card')).toContainText('Pending'); await page.locator('.training-day-card').click(); await button(page, 'Start').click(); await fillSet(page); await note(page, 'Note for Press', 'Remove me'); await saved(page)
+  await button(page, 'Back to workouts').click(); await button(page, 'Next week').click(); await expect(page.locator('.training-day-card')).toContainText('Pending'); await page.locator('.training-day-card').click(); await button(page, 'Start').click(); await fillSet(page); await note(page, 'Note for Press', 'Remove me'); await saved(page)
   await button(page, 'REST Press after set 1').click(); await closeTimer(page); await input(page, 'Press set 2 Repetitions').fill('9')
   await button(page, 'Clear').click(); await page.getByRole('dialog').getByRole('button', { name: 'Clear', exact: true }).click(); await saved(page)
   await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue(''); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)

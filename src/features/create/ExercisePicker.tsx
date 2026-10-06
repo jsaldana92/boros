@@ -25,7 +25,7 @@ export function ExercisePicker({ choices, onChoose, onClose, remaining, path = [
     <EditorTitle path={path} />
     <LibraryFilters noun="exercises to add" search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
     <div className="actions selection-actions"><label className="check-label"><input type="checkbox" disabled={!visible.length} checked={all} onChange={() => setSelected(all ? [] : visible.map((choice) => choice.id))} />Select All</label><button type="button" disabled={!selection.length || selection.length > remaining} onClick={() => add(visible.filter((choice) => selection.includes(choice.id)))}>Add selected</button></div>
-    {selection.length > remaining && <p role="alert">Select at most {remaining} more exercises for this day.</p>}
+    {selection.length > remaining && <p role="alert">Select at most {remaining} more exercises for this workout.</p>}
     {!visible.length && <p>No matching exercises.</p>}
     <div className="exercise-list" role="region" aria-label="Available exercises">{visible.map((choice) => <div className="exercise-selection-row" key={choice.id}>
       <label className="check-label"><input type="checkbox" checked={selection.includes(choice.id)} onChange={(event) => setSelected(event.target.checked ? [...selection, choice.id] : selection.filter((id) => id !== choice.id))} />{choice.prescription.name}</label>

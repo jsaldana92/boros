@@ -13,7 +13,7 @@ async function rows(page: Page, store: string) {
 async function setup(page: Page) {
   await page.clock.setFixedTime(new Date('2026-10-05T12:00:00Z'))
   await page.goto('./'); await expect(b(page, 'Calendar')).toBeVisible(); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
-  await b(page, 'Create').click(); await b(page, 'Import AI Output').click()
+  await b(page, 'Create').click(); await b(page, 'Imported').click()
   await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name: 'Calendar strength', durationWeeks: 5, trainingDaysPerWeek: 4, days: ['Upper', 'Lower', 'Push', 'Pull'].map((name) => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }] }] })) } }))
   await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(page.getByRole('article', { name: 'Plan Calendar strength', exact: true })).toBeVisible()
   await b(page, 'Calendar').click()
@@ -85,7 +85,7 @@ test('legacy duplicates, scheduled/unscheduled runs, 50/40/10 rings, guarded Lea
   })
   await page.reload(); await expect(b(page, 'Review Current Plans')).toBeVisible(); await runPage(page)
   await expect(page.getByRole('article', { name: 'Run Calendar strength' })).toHaveCount(3)
-  const ring = page.getByRole('img', { name: 'Plan: 10 of 20 planned days, 50%' }); await expect(ring).toBeVisible(); await expect(page.getByRole('img', { name: 'Completed: 8 of 20 planned days, 40%' })).toBeVisible(); await expect(page.getByRole('img', { name: 'Skipped: 2 of 20 planned days, 10%' })).toBeVisible()
+  const ring = page.getByRole('img', { name: 'Plan: 10 of 20 planned workouts, 50%' }); await expect(ring).toBeVisible(); await expect(page.getByRole('img', { name: 'Completed: 8 of 20 planned workouts, 40%' })).toBeVisible(); await expect(page.getByRole('img', { name: 'Skipped: 2 of 20 planned workouts, 10%' })).toBeVisible()
   const circles = page.locator('.plan-card').filter({ has: ring }).locator('.run-ring'), positions = await circles.evaluateAll(nodes => nodes.map(node => { const r = node.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height } }))
   expect(new Set(positions.map(p => p.y)).size).toBe(1); expect(positions[1].x).toBeGreaterThan(positions[0].x)
   const center = await circles.first().locator('span').boundingBox(); expect(Math.abs(center!.y + center!.height / 2 - positions[0].y - positions[0].height / 2)).toBeLessThan(2)

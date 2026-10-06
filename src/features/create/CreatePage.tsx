@@ -1,3 +1,4 @@
+import { WorkoutLibrary } from './WorkoutLibrary'
 import { createId } from '../../lib/browser-crypto.ts'
 import { ImportPanel } from './ImportPanel'
 import { useRef, useState, type ReactNode } from 'react'
@@ -20,13 +21,14 @@ export function CreatePage() {
 
 function CreateWorkspace({ profileId }: { profileId: string }) {
   const [mode, setMode] = useState('library')
+  const [startWorkout, setStartWorkout] = useState(0)
   const [startNew, setStartNew] = useState(0)
   const [importStatus, setImportStatus] = useState('')
   const closeImport = (message = '') => { setMode('library'); setImportStatus(message); requestAnimationFrame(() => document.getElementById('import-output-trigger')?.focus()) }
-  return <><ExerciseLibrary plans={<PlanLibrary profileId={profileId} startNew={startNew} onEditing={(value) => setMode(value ? 'plan' : 'library')} hidden={mode === 'exercise' || mode === 'import'} />} profileId={profileId} planOpen={mode === 'plan' || mode === 'import'} onImport={() => { setImportStatus(''); setMode('import') }} onEditing={(value) => setMode(value ? 'exercise' : 'library')} onPlan={() => { setStartNew((value) => value + 1); setMode('plan') }} />{mode === 'import' && <ImportPanel profileId={profileId} onClose={closeImport} />}<p role="status">{importStatus}</p></>
+  return <><ExerciseLibrary plans={<PlanLibrary profileId={profileId} startNew={startNew} onEditing={(value) => setMode(value ? 'plan' : 'library')} hidden={mode !== 'library' && mode !== 'plan'} />} workouts={<WorkoutLibrary profileId={profileId} startNew={startWorkout} onEditing={value => setMode(value ? 'workout' : 'library')} hidden={mode !== 'library' && mode !== 'workout'} />} onWorkout={() => { setStartWorkout(v => v + 1); setMode('workout') }} profileId={profileId} planOpen={mode === 'plan' || mode === 'import' || mode === 'workout'} onImport={() => { setImportStatus(''); setMode('import') }} onEditing={(value) => setMode(value ? 'exercise' : 'library')} onPlan={() => { setStartNew((value) => value + 1); setMode('plan') }} />{mode === 'import' && <ImportPanel profileId={profileId} onClose={closeImport} />}<p role="status">{importStatus}</p></>
 }
 
-function ExerciseLibrary({ plans, profileId, planOpen, onPlan, onEditing, onImport }: { plans: ReactNode; profileId: string; planOpen: boolean; onPlan: () => void; onEditing: (value: boolean) => void; onImport: () => void }) {
+function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPlan, onEditing, onImport }: { plans: ReactNode; workouts: ReactNode; onWorkout: () => void; profileId: string; planOpen: boolean; onPlan: () => void; onEditing: (value: boolean) => void; onImport: () => void }) {
   const [attempt, setAttempt] = useState(0)
   const result = useLiveQuery(async () => {
     try { return { data: await exercises.library(profileId), error: '' } }
@@ -60,9 +62,10 @@ function ExerciseLibrary({ plans, profileId, planOpen, onPlan, onEditing, onImpo
     {!editor && !planOpen && <h1>Create</h1>}
     {editor && <ExerciseEditor key={editor.key} profileId={profileId} initial={editor.draft} original={editor.original} tags={data?.tags ?? []} onClose={close} onSaved={(name) => { close(); setStatus(`Saved ${name}.`) }} />}
     <div hidden={!!editor || planOpen}>
-      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button><button aria-label="Import AI Output" id="import-output-trigger" disabled={busy} onClick={onImport}>AI</button></div>
+      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button id="create-workout" aria-label="Create workout" onClick={onWorkout}>Workout</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button></div><button className="imported-button" id="import-output-trigger" disabled={busy} onClick={onImport}>Imported</button>
     </div>
     {plans}
+    {workouts}
     <div hidden={!!editor || planOpen}>
       <h2 className="library-heading">Exercises</h2>
       {!result && <p role="status">Loading exercises...</p>}

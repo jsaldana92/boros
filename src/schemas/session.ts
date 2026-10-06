@@ -6,21 +6,24 @@ import { displayNumber, fromKg, toKg, weightUnitSchema, type WeightUnit } from '
 
 const text = z.string().max(64)
 export const resultInputSchema = z.object({ load: text, reps: text, rir: text, unit: weightUnitSchema, skipped: z.boolean() }).strict()
-export const sessionInputSchema = z.object({ notes: z.string().max(20000), exercises: z.array(z.object({ id: z.string().uuid(), notes: z.string().max(20000), sets: z.array(resultInputSchema).min(1).max(100) }).strict()).min(1).max(100) }).strict()
+export const sessionInputSchema = z.object({ notes: z.string().max(20000), exercises: z.array(z.object({ id: z.string().uuid(), notes: z.string().max(20000), sets: z.array(resultInputSchema).min(1).max(100) }).strict()).min(0).max(100) }).strict()
 export type ResultInput = z.infer<typeof resultInputSchema>
 export type SessionInput = z.infer<typeof sessionInputSchema>
+export type StandaloneSource = { kind: 'workout'; workoutId: string } | { kind: 'custom'; workoutId?: string }
 export interface SessionDraft {
+  source?: StandaloneSource; timeZone?: string
   structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
-  id: string; profileId: string; revision: number; sourcePlanId: string; sourceDayId: string; activeSourceKey?: string
-  planName: string; planInstructions?: string; day: TrainingDay; input: SessionInput; startedAt: string; updatedAt: string; finalizedAt?: string
+  id: string; profileId: string; revision: number; sourcePlanId?: string; sourceDayId: string; activeSourceKey?: string
+  planName?: string; planInstructions?: string; day: TrainingDay; input: SessionInput; startedAt: string; updatedAt: string; finalizedAt?: string
 }
 export type RecordedSet = { skipped: true } | { skipped: false; weightKg: number; load: number; unit: WeightUnit; reps: number; rir?: number }
 export interface CompletedSession {
+  source?: StandaloneSource; timeZone?: string
   structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
-  id: string; draftId: string; profileId: string; revision: number; sourcePlanId: string; sourceDayId: string
-  planName: string; planInstructions?: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
+  id: string; draftId: string; profileId: string; revision: number; sourcePlanId?: string; sourceDayId: string
+  planName?: string; planInstructions?: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
   partial: boolean; startedAt: string; completedAt: string; loggedAt: string
 }
 export type RestTimer = { id: 'active'; token: string; profileId: string; draftId: string; label: string; alertedAt?: string } & ({ mode?: 'countdown'; durationSeconds: number; endAt: string } | { mode: 'countup'; startedAt: string })

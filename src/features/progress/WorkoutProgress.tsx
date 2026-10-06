@@ -49,7 +49,7 @@ export function WorkoutProgress({ mainContent, mainOnly = false }: { mainContent
       </div>
       {plan && <section hidden={!!item} className="progress-section progress-drilldown" aria-label="Plan analytics">
         <h2 id={!item ? 'analytics-heading' : undefined} tabIndex={-1}>{plan.name}</h2>
-        <div className="analytics-metrics"><Metric label="Times Completed" value={plan.timesCompleted} /><Metric label="Exercises Completed" value={plan.exercisesCompleted} /><Metric label="Training Days Completed" value={plan.daysCompleted} /><Metric label="Training Days Skipped" value={plan.daysSkipped} /></div>
+        <div className="analytics-metrics"><Metric label="Times Completed" value={plan.timesCompleted} /><Metric label="Exercises Completed" value={plan.exercisesCompleted} /><Metric label="Workouts Completed" value={plan.daysCompleted} /><Metric label="Workouts Skipped" value={plan.daysSkipped} /></div>
         <ItemBrowser key={plan.id} items={plan.items} tags={planTags} onSelect={(itemKey) => navigate({ planId: plan.id, itemKey })} />
         <div className="actions"><button onClick={() => navigate({}, true)}>Back</button></div>
       </section>}

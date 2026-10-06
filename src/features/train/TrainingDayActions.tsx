@@ -28,6 +28,6 @@ export function TrainingDayActions({ profileId, event, run, displayDate, onClose
     </div>{error && <p role="alert">{error}</p>}
   </ActionDialog>
     {discard && <ConfirmDialog title="Discard Progress?" confirmLabel="Discard Progress" destructive busy={busy} onCancel={() => setDiscard(false)} onConfirm={() => void act(async () => { await sessions.discard(profileId, event.draft!.id, event.draft!.revision); onClose() })}><p>Delete only this occurrence's draft, entered results, notes and timer. Previously completed sessions stay unchanged.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
-    {reset && <ConfirmDialog title="Reset this training day?" confirmLabel="Reset" destructive busy={busy} onCancel={() => setReset(undefined)} onConfirm={() => void act(async () => { await runActions.reset(reset); onClose() })}><p>Saved results for this occurrence will be deleted, along with its entered results, notes, draft, timer and completion or Skip marker. Other weeks, runs and measurements stay unchanged.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
+    {reset && <ConfirmDialog title="Reset this workout?" confirmLabel="Reset" destructive busy={busy} onCancel={() => setReset(undefined)} onConfirm={() => void act(async () => { await runActions.reset(reset); onClose() })}><p>Saved results for this occurrence will be deleted, along with its entered results, notes, draft, timer and completion or Skip marker. Other weeks, runs and measurements stay unchanged.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
   </>
 }

@@ -15,7 +15,7 @@ function fixture(name = 'Detailed plan') {
   ] } }
 }
 async function open(p: Page) { await p.goto('./'); await b(p, 'Create').click(); if (await b(p, 'Understood').isVisible()) await b(p, 'Understood').click(); await expect(b(p, 'Create Plan')).toBeEnabled() }
-async function preview(p: Page, payload: unknown) { await b(p, 'Import AI Output').click(); await f(p, 'AI output JSON').fill(JSON.stringify(payload)); await b(p, 'Validate and preview').click(); await expect(f(p, 'Plan name')).toBeVisible() }
+async function preview(p: Page, payload: unknown) { await b(p, 'Imported').click(); await f(p, 'AI output JSON').fill(JSON.stringify(payload)); await b(p, 'Validate and preview').click(); await expect(f(p, 'Plan name')).toBeVisible() }
 async function seed(p: Page) { await open(p); await preview(p, fixture()); await expect(f(p, 'Instructions')).toHaveValue(instructions); await f(p, 'Note (optional):').fill('Plan note\nSeparate text'); await b(p, 'Save plan').click(); await expect(card(p)).toBeVisible() }
 async function records(p: Page, store = 'plans') {
   return p.evaluate(async (store) => {
@@ -30,7 +30,7 @@ test('plan details show saved order, repeated occurrences, accurate targets and 
     await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Create').click()
     const trigger = card(page).getByRole('button'); await trigger.focus(); await page.keyboard.press('Enter')
     const details = page.getByRole('dialog', { name: 'Detailed plan', exact: true })
-    await expect(details).toBeVisible(); await expect(details).toContainText('12 weeks · 2 training days · 5 rest days')
+    await expect(details).toBeVisible(); await expect(details).toContainText('12 weeks · 2 workouts · 5 rest days')
     await expect(details.locator('.plan-details-day > h3')).toHaveText(['Upper', 'Lower'])
     await expect(details.locator('.plan-details-exercise h4, .plan-details-exercise h5')).toHaveText(['Warmup', 'Repeated', 'Partner', 'Repeated', 'Finish'])
     const box = details.locator('.plan-superset-members')
@@ -102,7 +102,7 @@ test('AI v3 without instructions and older payloads stay editable without invent
     await new Promise<void>((resolve, reject) => { const tx = db.transaction('plans', 'readwrite'), store = tx.objectStore('plans'), r = store.getAll(); r.onsuccess = () => { const plan = r.result.find((p) => p.name === 'Version 1'); delete plan.durationWeeks; plan.instructions = ' \n '; plan.notes = ' '; store.put(plan) }; tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error) }); db.close()
   })
   await page.reload(); await card(page, 'Version 1').getByRole('button').click()
-  const details = page.getByRole('dialog'); await expect(details).toContainText('Legacy unbounded duration · 1 training day · 6 rest days')
+  const details = page.getByRole('dialog'); await expect(details).toContainText('Legacy unbounded duration · 1 workout · 6 rest days')
   await expect(details.getByRole('region', { name: 'Instructions', exact: true })).toHaveCount(0); await expect(details.getByRole('region', { name: 'Note', exact: true })).toHaveCount(0); await expect(details.locator('hr')).toHaveCount(1)
   await expect(details.locator('.prescription-summary')).toHaveText('1 set · 5 reps')
 })

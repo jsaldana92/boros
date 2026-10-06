@@ -10,7 +10,7 @@ import { canonicalSnapshot, validateRestoreRecords } from './restore-records.ts'
 import type { ValidatedBackup } from './restore-format.ts'
 
 export type RestoreChoice = 'new' | 'replace' | 'device' | 'import' | 'clear'
-export const ownedStores = ['tags', 'exercises', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'photos'] as const
+export const ownedStores = ['tags', 'exercises', 'workouts', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'photos'] as const
 export type OwnedStore = typeof ownedStores[number]
 export interface PlanCounts { added: number; conflicts: number; replaced: number; removed: number; skipped: number }
 export interface RestorePlan {
@@ -61,15 +61,17 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     ? { id: newId, name: source.name, nameKey: source.nameKey, kind: source.kind, weightUnit: source.weightUnit, heightUnit: source.heightUnit, ...(source.timeZone ? { timeZone: source.timeZone } : {}), revision: 1, createdAt: at, updatedAt: at }
     : { ...structuredClone(source), id: newId, ...(choice === 'new' ? { name: displayName.trim(), nameKey: nameKey(displayName), kind: input!.profile.kind === 'guest' && displayName === 'Guest' ? 'guest' as const : 'named' as const } : {}) }
   if (!profile.nameKey || profile.name.length > 80) throw new Error('Enter an unused profile name of 1–80 characters.')
-  const result: ProfileSnapshot = { databaseVersion: 5, capturedAt: at, profile, tags: [], exercises: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
+  const result: ProfileSnapshot = { databaseVersion: 6, capturedAt: at, profile, tags: [], exercises: [], workouts: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
   const plan: RestorePlan = { id: newId, choice, targetId: local?.profile.id, targetName: local?.profile.name, targetFingerprint: local && snapshotFingerprint(local), targetPhotoFingerprint: local && await photoFingerprint(local.photos), result, counts, warnings, conflicts }
   if (choice === 'clear') { for (const key of ownedStores) counts[key].removed = local![key].length; return plan }
   const file = input!, device = current
   const localPlans = merging ? device!.plans : [], localExercises = merging ? device!.exercises : [], localTags = merging ? device!.tags : []
+  const localWorkouts = merging ? device!.workouts : [], workoutMatches = matches(file.workouts, localWorkouts, 'workout')
+  const workoutIds = new Map(file.workouts.map(w => [w.id, workoutMatches.get(w.id)?.id ?? w.id]))
   const planMatches = matches(file.plans, localPlans, 'plan'), exerciseMatches = matches(file.exercises, localExercises, 'exercise'), tagMatches = matches(file.tags, localTags, 'tag')
   const planIds = new Map(file.plans.map((p) => [p.id, planMatches.get(p.id)?.id ?? p.id])), exerciseIds = new Map(file.exercises.map((e) => [e.id, exerciseMatches.get(e.id)?.id ?? e.id])), tagIds = new Map(file.tags.map((t) => [t.id, tagMatches.get(t.id)?.id ?? t.id]))
-  for (const [label, found] of [['plan', planMatches], ['exercise', exerciseMatches], ['tag', tagMatches]] as const) for (const row of found.values()) conflicts.push(`${label}: ${row.name}`)
-  const mergeNamed = <T extends Named>(incoming: T[], locals: T[], found: Map<string, T>, key: 'plans' | 'exercises' | 'tags') => {
+  for (const [label, found] of [['workout', workoutMatches], ['plan', planMatches], ['exercise', exerciseMatches], ['tag', tagMatches]] as const) for (const row of found.values()) conflicts.push(`${label}: ${row.name}`)
+  const mergeNamed = <T extends Named>(incoming: T[], locals: T[], found: Map<string, T>, key: 'plans' | 'exercises' | 'tags' | 'workouts') => {
     const replaced = new Set(preferImport ? [...found.values()].map((row) => row.id) : [])
     const kept = locals.filter((row) => !replaced.has(row.id)), selected = incoming.filter((row) => preferImport || !found.has(row.id)).map((row) => ({ ...row, id: found.get(row.id)?.id ?? row.id }))
     counts[key].conflicts = found.size; counts[key].replaced = replaced.size; counts[key].skipped = preferImport ? 0 : found.size
@@ -77,13 +79,16 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     return { all: [...kept, ...selected], imported: selected }
   }
   const tags = mergeNamed(file.tags, localTags, tagMatches, 'tags'), exercises = mergeNamed(file.exercises, localExercises, exerciseMatches, 'exercises'), plans = mergeNamed(file.plans, localPlans, planMatches, 'plans')
+  const workouts = mergeNamed(file.workouts, localWorkouts, workoutMatches, 'workouts'); result.workouts = workouts.all
   result.tags = tags.all; result.exercises = exercises.all; result.plans = plans.all
   if (profile.selectedPlanIds) profile.selectedPlanIds = [...new Set(profile.selectedPlanIds.map((id) => choice === 'device' ? id : planIds.get(id)!).filter((id) => result.plans.some((p) => p.id === id)))]
   for (const exercise of exercises.imported) exercise.tagIds = exercise.tagIds.map((id) => tagIds.get(id)!)
   const importedPlanIds = new Set(file.plans.filter((p) => preferImport || !planMatches.has(p.id)).map((p) => p.id)), removedLocalPlans = new Set(preferImport ? [...planMatches.values()].map((p) => p.id) : [])
-  const retained = <T extends { sourcePlanId: string }>(rows: T[]) => rows.filter((row) => !removedLocalPlans.has(row.sourcePlanId))
-  const localSchedules = merging ? device!.schedules.filter((s) => !removedLocalPlans.has(s.planId)) : [], localDrafts = merging ? retained(device!.drafts) : [], localSessions = merging ? retained(device!.sessions) : []
-  const importedSchedules = file.schedules.filter((s) => importedPlanIds.has(s.planId)), importedDrafts = file.drafts.filter((s) => importedPlanIds.has(s.sourcePlanId)), importedSessions = file.sessions.filter((s) => importedPlanIds.has(s.sourcePlanId))
+  const retained = <T extends { sourcePlanId?: string }>(rows: T[]) => rows.filter((row) => (!row.sourcePlanId || !removedLocalPlans.has(row.sourcePlanId)))
+  const incomingStandalone = new Set(file.drafts.filter(d => d.source).map(d => d.id))
+  const retainStandalone = <T extends { id: string; source?: unknown }>(rows: T[]) => rows.filter(row => !(preferImport && row.source && incomingStandalone.has(row.id)))
+  const localSchedules = merging ? device!.schedules.filter((s) => !removedLocalPlans.has(s.planId)) : [], localDrafts = merging ? retainStandalone(retained(device!.drafts)) : [], localSessions = merging ? retainStandalone(retained(device!.sessions)) : []
+  const importedSchedules = file.schedules.filter((s) => importedPlanIds.has(s.planId)), importedDrafts = file.drafts.filter((s) => (s.source ? preferImport || !device?.drafts.some(d => d.id === s.id && d.source) : !!s.sourcePlanId && importedPlanIds.has(s.sourcePlanId))), importedSessions = file.sessions.filter((s) => (s.source ? preferImport || !device?.drafts.some(d => d.id === s.id && d.source) : !!s.sourcePlanId && importedPlanIds.has(s.sourcePlanId)))
   const allocate = async (kind: string, rows: { id: string }[], retainedRows: { id: string }[]) => {
     const used = new Set(retainedRows.map((r) => r.id)), ids = new Map<string, string>()
     for (const row of rows) {
@@ -94,20 +99,27 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     return ids
   }
   const scheduleIds = await allocate('schedule', importedSchedules, localSchedules), draftIds = await allocate('draft', importedDrafts, [...localDrafts, ...localSessions])
-  const remapDay = (day: TrainingDay) => { for (const exercise of day.exercises) { if (exercise.templateId) exercise.templateId = exerciseIds.get(exercise.templateId) ?? exercise.templateId; if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } } }
+  const remapDay = (day: TrainingDay) => { if (day.sourceWorkoutId) day.sourceWorkoutId = workoutIds.get(day.sourceWorkoutId) ?? day.sourceWorkoutId; for (const exercise of day.exercises) { if (exercise.templateId) exercise.templateId = exerciseIds.get(exercise.templateId) ?? exercise.templateId; if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } } }
+  for (const w of workouts.imported) remapDay(w)
   for (const p of plans.imported) p.days.forEach(remapDay)
   for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const ref of schedule.occurrenceExceptions ?? []) { ref.scheduleId = schedule.id; ref.key = occurrenceKey(schedule.id, ref.dayId, ref.scheduledDate, ref.programWeek) } for (const revision of schedule.revisions) revision.days.forEach(remapDay); for (const outcome of schedule.outcomes ?? []) { outcome.ref.scheduleId = schedule.id; outcome.ref.key = occurrenceKey(schedule.id, outcome.ref.dayId, outcome.ref.scheduledDate, outcome.ref.programWeek); remapDay(outcome.day) } }
   for (const item of [...importedDrafts, ...importedSessions]) {
-    item.id = draftIds.get(item.id)!; item.sourcePlanId = planIds.get(item.sourcePlanId)!; remapDay(item.day)
+    item.id = draftIds.get(item.id)!; if (item.sourcePlanId) item.sourcePlanId = planIds.get(item.sourcePlanId)!; if (item.source?.workoutId) item.source.workoutId = workoutIds.get(item.source.workoutId) ?? item.source.workoutId; remapDay(item.day)
     if (item.occurrence) { item.occurrence.scheduleId = scheduleIds.get(item.occurrence.scheduleId)!; item.occurrence.key = occurrenceKey(item.occurrence.scheduleId, item.occurrence.dayId, item.occurrence.scheduledDate, item.occurrence.programWeek); item.occurrenceKey = item.occurrence.key }
     if ('draftId' in item) item.draftId = item.id
-    else item.activeSourceKey = item.finalizedAt ? undefined : item.occurrenceKey ? `scheduled:${item.occurrenceKey}` : `${item.sourcePlanId}:${item.sourceDayId}`
+    else item.activeSourceKey = item.finalizedAt || item.source ? undefined : item.occurrenceKey ? `scheduled:${item.occurrenceKey}` : `${item.sourcePlanId}:${item.sourceDayId}`
   }
   result.schedules = [...localSchedules, ...importedSchedules]; result.drafts = [...localDrafts, ...importedDrafts]; result.sessions = [...localSessions, ...importedSessions]
   for (const key of ['schedules', 'drafts', 'sessions'] as const) {
     const selected = key === 'schedules' ? importedSchedules : key === 'drafts' ? importedDrafts : importedSessions
     const kept = key === 'schedules' ? localSchedules : key === 'drafts' ? localDrafts : localSessions
     counts[key].added = selected.length; counts[key].removed = (merging ? device![key].length : 0) - kept.length; counts[key].skipped = file[key].length - selected.length
+    if (key !== 'schedules' && merging) {
+      const collisions = file[key].filter(row => row.source && device![key].some(old => old.id === row.id && old.source))
+      counts[key].conflicts = collisions.length; counts[key].replaced = preferImport ? collisions.length : 0
+      counts[key].added -= counts[key].replaced; counts[key].removed -= counts[key].replaced
+      if (key === 'drafts') for (const row of collisions) conflicts.push(`standalone session: ${row.id}`)
+    }
   }
   const localMeasurements = merging ? device!.measurements : [], measurementIds = new Set(file.measurements.map((m) => m.id))
   for (const m of file.measurements) {

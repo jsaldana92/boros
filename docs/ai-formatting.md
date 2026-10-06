@@ -2,12 +2,26 @@
 
 The application generates authoritative instructions from
 `src/features/create/interchange.ts` and schema-checked examples in
-`src/schemas/interchange.ts`. The current public contract is **AI v4**, with
-strict v1/v2/v3 readers. Database v5 remains unchanged; backups use their
-separate v10 format with strict v1-v9 compatibility.
+`src/schemas/interchange.ts`. The current public contract is **AI v5**, with
+strict v1-v4 readers. Database v6 adds the independent workout collection; backups
+use the separate v11 format with strict v1-v10 compatibility.
 
-Every v4 envelope has exactly `schemaVersion: 4`, `kind: "plan" | "workout"`,
-and the matching `plan` or `workout` payload. No internal IDs are accepted.
+Every v5 envelope has exactly `schemaVersion: 5`, `kind: "plan" | "workout" | "exercise"`,
+and exactly the matching payload. No internal IDs are accepted.
+
+`kind: "exercise"` contains one movement and its ordered sets. `kind: "workout"`
+contains `{ name, exercises, supersets? , instructions?, notes? }`, with 1-100
+ordered exercise prescriptions and the same contiguous group rules as plan workouts.
+Workout instructions and notes are separate optional plain text, up to 20,000
+characters. A workout has no duration, week count or plan identity. The editable
+workout preview uses the shared builder. One save atomically creates the workout,
+missing exercise templates and tags, reusing existing normalized exercise names
+without overwriting their defaults. Repeated prescriptions retain their own IDs.
+
+**Legacy meaning is frozen:** in schema versions 1-4, `kind: "workout"` and the
+`workout` payload mean one exercise. Only v5 uses that kind for a collection.
+Dispatch uses explicit version and kind; hybrid envelopes fail, with no guesses
+or silent reinterpretation. Legacy previews therefore remain exercise editors.
 
 For a plan, `name` and a finite positive safe-integer `durationWeeks` are required.
 Optional `instructions` and `notes` are separate plain-text strings, each at most
@@ -19,7 +33,7 @@ Optional `instructions` and `notes` are separate plain-text strings, each at mos
   `uniqueWeekCount` must divide `durationWeeks`; global `days` or a global day
   count are forbidden. A one-week plan therefore uses repeating mode.
 
-Days retain their ordered exercise snapshots and declared supersets. Exercise
+Workouts (the literal `days` array) retain their ordered exercise snapshots and declared supersets. Exercise
 prescriptions support heterogeneous ordered `sets`, positive rep ranges,
 optional RIR including zero, group membership, optional integer rest seconds
 including zero, instructions, optional notes, tags, and validated HTTPS YouTube
@@ -50,8 +64,8 @@ Both Plan and Exercise prompts use this initial-response instruction:
 
 Required unknown targets must be clarified before generating the final JSON.
 Examples illustrate the schema; they are not prescribed targets. The envelope's
-kind and payload must match. Workout is a standalone exercise; only Plan supports
-day/group membership and rest fields. No IDs or unsupported fields are accepted.
+kind and payload must match. The legacy literal `kind: "workout"` and payload key `workout` represent a standalone exercise; only Plan supports
+workout/group membership and rest fields. No IDs or unsupported fields are accepted.
 All rests use integer seconds in JSON; UI Minutes/Seconds inputs convert exactly.
 
 For a Plan superset with A: 2 sets × 20 and B: 2 sets × 8:
@@ -89,5 +103,13 @@ defaults may no longer be recoverable. Legacy provenance and Progress identities
 remain separate from the new defaults reference. Library Edit opens the standalone
 editor and saves directly.
 
-The public discriminator and payload key remain `workout`; UI terminology is
-Exercise. No public JSON fields or stored compatibility fields were renamed.
+In legacy v1-v4, the discriminator and payload key remain `workout` for one
+Exercise. V5 uses `exercise` for that object and `workout` for a collection.
+
+## Historical UI terminology revision (2026-10-05; superseded by v5 above)
+
+Workout now means an ordered collection of exercises. This changes generated
+instruction prose, not schema v4 or its strict older readers. `days`, `dayId`,
+`trainingDaysPerWeek` and the legacy standalone-exercise `kind: "workout"` value
+retain their published meanings. Examples/IDs and user-authored text are not
+rewritten. Backup schema v10 and IndexedDB v5 are unchanged.

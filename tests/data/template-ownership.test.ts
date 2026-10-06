@@ -126,12 +126,12 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
   const snapshot = await captureProfile(id, db), generated = await generateBackup(snapshot, 'ownership-test')
   for (const version of [1, 2, 3, 4, 5, 6] as const) {
     const zip = await JSZip.loadAsync(generated.bytes), data = JSON.parse(await zip.file('data.json')!.async('string'))
-    data.backupSchemaVersion = version
+    data.backupSchemaVersion = version; delete data.workouts
     if (version < 3) { delete data.profile.timeZone; delete data.profile.selectedPlanIds }
     if (version === 1) delete data.plans[0].durationWeeks
     validateBackupData(data)
     const payload = new Map([['data.json', JSON.stringify(data)], ...csvTables(data).map((f) => [f.path, f.text] as [string, string])])
-    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = version; manifest.counts = recordCounts(data)
+    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = version; manifest.databaseSchemaVersion = 5; manifest.counts = recordCounts(data)
     manifest.inventory = await Promise.all([...payload].map(async ([path, text]) => ({ path, bytes: new TextEncoder().encode(text).length, sha256: await sha256(new TextEncoder().encode(text)), mediaType: path === 'data.json' ? 'application/json' : 'text/csv; charset=utf-8' })))
     manifest.csvRows = Object.fromEntries(csvTables(data).map((f) => [f.path, f.rows]))
     const oldZip = new JSZip(); for (const [path, text] of payload) oldZip.file(path, text, { createFolders: false }); oldZip.file('manifest.json', JSON.stringify(manifest))
@@ -143,7 +143,7 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
     assert.equal(templateReference(restored.plans[0].days[0].exercises[0]), original.days[0].exercises[0].id)
     assert.equal(restored.plans[0].createdAt, original.createdAt); assert.equal(restored.plans[0].updatedAt, original.updatedAt)
     const round = await readBackup((await generateBackup(restored, 'test')).bytes)
-    assert.equal(round.manifest.backupSchemaVersion, 10); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
+    assert.equal(round.manifest.backupSchemaVersion, 11); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
     // Merge the original old backup again into its matching original profile.
     let target = id
     for (let repeat = 0; repeat < 2; repeat++) { const merge = await service.preview(backup, 'import'); target = await service.commit(merge, true); assert.equal((await captureProfile(target, db)).exercises.length, 2) }

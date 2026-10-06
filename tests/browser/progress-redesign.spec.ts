@@ -7,7 +7,7 @@ const f = (page: Page, name: string) => page.getByLabel(name, { exact: true })
 async function rows(page: Page, store: string) { return page.evaluate(async store => { const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('boros'); r.onsuccess = () => resolve(r.result) }); const rows = await new Promise<any[]>(resolve => { const r = db.transaction(store).objectStore(store).getAll(); r.onsuccess = () => resolve(r.result) }); db.close(); return rows }, store) }
 async function setup(page: Page) {
   await page.clock.setFixedTime(new Date('2026-10-05T12:00:00Z')); await page.goto('./'); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
-  await b(page, 'Create').click(); await b(page, 'Import AI Output').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name: 'Unified strength', durationWeeks: 4, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map(name => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(page.getByRole('article', { name: 'Plan Unified strength' })).toBeVisible()
+  await b(page, 'Create').click(); await b(page, 'Imported').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name: 'Unified strength', durationWeeks: 4, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map(name => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(page.getByRole('article', { name: 'Plan Unified strength' })).toBeVisible()
 }
 test('Calendar activates Train atomically, excludes active template, repairs missing selection, Train schedules same instance', async ({ page, context }) => {
   await setup(page); await b(page, 'Calendar').click(); await b(page, 'Add Plan').click(); await stagePlan(page, 'Unified strength'); expect(await rows(page, 'schedules')).toHaveLength(0); await expect(page.getByText(/Page Save adds/)).toHaveCount(0)
@@ -32,7 +32,7 @@ test('Month weeks use horizontal columns, default and independent keyboard toggl
   await page.setViewportSize({ width: 768, height: 1024 }); await page.screenshot({ path: info.outputPath('month-columns-tablet.png'), fullPage: true }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 test('Create ordering and measured two-row scrolling; shared three-row exercise browsing, tags, themes and large text', async ({ page }, info) => {
-  await setup(page); await expect(page.locator('.create-carousel button')).toHaveText(['Plan', 'Exercise', 'AI']); await expect(page.locator('main h2')).toHaveText(['Plans', 'Exercises'])
+  await setup(page); await expect(page.locator('.create-carousel button')).toHaveText(['Plan', 'Workout', 'Exercise']); await expect(page.locator('main h2')).toHaveText(['Plans', 'Workouts', 'Exercises'])
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('boros'); r.onsuccess = () => resolve(r.result) })
     const all = (store: string) => new Promise<any[]>(resolve => { const r = db.transaction(store).objectStore(store).getAll(); r.onsuccess = () => resolve(r.result) })
@@ -42,9 +42,9 @@ test('Create ordering and measured two-row scrolling; shared three-row exercise 
   await page.reload(); const plans = page.getByRole('region', { name: 'Plan catalog' }); await expect(plans.locator('.plan-card')).toHaveCount(16); await expect.poll(() => plans.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true); await plans.evaluate(el => { el.scrollTop = el.scrollHeight }); expect(await plans.evaluate(el => el.scrollTop)).toBeGreaterThan(0)
   const createCard = await page.locator('.exercise-list').getByRole('button', { name: 'Press', exact: true }).innerText()
   expect(createCard).toMatch(/Added: \d{2}\/\d{2}\/\d{4}/)
-  await expect(page.locator('.create-carousel')).toHaveCSS('border-bottom-width', '1px'); await expect(page.locator('.plan-library')).toHaveCSS('border-top-width', '0px')
+  await expect(page.locator('.create-carousel')).toHaveCSS('border-bottom-width', '0px'); await expect(page.locator('.plan-library')).toHaveCSS('border-top-width', '0px')
   const dimensions = await page.locator('.library-filters').evaluateAll(rows => rows.map(row => { const input = row.querySelector('input')!.getBoundingClientRect(), select = row.querySelector('select')!.getBoundingClientRect(), box = row.getBoundingClientRect(); return { inputH: input.height, selectH: select.height, selectW: select.width, aligned: input.bottom === select.bottom, farLeft: input.left === box.left, farRight: select.right === box.right } }))
-  expect(dimensions).toHaveLength(2); for (const row of dimensions) expect(row).toEqual({ inputH: 44, selectH: 44, selectW: 132, aligned: true, farLeft: true, farRight: true })
+  expect(dimensions).toHaveLength(3); for (const row of dimensions) expect(row).toEqual({ inputH: 44, selectH: 44, selectW: 132, aligned: true, farLeft: true, farRight: true })
   for (const select of await page.locator('.library-filters select').all()) { await expect(select.locator('option')).toHaveText(['A–Z', 'Z–A', 'Newest', 'Oldest']); await select.selectOption('newest'); expect((await select.boundingBox())!.width).toBe(132) }
   await b(page, 'Progress').click(); const exercises = page.getByRole('region', { name: 'Exercises', exact: true }), grid = page.getByRole('region', { name: 'Overall exercises' }); await expect.poll(() => grid.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true); await expect(grid).toHaveCSS('grid-template-columns', /\S+ \S+ \S+/)
   expect(await grid.getByRole('button', { name: 'Press', exact: true }).innerText()).toBe(createCard)

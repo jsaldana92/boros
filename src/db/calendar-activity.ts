@@ -4,7 +4,7 @@ import { browserZone, localToday } from '../lib/calendar-dates.ts'
 import type { CompletedSession } from '../schemas/session.ts'
 import type { TrainingDay } from '../schemas/plan.ts'
 
-export interface CalendarActivity { id: string; date: string; planId: string; planName: string; day: TrainingDay; event?: CalendarEvent; session?: CompletedSession }
+export interface CalendarActivity { id: string; date: string; planId?: string; planName: string; day: TrainingDay; event?: CalendarEvent; session?: CompletedSession }
 export function calendarActivityService(database: BorosDatabase) {
   return {
     async events(profileId: string, start: string, end: string): Promise<CalendarActivity[]> {
@@ -29,10 +29,10 @@ export function calendarActivityService(database: BorosDatabase) {
         }
         for (const session of logs) {
           if (session.occurrence && !session.occurrence.unscheduled) continue
-          const date = localToday(session.occurrence?.timeZone ?? profile.timeZone ?? browserZone(), new Date(session.completedAt))
+          const date = localToday(session.occurrence?.timeZone ?? session.timeZone ?? profile.timeZone ?? browserZone(), new Date(session.completedAt))
           if (!inRange(date)) continue
           const id = session.occurrence?.key ?? session.id
-          entries.set(id, { id, date, planId: session.sourcePlanId, planName: session.planName, day: session.day, session })
+          entries.set(id, { id, date, planId: session.sourcePlanId, planName: session.source ? 'Workout' : session.planName!, day: session.day, session })
         }
         return [...entries.values()].sort((a, b) => a.date.localeCompare(b.date) || a.planName.localeCompare(b.planName) || a.id.localeCompare(b.id))
       })

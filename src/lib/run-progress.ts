@@ -3,10 +3,10 @@ import { occurrences, revisionAt, programWeek, type Schedule, type OccurrenceOut
 import { resolveWeek } from '../schemas/plan.ts'
 import type { CompletedSession } from '../schemas/session.ts'
 
-// Shared with Progress: a partial log retains its results but is not a fully
-// completed day. Explicit completion wins; skip is never inferred from age.
+// Explicit Save completes the workout, including partial historical logs.
+// Exercise outcomes still depend on actual results; skip is never inferred from age.
 export function resolvedDays(sessions: CompletedSession[], outcomes: OccurrenceOutcome[] = []) {
-  const completed = new Set(sessions.filter((s) => !s.partial).map((s) => s.occurrence?.key ?? `session:${s.id}`))
+  const completed = new Set(sessions.map((s) => s.occurrence?.key ?? `session:${s.id}`))
   const skipped = new Set<string>(), manual = new Set<string>()
   for (const outcome of outcomes) {
     if (outcome.status === 'completed') { completed.add(outcome.ref.key); manual.add(outcome.ref.key) }
@@ -97,7 +97,7 @@ export function runLifecycle(run: Schedule, sessions: CompletedSession[], instan
   const ended = !!(today && effectiveEnd && effectiveEnd < today)
   const complete = progress.total !== undefined && progress.total > 0 && progress.resolved >= progress.total
   const previous = !!run.closedAt || stopped || ended || complete
-  const completion = complete && validZone(run.timeZone) ? [...sessions.filter((s) => s.profileId === run.profileId && s.occurrence?.scheduleId === run.id && !s.partial).map((s) => s.completedAt), ...(run.outcomes ?? []).filter((o) => o.status !== 'pending').map((o) => o.updatedAt)].filter((at) => Number.isFinite(Date.parse(at))).sort().at(-1) : undefined
+  const completion = complete && validZone(run.timeZone) ? [...sessions.filter((s) => s.profileId === run.profileId && s.occurrence?.scheduleId === run.id).map((s) => s.completedAt), ...(run.outcomes ?? []).filter((o) => o.status !== 'pending').map((o) => o.updatedAt)].filter((at) => Number.isFinite(Date.parse(at))).sort().at(-1) : undefined
   // stoppedFrom is exclusive; an explicit Leave uses its actual closure date.
   const end = run.closedAt ? closure : stopped ? [effectiveEnd, run.stoppedFrom! > '0001-01-01' ? addDays(run.stoppedFrom!, -1) : undefined].filter((d): d is string => !!d).sort()[0] : complete && completion ? localToday(run.timeZone, new Date(completion)) : effectiveEnd
   return { previous, end, progress }

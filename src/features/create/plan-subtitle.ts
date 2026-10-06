@@ -7,5 +7,5 @@ export function weeklyCounts(plan: Pick<Plan, 'days' | 'weeks'>) {
 }
 export function planSubtitle(plan: Pick<Plan, 'days' | 'durationWeeks' | 'weeks'>) {
   const counts = weeklyCounts(plan)
-  return `${plan.durationWeeks === undefined ? 'Legacy unbounded duration' : `${plan.durationWeeks} ${plan.durationWeeks === 1 ? 'week' : 'weeks'}`} · ${counts.training} training ${counts.training === '1' ? 'day' : 'days'} · ${counts.rest} rest ${counts.rest === '1' ? 'day' : 'days'}`
+  return `${plan.durationWeeks === undefined ? 'Legacy unbounded duration' : `${plan.durationWeeks} ${plan.durationWeeks === 1 ? 'week' : 'weeks'}`} · ${counts.training} ${counts.training === '1' ? 'workout' : 'workouts'} · ${counts.rest} rest ${counts.rest === '1' ? 'day' : 'days'}`
 }

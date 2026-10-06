@@ -5,7 +5,7 @@ export async function cardAction(page: Page, card: Locator, action: string) {
   await card.getByRole('button').click()
   let dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
-  const menu = dialog.getByRole('button', { name: /^(Exercise|Plan) actions$/ })
+  const menu = dialog.getByRole('button', { name: /^(Exercise|Plan|Workout) actions$/ })
   if (await menu.count()) {
     const title = await menu.getAttribute('aria-label')
     await menu.click()

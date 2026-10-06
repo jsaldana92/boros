@@ -96,7 +96,7 @@ export function scheduleService(database: BorosDatabase) {
           const ref = record.occurrence
           if (!ref || (zone && ref.timeZone !== zone) || !inRange(ref.scheduledDate, ref.unscheduled)) continue
           const generated = events.get(ref.key)
-          events.set(ref.key, { ...generated, ref, planId: record.sourcePlanId, planName: record.planName, planInstructions: record.planInstructions, day: record.day, unscheduled: ref.unscheduled, retained: !generated || generated.ref.scheduleRevisionId !== ref.scheduleRevisionId, ...('completedAt' in record ? { session: record } : { draft: record }) })
+          events.set(ref.key, { ...generated, ref, planId: record.sourcePlanId!, planName: record.planName!, planInstructions: record.planInstructions, day: record.day, unscheduled: ref.unscheduled, retained: !generated || generated.ref.scheduleRevisionId !== ref.scheduleRevisionId, ...('completedAt' in record ? { session: record } : { draft: record }) })
         }
         return [...events.values()].sort((a, b) => a.ref.scheduledDate.localeCompare(b.ref.scheduledDate) || a.planName.localeCompare(b.planName))
       })

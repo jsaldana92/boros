@@ -25,10 +25,10 @@ test('complete archive independently reopens with exact records, photo bytes, id
   const { bytes, filename } = await generateBackup(snapshot, version), zip = await JSZip.loadAsync(bytes, { checkCRC32: true })
   const manifest = JSON.parse(await zip.file('manifest.json')!.async('string')), data = JSON.parse(await zip.file('data.json')!.async('string'))
   manifestSchema.parse(manifest); backupDataSchema.parse(data)
-  assert.equal(manifest.app.version, version); assert.equal(manifest.databaseSchemaVersion, 5); assert.equal(manifest.backupSchemaVersion, 10)
+  assert.equal(manifest.app.version, version); assert.equal(manifest.databaseSchemaVersion, 6); assert.equal(manifest.backupSchemaVersion, 11)
   assert.equal(manifest.profile.id, fixture.id); assert.equal(manifest.snapshotAt, snapshot.capturedAt); assert.equal(manifest.snapshotPolicy, SNAPSHOT_POLICY)
-  assert.deepEqual(manifest.counts, { profiles: 1, tags: 2, exercises: 2, plans: 1, schedules: 1, drafts: 3, sessions: 2, measurements: 3, assets: 2, outcomes: 0, excludedWeeks: 0 })
-  const { databaseVersion, capturedAt, photos, ...canonical } = snapshot; assert.equal(databaseVersion, 5); assert.ok(capturedAt)
+  assert.deepEqual(manifest.counts, { workouts: 0, profiles: 1, tags: 2, exercises: 2, plans: 1, schedules: 1, drafts: 3, sessions: 2, measurements: 3, assets: 2, outcomes: 0, excludedWeeks: 0 })
+  const { databaseVersion, capturedAt, photos, ...canonical } = snapshot; assert.equal(databaseVersion, 6); assert.ok(capturedAt)
   for (const [key, value] of Object.entries(canonical)) assert.deepEqual(data[key], json(value), key)
   assert.equal(data.sessions[0].day.exercises[0].prescription.instructions, strangeText)
   assert.ok(data.sessions.some((s) => s.partial) && data.sessions.some((s) => !s.partial)); assert.equal(data.schedules[0].revisions.length, 2)
@@ -82,7 +82,7 @@ test('minimal Guest exports header-only tables, preserves null/zero and safe fil
 
 test('missing assets/required relations, invalid schemas and read/compression/hash failures never mutate source data', async (t) => {
   const db = await database(t), { id } = await representativeProfile(db), before = await source(db), base = await captureProfile(id, db)
-  for (const mutate of [(s) => { s.photos = [] }, (s) => { s.tags = [] }, (s) => { s.plans = [] }, (s) => { s.schedules = [] }, (s) => { s.drafts = [] }, (s) => { s.photos[0].profileId = crypto.randomUUID() }, (s) => { s.plans[0].days[0].exercises[0].prescription.sets[0].reps.max = 0 }, (s) => { s.databaseVersion = 6 }]) { const broken = structuredClone(base); mutate(broken); await assert.rejects(generateBackup(broken, version)) }
+  for (const mutate of [(s) => { s.photos = [] }, (s) => { s.tags = [] }, (s) => { s.plans = [] }, (s) => { s.schedules = [] }, (s) => { s.drafts = [] }, (s) => { s.photos[0].profileId = crypto.randomUUID() }, (s) => { s.plans[0].days[0].exercises[0].prescription.sets[0].reps.max = 0 }, (s) => { s.databaseVersion = 99 }]) { const broken = structuredClone(base); mutate(broken); await assert.rejects(generateBackup(broken, version)) }
   const failed = structuredClone(base); failed.photos[0].blob.arrayBuffer = async () => { throw new Error('Simulated photo read failure') }; await assert.rejects(generateBackup(failed, version), /photo read failure/)
   const original = JSZip.prototype.generateAsync
   try { JSZip.prototype.generateAsync = async () => { throw new Error('Compression failed') }; await assert.rejects(generateBackup(base, version), /Compression failed/) } finally { JSZip.prototype.generateAsync = original }

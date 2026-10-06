@@ -200,7 +200,7 @@ async function altered(bytes: Uint8Array, edit: (zip: JSZip, manifest, data) => 
 test('upload rejects future versions, wrong ownership/references, missing/checksum/bad assets and manifest/count inconsistencies without writes', async (t) => {
   const { db, bytes } = await setup(t), before = await all(db)
   for (const [edit, pattern] of [
-    [(_z, m) => { m.backupSchemaVersion = 99 }, /Update Boros/], [(_z, m) => { m.databaseSchemaVersion = 6 }, /Update Boros/],
+    [(_z, m) => { m.backupSchemaVersion = 99 }, /Update Boros/], [(_z, m) => { m.databaseSchemaVersion = 99 }, /Update Boros/],
     [(_z, _m, d) => { d.drafts[0].sourcePlanId = crypto.randomUUID() }, /missing plan/],
     [(_z, _m, d) => { d.tags[0].profileId = crypto.randomUUID() }, /wrong profile/],
     [(z, _m, d) => { z.remove(d.assets[0].path) }, /inventory|Missing/],

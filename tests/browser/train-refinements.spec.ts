@@ -14,7 +14,7 @@ async function rows(page: Page, name: string) {
 async function fixture(page: Page, theme = 'Dark') {
   await page.clock.setFixedTime(new Date('2026-10-05T16:00:00Z')); await page.goto('./')
   await expect(b(page, 'Settings')).toBeVisible(); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
-  await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Create').click(); await b(page, 'Import AI Output').click()
+  await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Create').click(); await b(page, 'Imported').click()
   await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 2, kind: 'plan', plan: { name: 'Refined plan', durationWeeks: 4, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map((name) => ({ name, exercises: [{ name: 'Press', instructions: 'Snapshot instructions', youtubeUrl: 'https://youtu.be/abcdefghijk', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 1, max: 2 } }, { reps: { min: 8, max: 8 } }], restBetweenSetsSeconds: 10 }] })) } }))
   await b(page, 'Validate and preview').click(); await f(page, 'Note (optional):').fill('Hide this subtitle in Train'); await page.locator('.plan-day').first().getByRole('button', {name: /^Actions for /}).first().click(); await b(page, 'Edit').click(); await f(page, 'Notes (optional)').fill('Template note'); await page.locator('.exercise-editor button[type=submit]').click(); await b(page, 'Save plan').click(); await expect(plan(page)).toBeVisible()
   await b(page, 'Train').click(); await b(page, 'Add Plan').click(); await page.getByRole('dialog', { name: 'Add Plan' }).getByRole('article').getByRole('button').click(); await plan(page).click(); await expect(day(page)).toContainText('Pending')
@@ -54,7 +54,7 @@ test('failed cancellation keeps input; Clear stays open and deletes no other his
 })
 
 test('Leave Plan removes every draft week, keeps history, closes run across reload and re-adds fresh', async ({ page }) => {
-  await fixture(page); await start(page); await results(page); await b(page, 'Save').click(); await b(page, 'Save partial session').click(); await b(page, 'Back to training days').click()
+  await fixture(page); await start(page); await results(page); await b(page, 'Save').click(); await b(page, 'Save partial session').click(); await b(page, 'Back to workouts').click()
   const completed = await rows(page, 'sessions'), firstRun = (await rows(page, 'schedules'))[0]
   for (let week = 1; week <= 2; week++) {
     await b(page, 'Next week').click(); await start(page); await results(page); await interrupt(page); await plan(page).click()
@@ -77,10 +77,10 @@ test('snapshot information, previous placeholders and occurrence Reset agree wit
   await expect(information.getByRole('heading', { name: 'Instructions', exact: true })).toBeVisible(); await expect(information.getByRole('heading', { name: 'Note', exact: true })).toBeVisible(); await expect(information.locator('hr')).toHaveCount(2); await expect(information.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0)
   await expect(information.locator('iframe')).toHaveAttribute('src', /^https:\/\/www.youtube.com\/embed\/abcdefghijk\?/); await b(page, 'Close').click(); await expect(page.locator('iframe')).toHaveCount(0); await expect(b(page, 'Information for Press')).toBeFocused()
   await expect(page.locator('.set-target').first()).toHaveText('5–8 reps · 1–2 RIR'); await expect(page.locator('.set-target').nth(1)).toHaveText('8 reps')
-  await results(page); await b(page, 'Save').click(); await b(page, 'Save partial session').click(); await b(page, 'Back to training days').click(); await b(page, 'Next week').click(); await start(page)
+  await results(page); await b(page, 'Save').click(); await b(page, 'Save partial session').click(); await b(page, 'Back to workouts').click(); await b(page, 'Next week').click(); await start(page)
   await expect(f(page, 'Press set 1 Weight (kg)')).toHaveAttribute('placeholder', '0'); await expect(f(page, 'Press set 1 Repetitions')).toHaveAttribute('placeholder', '5'); await expect(f(page, 'Press set 1 Actual RIR (optional)')).toHaveAttribute('placeholder', '0'); await expect(f(page, 'Press set 1 Weight (kg)')).toHaveValue(''); await expect(f(page, 'Press set 2 Weight (kg)')).not.toHaveAttribute('placeholder')
   await f(page, 'Press set 1 Weight (kg)').fill('25'); await f(page, 'Press set 1 Weight (kg)').fill(''); await waitForDraft(page); await b(page, 'Cancel').click(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0)
-  await b(page, 'Previous week').click(); await day(page).click(); await b(page, 'Reset').click(); const reset = page.getByRole('dialog', { name: 'Reset this training day?' }); await expect(reset).toContainText('Saved results for this occurrence will be deleted'); await reset.getByRole('button', { name: 'Cancel', exact: true }).click(); await b(page, 'Close').click(); expect(await rows(page, 'sessions')).toHaveLength(1)
+  await b(page, 'Previous week').click(); await day(page).click(); await b(page, 'Reset').click(); const reset = page.getByRole('dialog', { name: 'Reset this workout?' }); await expect(reset).toContainText('Saved results for this occurrence will be deleted'); await reset.getByRole('button', { name: 'Cancel', exact: true }).click(); await b(page, 'Close').click(); expect(await rows(page, 'sessions')).toHaveLength(1)
   await day(page).click(); await b(page, 'Reset').click(); await reset.getByRole('button', { name: 'Reset', exact: true }).click(); await expect(day(page)).toContainText('Pending'); expect(await rows(page, 'sessions')).toHaveLength(0)
   await b(page, 'Calendar').click(); await expect(page.getByRole('region', { name: 'Unassigned weekly training' })).toHaveCount(0)
   await b(page, 'Progress').click(); await expect(page.getByRole('article', { name: 'Run Refined plan', exact: true })).toBeVisible()
@@ -90,7 +90,7 @@ test('snapshot information, previous placeholders and occurrence Reset agree wit
 test('stale tabs cannot recreate Reset or closed-run drafts and their timers', async ({ page, context }) => {
   await fixture(page); await start(page); await results(page)
   const peer = await context.newPage(); await peer.goto('./'); await plan(peer).click(); await day(peer).click()
-  await b(peer, 'Reset').click(); await peer.getByRole('dialog', { name: 'Reset this training day?' }).getByRole('button', { name: 'Reset', exact: true }).click()
+  await b(peer, 'Reset').click(); await peer.getByRole('dialog', { name: 'Reset this workout?' }).getByRole('button', { name: 'Reset', exact: true }).click()
   await f(page, 'Press set 1 Weight (kg)').fill('50'); await expect(page.getByRole('alert').first()).toContainText('unavailable'); await expect(f(page, 'Press set 1 Weight (kg)')).toHaveValue('50')
   expect(await rows(page, 'drafts')).toHaveLength(0); expect(await rows(page, 'sessions')).toHaveLength(0)
   page.once('dialog', (dialog) => dialog.accept()); await page.reload(); await plan(page).click(); await start(page); await results(page)
@@ -109,7 +109,7 @@ test('information omits absent sections and empty information is plain text with
   await expect(dialog.getByRole('heading', { name: 'Note', exact: true })).toHaveCount(0); await expect(dialog.locator('hr')).toHaveCount(1)
   await b(page, 'Close').click(); await b(page, 'Cancel').click(); await b(page, 'Create').click()
   await b(page, 'Create exercise').click(); await f(page, 'Exercise name').fill('No information'); await f(page, 'Set 1 Reps minimum').fill('5'); await b(page, 'Save exercise').click()
-  await b(page, 'Create Plan').click(); await f(page, 'Plan name').fill('Empty information'); await f(page, 'Duration (weeks)').fill('1'); await page.getByRole('combobox', { name: 'Training days per week', exact: true }).selectOption('1')
+  await b(page, 'Create Plan').click(); await f(page, 'Plan name').fill('Empty information'); await f(page, 'Duration (weeks)').fill('1'); await page.getByRole('combobox', { name: 'Workouts per week', exact: true }).selectOption('1')
   await b(page, 'Add exercise').click(); await b(page, 'Add No information').click(); await b(page, 'Save plan').click()
   await b(page, 'Train').click(); await b(page, 'Add Plan').click(); await page.getByRole('dialog').getByRole('article', { name: 'Plan Empty information', exact: true }).getByRole('button').click()
   await page.getByRole('article', { name: 'Plan Empty information', exact: true }).getByRole('button').click(); await page.locator('.training-day-card').click(); await b(page, 'Start').click(); await b(page, 'Information for No information').click()

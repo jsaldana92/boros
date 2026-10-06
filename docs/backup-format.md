@@ -1,11 +1,38 @@
-# Boros profile backup, schema 10 (schemas 1-9 supported)
+# Boros profile backup, schema 11 (schemas 1-10 supported)
 
-Export was implemented in Phase 8; reviewed restore and profile Clear Data are
-implemented in Phase 9. This remains separate from the external AI interchange
-format. Unique-week cycles now write backup schema 10; database version 5 stays unchanged. Strict
-schema 1-9/database v5 backups remain supported through the compatibility path below. An isolated
-export → import under a new name → export comparison verifies canonical records,
-relationships and original image bytes, with the identity exceptions below.
+Current exports pair **backup v11 / database v6**. Strict backup v1-v10 /
+database v5 archives remain readable: original JSON, inventory, CSV headers,
+photo bytes and SHA-256 checksums are validated before adding an empty workout
+collection to the in-memory envelope. No existing plan workouts are extracted.
+
+V11 adds `workouts`: profile-owned, revisioned, archivable templates with normalized
+active names, stable root/occurrence/group/set IDs, timestamps, ordered exercise
+prescriptions, and optional instructions/notes. Plan and session day snapshots
+can retain `sourceWorkoutId`; each copy gets independent execution IDs. Existing
+exercise provenance remains explicit. `csv/workouts.csv` adds the library inventory;
+`days.csv` adds source workout/instructions/notes and uses ownerKind `workout` for
+library prescriptions. The current archive has **32 CSV tables**. V1-v10 fields
+and headers are frozen.
+
+Standalone/custom drafts and sessions carry `source: { kind: "workout", workoutId }`
+or `{ kind: "custom", workoutId? }` plus a captured `timeZone`. They omit plan and
+occurrence metadata; validation rejects hybrids and missing referenced workouts.
+Only an unfinished custom draft may have zero exercises. Finalized draft/session
+source, time context, snapshots and actual results must agree. Draft/session CSVs
+add `sourceKind`, `sourceWorkoutId`, and `completionTimeZone`. Results/private notes
+remain separate from reusable prescriptions.
+
+Workout libraries merge independently by stable ID/normalized name with the selected
+precedence, remapping copied source references. They do not belong to plan families.
+Standalone draft/session pairs merge by session ID only, never workout ID/name/date;
+reimport is idempotent. Replacing a conflicting plan family retains unrelated
+standalone records and workouts. New-name/replace/clear includes the new collection
+in the existing reviewed, atomic profile operation. Clearing one profile never
+clears another. Checksums and photo verification are unchanged.
+
+Export was implemented in Phase 8; reviewed restore and profile Clear Data in
+Phase 9. These formats are separate from AI v5. The following older format notes
+remain historical descriptions; v11 includes their supported fields.
 
 Group 4 Progress statistics are derived from the existing canonical sessions,
 prescription snapshots, source references and measurements. Graph selection,
@@ -130,10 +157,10 @@ plan/run ID, schedule revision ID, week UUID/order, and day UUID/order.
 snapshots leave it blank. Existing assignment rows join to definitions through
 their day IDs. Original v1-v9 fields, table inventories and columns remain frozen;
 v9 rejects cycle-only fields. Validation of original bytes, CRC, SHA-256, CSVs
-and photos happens before promotion of the in-memory envelope to v10. Restore
+and photos happened before promotion to v10 (now to v11 as described above). Restore
 retains whole-plan-family precedence and internal references; no browser data is
-cleared or eagerly rewritten. IndexedDB remains `boros` v5, with no store/index
-migration. Timers and navigation preferences remain excluded.
+cleared or eagerly rewritten. The cycle revision kept `boros` v5; the Workout
+revision now adds only the v6 workout store. Timers and navigation preferences remain excluded.
 
 After merge precedence and identity remapping, restore removes only unfinished
 drafts whose exact profile/run/source-plan belongs to an explicitly closed run,
@@ -225,8 +252,8 @@ profile age/height/photo reference). Current UI services ordinarily omit those
 fields rather than write null. Record timestamps/revisions are not regenerated.
 
 `src/schemas/backup.ts` defines the executable payload/manifest schema and required
-reference checks. Database version stays 5: exporting adds no tables, migrations,
-or writes. The manifest separately records backup schema `8`, database schema `5`,
+reference checks. Exporting itself performs no migrations or writes. The current
+manifest records backup schema `11`, database schema `6`,
 and the real `package.json` app name/version (`boros`, currently `0.0.0`). That
 package value is not an invented release number.
 
@@ -320,11 +347,11 @@ validated in increasing Monday order and select the applicable boundary without
 rewriting earlier occurrences. Started/completed exceptions remain valid beyond
 a later end date. Plan edits do not alter the frozen schedule boundary.
 
-Upload accepts versions 1-10 with matching manifest/data versions and database
-v5. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
+Upload accepts versions 1-11 with matching manifest/data versions: v1-v10
+require database v5, and v11 requires database v6. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
 before validating records against the version-specific strict field set, linked
 references, CSV inventory/counts and original assets. Only after all checks pass,
-v1-v9 canonical data is cloned with a v10 envelope; no group/duration/preference,
+v1-v10 canonical data is cloned with a v11 envelope and empty workouts; no group/duration/preference,
 historical week, closure, hidden flag, exception or plan instructions are invented and
 the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
 The returned manifest remains the original validated version for provenance.
@@ -452,7 +479,7 @@ permissions and physical mobile save-sheet behavior still need manual checks.
 
 ## Upload validation and limits (Phase 9)
 
-Settings → Data → **Backup ZIP** accepts an original Boros schema 1-10/database v5
+Settings → Data → **Backup ZIP** accepts an original Boros schema 1-10/database v5 or schema 11/database v6
 export. Unsupported versions explain that the user must update Boros or choose a
 supported export. Import never guesses at a future schema or reads AI interchange
 as a backup. Parsing, hashing, CSV row checks and image decoding run in a worker,
@@ -621,7 +648,7 @@ remove them. Do not delete the source to test a move.
    actual original ZIP is present/readable on disk; “Download started” cannot
    confirm filesystem success. Repeat separately for each desired profile.
 2. At the verified target address, use Settings → Data → Backup ZIP. Select the
-   original schema 1-10/database v5 ZIP; do not unpack/repackage it or import CSVs.
+   original schema 1-10/database v5 or schema 11/database v6 ZIP; do not unpack/repackage it or import CSVs.
    Review validation and counts. Prefer **Import under a new name** with an unused
    name if a name conflict exists; merge/replace have the destructive whole-family
    semantics documented above. Review, acknowledge and Confirm and save.

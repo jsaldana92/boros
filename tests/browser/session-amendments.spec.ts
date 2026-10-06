@@ -7,7 +7,7 @@ test.setTimeout(90000)
 async function rows(p:Page,store:string) { return p.evaluate(async store=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('boros');r.onsuccess=()=>resolve(r.result)});try{return await new Promise<any[]>(resolve=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result)})}finally{db.close()}},store) }
 async function setup(page:Page,theme='Dark') {
   await page.clock.install({time:new Date('2026-10-05T16:00:00Z')});await page.goto('./');await expect(b(page,'Settings')).toBeVisible();if(await b(page,'Understood').isVisible())await b(page,'Understood').click()
-  await b(page,'Settings').click();await b(page,theme).click();await b(page,'Create').click();await b(page,'Import AI Output').click()
+  await b(page,'Settings').click();await b(page,theme).click();await b(page,'Create').click();await b(page,'Imported').click()
   await f(page,'AI output JSON').fill(JSON.stringify({schemaVersion:2,kind:'plan',plan:{name:'Live plan',durationWeeks:4,trainingDaysPerWeek:1,days:[{name:'Upper',supersets:[{number:1}],exercises:[{name:'Solo',sets:[{reps:{min:5,max:8},rir:{min:0,max:0}}],tags:['Solo']},...[3,2,1].map((n,i)=>({name:['A','B','C'][i],superset:1,tags:['Group'],sets:Array.from({length:n},(_,j)=>({reps:{min:j+5,max:j+5},rir:{min:i,max:i}}))}))]}]}}))
   await b(page,'Validate and preview').click();await b(page,'Save plan').click();await expect(page.getByRole('article',{name:'Plan Live plan',exact:true})).toBeVisible();await startWeekly(page,'Live plan','Upper')
 }
@@ -32,7 +32,7 @@ for(const theme of ['Dark','Light'])test(`session additions, explicit rounds, se
   expect(await rows(page,'plans')).toEqual([plan]);expect(page.url()).toBe(address);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
   await page.screenshot({path:info.outputPath(`session-${theme}.png`),fullPage:true})
   await b(page,'Progress').click();const leave=page.getByRole('dialog',{name:'Leaving Upper',exact:true});await expect(leave).toContainText('Leaving now will clear all your progress and you will have to restart.');await leave.getByRole('button',{name:'Cancel',exact:true}).click();await expect(f(page,'Solo occurrence 1 set 1 Weight (lb)')).toHaveValue('220.462262');expect((await rows(page,'restTimers'))[0]).toEqual(timer)
-  await b(page,'Progress').click();await b(page,'Leave').click();await expect(page.getByRole('article',{name:'Run Live plan',exact:true})).toBeVisible();expect(await rows(page,'drafts')).toHaveLength(0);expect(await rows(page,'restTimers')).toHaveLength(0);await page.getByRole('article',{name:'Run Live plan',exact:true}).getByRole('button').click();await expect(page.getByRole('region',{name:'Plan analytics'})).toBeVisible();await expect(page.getByText('Training Days Completed',{exact:true}).locator('..')).toContainText('0')
+  await b(page,'Progress').click();await b(page,'Leave').click();await expect(page.getByRole('article',{name:'Run Live plan',exact:true})).toBeVisible();expect(await rows(page,'drafts')).toHaveLength(0);expect(await rows(page,'restTimers')).toHaveLength(0);await page.getByRole('article',{name:'Run Live plan',exact:true}).getByRole('button').click();await expect(page.getByRole('region',{name:'Plan analytics'})).toBeVisible();await expect(page.getByText('Workouts Completed',{exact:true}).locator('..')).toContainText('0')
 })
 
 test('structure-only recovery, Clear retention, picker cancellation/focus, failed Settings flush and destructive leave',async({page})=>{
@@ -59,11 +59,11 @@ test('month defaults reflect viewport and Today reveals the correct horizontally
 })
 
 
-test('added exercises and unequal final rounds save into frozen review and Progress without increasing planned days',async({page})=>{
+test('added exercises and unequal final rounds save into frozen review and Progress without increasing planned workouts',async({page})=>{
   await setup(page);await b(page,'Add Set to Superset 1').click();await b(page,'Add Exercise').click()
   const picker=page.getByRole('dialog',{name:'Add Exercise',exact:true});await picker.getByLabel('Sort exercises to add',{exact:true}).selectOption('za');await picker.getByRole('button',{name:'Tags',exact:true}).click();await picker.getByRole('button',{name:'Solo',exact:true}).click();await picker.getByLabel('Solo',{exact:true}).check();await b(page,'Add selected').click()
   await f(page,'Solo occurrence 5 set 1 Weight (kg)').fill('25');await f(page,'Solo occurrence 5 set 1 Repetitions').fill('7');await f(page,'B set 3 Weight (kg)').fill('10');await f(page,'B set 3 Repetitions').fill('5');await b(page,'Save').click();await b(page,'Save partial session').click()
   const saved=page.getByRole('region',{name:'Saved session details',exact:true}),round=saved.getByRole('region',{name:'Saved superset 1',exact:true}).locator('.superset-round').last();await expect(round).toContainText('B: Set 3: 10 kg');await expect(round).toContainText('C: Set 2: Skipped');await expect(saved).toContainText('25 kg')
   const session=(await rows(page,'sessions'))[0];expect(session.day.exercises).toHaveLength(5);expect(session.structure.amended).toBe(true)
-  await b(page,'Progress').click();const plan=page.getByRole('article',{name:'Run Live plan',exact:true});await expect(plan.getByRole('img',{name:'Completed: 0 of 4 planned days, 0%'})).toBeVisible();await plan.getByRole('button').click();await expect(page.getByRole('region',{name:'Plan exercises'}).getByRole('button')).toHaveCount(5);await page.reload();expect((await rows(page,'sessions'))[0]).toEqual(session)
+  await b(page,'Progress').click();const plan=page.getByRole('article',{name:'Run Live plan',exact:true});await expect(plan.getByRole('img',{name:'Completed: 1 of 4 planned workouts, 25%'})).toBeVisible();await plan.getByRole('button').click();await expect(page.getByRole('region',{name:'Plan exercises'}).getByRole('button')).toHaveCount(5);await page.reload();expect((await rows(page,'sessions'))[0]).toEqual(session)
 })

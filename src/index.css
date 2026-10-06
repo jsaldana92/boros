@@ -441,7 +441,24 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 }
 
 .duration-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.unique-toggle { display: grid; gap: .45rem; }
+.unique-toggle { display: grid; gap: 6px; justify-items: end; text-align: right; font-size: 14px; }
 .unique-toggle button { width: fit-content; min-width: 4.5rem; }
 .unique-toggle [aria-checked="true"] { background: var(--action); color: var(--action-text); }
 .unique-week-heading { text-align: center; }
+.plan-top-fields { --plan-field-gap: 18px; display: grid; gap: var(--plan-field-gap); }
+.plan-top-fields input, .plan-top-fields select, .plan-top-fields textarea { margin-bottom: 0; }
+.plan-add-button { display: block; width: 80%; max-width: 100%; margin-inline: auto; }
+
+.imported-button { display: block; width: 100%; margin: 12px 0 24px; }
+.workout-library-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: 370px; overflow-y: auto; padding: 4px; }
+.workout-library-grid article, .workout-library-grid button { min-width: 0; width: 100%; }
+.workout-library-grid button { min-height: 110px; padding: 10px; }
+.workout-library-grid strong { overflow-wrap: anywhere; }
+.standalone-workout-builder { margin-block: 18px; }
+.train-workout-actions { display: grid; justify-items: center; gap: 12px; margin: 24px 0; }
+.train-workout-actions > button { width: 80%; }
+
+.create-carousel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0; border-bottom: 0; overflow: visible; }
+.create-carousel button { min-width: 0; overflow-wrap: anywhere; }
+.imported-button { margin-top: 12px; }
+.workout-library-grid button { aspect-ratio: 1.2; }

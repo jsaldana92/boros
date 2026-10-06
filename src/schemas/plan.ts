@@ -12,18 +12,18 @@ export const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_I
 export const groupSchema = z.object({ id: z.string().uuid(), number: positiveInteger, restBetweenRoundsSeconds: exerciseInputSchema.shape.restBetweenSeconds, restAfterGroupSeconds: exerciseInputSchema.shape.restAfterSeconds }).strict()
 export const occurrenceSchema = z.object({ id: z.string().uuid(), prescription: exerciseInputSchema, source: sourceSchema.optional(), setIds: z.array(z.string().uuid()).min(1).max(100).optional(), templateId: z.string().uuid().optional(), groupId: z.string().uuid().optional() })
 // Optional fields intentionally remain absent in legacy records; no rewrite/default duration.
-export const daySchema = z.object({ id: z.string().uuid(), name, groups: z.array(groupSchema).max(50).optional(), exercises: z.array(occurrenceSchema).min(1, 'Add at least one exercise to this day.').max(100, 'Use at most 100 exercises per day.') })
+export const daySchema = z.object({ id: z.string().uuid(), name, instructions: z.string().max(20000).optional(), notes: z.string().max(20000).optional(), sourceWorkoutId: z.string().uuid().optional(), groups: z.array(groupSchema).max(50).optional(), exercises: z.array(occurrenceSchema).min(1, 'Add at least one exercise to this workout.').max(100, 'Use at most 100 exercises per workout.') })
 export function validateGroups(day: z.infer<typeof daySchema>, context: z.RefinementCtx, prefix: (string | number)[] = []) {
   const groups = day.groups ?? [], ids = new Set<string>(), numbers = new Set<number>()
   groups.forEach((group, index) => {
     const issue = (message: string) => context.addIssue({ code: 'custom', path: [...prefix, 'groups', index], message })
-    if (ids.has(group.id) || numbers.has(group.number)) issue('Superset IDs and numbers must be unique within a day.')
+    if (ids.has(group.id) || numbers.has(group.number)) issue('Superset IDs and numbers must be unique within a workout.')
     ids.add(group.id); numbers.add(group.number)
     const positions = day.exercises.flatMap((item, i) => item.groupId === group.id ? [i] : [])
     if (positions.length < 2) issue(`Superset ${group.number} needs at least two members. Add a member or dissolve the group.`)
     if (positions.length && positions.at(-1)! - positions[0] + 1 !== positions.length) issue(`Superset ${group.number} members must be together in execution order.`)
   })
-  day.exercises.forEach((item, i) => { if (item.groupId && !ids.has(item.groupId)) context.addIssue({ code: 'custom', path: [...prefix, 'exercises', i, 'groupId'], message: 'Superset membership must reference a group in this training day.' }) })
+  day.exercises.forEach((item, i) => { if (item.groupId && !ids.has(item.groupId)) context.addIssue({ code: 'custom', path: [...prefix, 'exercises', i, 'groupId'], message: 'Superset membership must reference a group in this workout.' }) })
 }
 export const planInstructionsSchema = z.string().max(20000).optional()
 export const planInstructionsSnapshot = (instructions?: string) => instructions === undefined ? {} : { planInstructions: instructions }
@@ -46,14 +46,14 @@ export function resolveWeek(source: WeeklyStructure, programWeek: number) {
   const definitions = planWeeks(source)
   return definitions[(programWeek - 1) % definitions.length]
 }
-export const planInputSchema = z.object({ name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), durationWeeks: positiveInteger.optional(), weeks: z.array(weekSchema).min(2).optional(), days: z.array(daySchema).min(1, 'Add at least one training day.') }).superRefine((plan, context) => {
+export const planInputSchema = z.object({ name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), durationWeeks: positiveInteger.optional(), weeks: z.array(weekSchema).min(2).optional(), days: z.array(daySchema).min(1, 'Add at least one workout.') }).superRefine((plan, context) => {
   const issue = (path: (string | number)[], message: string) => context.addIssue({ code: 'custom', path, message })
   if (plan.weeks) {
     if (!plan.durationWeeks || plan.durationWeeks % plan.weeks.length !== 0) issue(['weeks'], 'Choose a unique-week count that divides the duration evenly.')
-    if (plan.weeks.map((week) => week.dayIds).flat().join() !== plan.days.map((day) => day.id).join()) issue(['weeks'], 'Every training day must belong to exactly one ordered week.')
-  } else if (plan.days.length > 7) issue(['days'], 'Use at most 7 training days.')
+    if (plan.weeks.map((week) => week.dayIds).flat().join() !== plan.days.map((day) => day.id).join()) issue(['weeks'], 'Every workout must belong to exactly one ordered week.')
+  } else if (plan.days.length > 7) issue(['days'], 'Use at most 7 workouts.')
   const ids = new Set<string>()
-  const add = (id: string, path: (string | number)[]) => { if (ids.has(id)) issue(path, 'Each week, day, group, exercise and set needs a unique ID.'); ids.add(id) }
+  const add = (id: string, path: (string | number)[]) => { if (ids.has(id)) issue(path, 'Each week, workout, group, exercise and set needs a unique ID.'); ids.add(id) }
   plan.weeks?.forEach((week, index) => add(week.id, ['weeks', index, 'id']))
   plan.days.forEach((day, index) => {
     validateGroups(day, context, ['days', index]); add(day.id, ['days', index, 'id'])

@@ -14,10 +14,10 @@ import { useListSpace } from './use-list-space'
 export function RunIndicators({ progress }: { progress: ReturnType<typeof runProgress> }) {
   return <span className="run-indicators">{[['Plan', progress.resolved], ['Completed', progress.completed], ['Skipped', progress.skipped]].map(([label, value]) => {
     const count = Number(value), total = progress.total, percent = total && total > 0 ? Math.min(100, Math.round(count / total * 100)) : undefined
-    return <span className="run-indicator" key={label} role="img" aria-label={`${label}: ${count}${total === undefined ? ', no fixed total' : ` of ${total} planned days`}${percent === undefined ? '' : `, ${percent}%`}`}>
+    return <span className="run-indicator" key={label} role="img" aria-label={`${label}: ${count}${total === undefined ? ', no fixed total' : ` of ${total} planned workouts`}${percent === undefined ? '' : `, ${percent}%`}`}>
       <span className="run-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle className="run-track" cx="50" cy="50" r="43" /><circle className={`run-fill run-fill-${String(label).toLowerCase()}`} cx="50" cy="50" r="43" pathLength="100" strokeDasharray={`${percent ?? 0} 100`} /></svg><span>{percent === undefined ? count : `${percent}%`}</span></span><span>{label}</span>
     </span>
-  })}{progress.total === undefined && <span className="muted run-total">No fixed total</span>}{progress.total === 0 && <span className="muted run-total">No prescribed days</span>}</span>
+  })}{progress.total === undefined && <span className="muted run-total">No fixed total</span>}{progress.total === 0 && <span className="muted run-total">No prescribed workouts</span>}</span>
 }
 
 export function PlanRuns({ profileId, runs, sessions, instant, previous, includeCurrent = false, duplicateIds = new Set(), onEdit, onCancel, onOpen, focusTargetId = 'calendar-heading' }: { profileId: string; runs: Schedule[]; sessions: CompletedSession[]; instant: Date; previous: boolean; includeCurrent?: boolean; duplicateIds?: Set<string>; onOpen?: (run: Schedule) => void; focusTargetId?: string; onEdit?: (schedule: Schedule) => void; onCancel?: () => void }) {

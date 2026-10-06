@@ -34,7 +34,7 @@ test('actual dates, paired extrema, mixed units and zero; complete exercises are
   assert.equal(all.maximum!.result.weightKg, 61); assert.equal(all.maximum!.result.reps, 7)
   assert.equal(all.minimum!.result.weightKg, 0); assert.equal(all.minimum!.result.reps, 5)
   assert.equal(all.repsMaximum!.result.reps, 7); assert.equal(all.repsMaximum!.result.weightKg, toKg(100, 'lb'))
-  assert.equal(plan.daysCompleted, 0); assert.equal(plan.exercisesCompleted, 6)
+  assert.equal(plan.daysCompleted, 2); assert.equal(plan.exercisesCompleted, 6)
   assert.deepEqual(exerciseCounts(data, key), { completed: 5, skipped: 0 })
   const firstItem = plan.items.find((i) => i.key.includes(first.day.exercises[0].id))!
   assert.equal(selectPerformances(data, firstItem.key, plan.id).length, 2)
@@ -71,5 +71,5 @@ test('export, new/replace/both-merge restoration preserve underlying results, me
     assert.equal(stableJSON(result.measurements.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.measurements.map(({ profileId: _owner, ...entry }) => entry)))
     assert.equal(stableJSON(result.sessions.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.sessions.map(({ profileId: _owner, ...entry }) => entry)))
   }
-  assert.equal(db.verno, 5); assert.equal(backup.manifest.backupSchemaVersion, 10)
+  assert.equal(db.verno, 6); assert.equal(backup.manifest.backupSchemaVersion, 11)
 })

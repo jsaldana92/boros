@@ -30,9 +30,9 @@ export async function validateGeneratedArchive(bytes: Uint8Array, expected: Back
 }
 export async function generateBackup(snapshot: ProfileSnapshot, appVersion: string, progress: (message: string) => void = () => {}) {
   progress('Validating saved records and references')
-  if (snapshot.databaseVersion !== 5) throw new Error('This database version is not supported by backup schema 8. Update Boros before exporting.')
+  if (![5, 6].includes(snapshot.databaseVersion)) throw new Error('This database version is not supported by backup schema 11. Update Boros before exporting.')
   const { databaseVersion: _databaseVersion, capturedAt: _capturedAt, photos, ...records } = snapshot
-  const data: BackupData = { format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, ...records, assets: photos.map(({ blob, ...asset }) => ({ ...asset, mediaType: blob.type as 'image/jpeg' | 'image/png' | 'image/webp', bytes: blob.size, path: `photos/${asset.id}.${blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]}` })) }
+  const data: BackupData = { format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, ...records, workouts: records.workouts ?? [], assets: photos.map(({ blob, ...asset }) => ({ ...asset, mediaType: blob.type as 'image/jpeg' | 'image/png' | 'image/webp', bytes: blob.size, path: `photos/${asset.id}.${blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]}` })) }
   validateBackupData(data)
   const canonicalText = JSON.stringify(data, null, 2), payload = new Map<string, { bytes: Uint8Array; mediaType: string }>()
   payload.set('data.json', { bytes: encode(canonicalText), mediaType: 'application/json' })
@@ -46,7 +46,7 @@ export async function generateBackup(snapshot: ProfileSnapshot, appVersion: stri
   const inventory: BackupManifest['inventory'] = []
   for (const [path, file] of payload) { progress(`Hashing payload ${inventory.length + 1}/${payload.size}`); inventory.push({ path, bytes: file.bytes.byteLength, mediaType: file.mediaType, sha256: await sha256(file.bytes) }) }
   const manifest: BackupManifest = {
-    format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, databaseSchemaVersion: 5, app: { name: 'boros', version: appVersion }, exportedAt: new Date().toISOString(), snapshotAt: snapshot.capturedAt,
+    format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, databaseSchemaVersion: 6, app: { name: 'boros', version: appVersion }, exportedAt: new Date().toISOString(), snapshotAt: snapshot.capturedAt,
     profile: { id: data.profile.id, name: data.profile.name, kind: data.profile.kind }, snapshotPolicy: SNAPSHOT_POLICY,
     counts: recordCounts(data), csvRows: Object.fromEntries(tables.map((item) => [item.path, item.rows])),
     authoritative: ['data.json', 'manifest.json', 'photos/'], checksum: 'SHA-256 of every payload file as uncompressed bytes; manifest.json is excluded. Integrity only, not authenticity.', exclusions,

@@ -78,7 +78,7 @@ test('Reset deletes only one occurrence and restores statuses/statistics; stale 
   await assert.rejects(sessions.update(id, completed.id, 1, otherDraft.input), /unavailable/)
   await assert.rejects(sessions.openOccurrence(id, run.id, event(0).ref.dayId, event(0).ref.scheduledDate, run.revision), /changed/)
   const calendar = scheduleService(db), events = await calendar.events(id, run.startWeek, addDays(run.startWeek, 6))
-  assert.equal(dayStatus(events[0]), 'Pending'); assert.equal((await progressService(db).read(id)).plans[0].daysCompleted, 0) // The retained fixture log is partial.
+  assert.equal(dayStatus(events[0]), 'Pending'); assert.equal((await progressService(db).read(id)).plans[0].daysCompleted, 1) // Explicit partial Save completed the retained workout.
   let current = (await db.schedules.get([id, run.id]))!
   current = await weekly.outcome(id, event(0).ref, current.revision, 'skipped')
   await actions.reset(await actions.preview(id, run.id, current.revision, event(0).ref))
@@ -173,7 +173,7 @@ test('v6 closed state and completed history round-trip; reviewed restore removes
   const { db, id, run, record, open, actions } = await setup(t), completed = await record(0), abandoned = await open(1)
   await actions.leave(await actions.preview(id, run.id, run.revision)); await db.drafts.add(abandoned)
   const snapshot = await captureProfile(id, db), zip = await generateBackup(snapshot, 'train-refinement'), backup = await readBackup(zip.bytes)
-  assert.equal(backup.data.backupSchemaVersion, 10)
+  assert.equal(backup.data.backupSchemaVersion, 11)
   for (const choice of ['new', 'replace', 'device', 'import'] as const) {
     const restored = await buildRestorePlan(backup, choice === 'new' ? undefined : snapshot, choice, crypto.randomUUID(), snapshot.profile.name, new Date().toISOString())
     assert.ok(restored.result.schedules[0].closedAt); assert.equal(restored.result.sessions[0].id, completed.id)

@@ -1,3 +1,5 @@
+import { SessionReview } from '../train/SessionReview'
+import type { CompletedSession } from '../../schemas/session'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowLeft, ArrowRight, ChevronDown, Menu } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -28,6 +30,7 @@ export function CalendarPage() {
 }
 function CalendarWorkspace({ profileId }: { profileId: string }) {
   const { allowLeave } = useWorkspace(), { openScreen } = useScreenNavigation(), instant = useCurrentInstant()
+  const [review, setReview] = useState<CompletedSession>()
   const [dayAction, setDayAction] = useState<{ event: CalendarEvent; run: Schedule; displayDate: string }>()
   const [selection, setSelection] = useState<string>(), [view, setView] = useState<CalendarView>(readCalendarView)
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches)
@@ -42,7 +45,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   const library = useLiveQuery(async () => {
     try {
       const data = await schedules.library(profileId)
-      return { data, colors: calendarColors(profileId, [...data.schedules.map((run) => run.planId), ...data.sessions.map((session) => session.sourcePlanId)]), error: '' }
+      return { data, colors: calendarColors(profileId, [...data.schedules.map((run) => run.planId), ...data.sessions.flatMap((session) => session.sourcePlanId ? [session.sourcePlanId] : [])]), error: '' }
     } catch (error) { return { error: message(error) } }
   }, [profileId, attempt])
   const data = library?.data, zone = browserZone(), today = localToday(zone, instant), date = selection ?? today, range = viewRange(date, view)
@@ -73,7 +76,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   const closeEditor = () => { setEditor(undefined); pendingFocus.current = () => restore(editorPosition.current) }
   const returnCalendar = () => { setDestination('calendar'); pendingFocus.current = () => restore(returnPosition.current) }
   const openEvent = async (activity: CalendarActivity) => {
-    if (activity.session) { openScreen('train', { profileId, sessionId: activity.session.id }); return }
+    if (activity.session) { setReview(activity.session); return }
     const event = activity.event
     if (!event) return
     if (event.outcome && event.outcome.status !== 'pending') { const run = data?.schedules.find((item) => item.id === event.ref.scheduleId); if (run) setDayAction({ event, run, displayDate: activity.date }); return }
@@ -90,8 +93,8 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   const renderDay = (day: string) => <section key={day} className={`calendar-day${view === 'month' && day.slice(0, 7) !== date.slice(0, 7) ? ' adjacent-month' : ''}${day === date ? ' selected-date' : ''}`} aria-label={day} aria-current={day === today ? 'date' : undefined}>
     <h3><time dateTime={day}>{weekdays[weekday(day)]} {day.slice(5)}</time>{day === today && ' · Today'}</h3>
     {events?.filter((activity) => activity.date === day).map((activity) => {
-      const event = activity.event, status = activity.session ? activity.session.partial ? 'Incomplete' : 'Completed' : event?.outcome?.status === 'completed' ? 'Completed' : event?.draft ? 'Incomplete' : event ? dayStatus(event, instant) : 'Completed'
-      return <button key={activity.id} style={{ '--plan-color': `var(--calendar-plan-${colors[activity.planId] ?? 0})` } as CSSProperties} className={`calendar-event${status === 'Completed' ? ' completed' : ''}`} disabled={busy} onClick={() => void openEvent(activity)}><span className="event-name">{activity.planName}</span><span className="event-day">{activity.day.name}</span><span className="status-pill">{status}</span></button>
+      const event = activity.event, status = activity.session ? 'Completed' : event?.outcome?.status === 'completed' ? 'Completed' : event?.draft ? 'Incomplete' : event ? dayStatus(event, instant) : 'Completed'
+      return <button key={activity.id} style={{ '--plan-color': `var(--calendar-plan-${colors[activity.planId ?? 'standalone'] ?? 0})` } as CSSProperties} className={`calendar-event${status === 'Completed' ? ' completed' : ''}`} disabled={busy} onClick={() => void openEvent(activity)}><span className="event-name">{activity.planName}</span><span className="event-day">{activity.day.name}</span><span className="status-pill">{status}</span></button>
     })}
     {data?.schedules.filter((run) => run.kind !== 'unscheduled' && weekday(day) === 0 && run.excludedWeeks?.includes(day)).map((run) => <p className="muted" key={run.id}>{run.revisions.at(-1)?.planName}: Excluded week</p>)}
     {data?.schedules.filter((run) => run.kind !== 'unscheduled' && scheduleActiveOn(run, day)).map((run) => { const revision = revisionAt(run, day); return revision?.needsRepair ? <p className="muted" key={run.id}>{revision.planName}: mapping needs repair</p> : revision && !revision.unscheduled && events && !events.some((activity) => activity.event?.ref.scheduleId === run.id && activity.date === day && !activity.event.unscheduled) ? <p className="muted" key={run.id}>{revision.planName}: Rest</p> : null })}
@@ -115,6 +118,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
       {dayAction && <TrainingDayActions profileId={profileId} {...dayAction} onClose={() => setDayAction(undefined)} onOpened={(value) => { setDayAction(undefined); openScreen('train', { profileId, draftId: value.draft?.id, sessionId: value.session?.id }) }} />}
       {error && <p role="alert">{error}</p>}
     </>}
+    {review && <ActionDialog title="Completed workout" actions={<></>} onClose={() => setReview(undefined)}><SessionReview session={review} onClose={() => setReview(undefined)} backLabel="Close" /></ActionDialog>}
     {menu && <ActionDialog title="Calendar menu" onClose={() => setMenu(false)} actions={<button onClick={() => setMenu(false)}>Cancel</button>}><div className="stacked-actions"><button onClick={() => openRuns('current')}>Current Plans</button><button onClick={() => openRuns('previous')}>Previous Plans</button></div></ActionDialog>}
   </>
 }

@@ -9,7 +9,7 @@ const card = (page: Page, name: string) => page.getByRole('article', { name: `Pl
 async function open(page: Page) {
   await page.goto('./'); await button(page, 'Create').click()
   const notice = button(page, 'Understood'); if (await notice.isVisible()) await notice.click()
-  await button(page, 'Import AI Output').click()
+  await button(page, 'Imported').click()
 }
 async function preview(page: Page, value: unknown, fenced = false) {
   const json = JSON.stringify(value)
@@ -76,7 +76,7 @@ test('invalid input and canceled previews write nothing; dirty navigation/unload
   const dialog = await unload; expect(dialog.type()).toBe('beforeunload'); await dialog.dismiss()
   await expect(page).toHaveURL(address)
   await button(page, 'Close').click(); await page.getByRole('dialog').getByRole('button', { name: 'Discard', exact: true }).click()
-  await expect(button(page, 'Import AI Output')).toBeFocused()
+  await expect(button(page, 'Imported')).toBeFocused()
   expect(await counts(page)).toEqual(before)
 })
 
@@ -86,7 +86,7 @@ test('four-day plan preview edits save independently and reopen in the manual ed
   await preview(page, planFixture(), true)
   expect((await counts(page)).plans).toBe(0); expect((await counts(page)).tags).toBe(0)
   await page.getByLabel('Plan name', { exact: true }).fill('Imported edited plan')
-  await page.getByLabel('Day 1 name', { exact: true }).fill('Upper 肩')
+  await page.getByLabel('Workout 1 name', { exact: true }).fill('Upper 肩')
   await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit')
   await expect(page.getByLabel('Set 1 RIR minimum (optional)', { exact: true })).toHaveValue('0')
   await expect(page.getByLabel('Set 2 RIR minimum (optional)', { exact: true })).toHaveValue('')
@@ -100,7 +100,7 @@ test('four-day plan preview edits save independently and reopen in the manual ed
   await expect(card(page, 'Imported edited plan')).toBeVisible()
   expect((await counts(page)).exercises).toBe(1); expect((await counts(page)).tags).toBe(2)
   await page.reload(); await cardAction(page, card(page, 'Imported edited plan'), 'Edit')
-  await expect(page.getByLabel('Day 1 name', { exact: true })).toHaveValue('Upper 肩')
+  await expect(page.getByLabel('Workout 1 name', { exact: true })).toHaveValue('Upper 肩')
   await expect(page.locator('.plan-day')).toHaveCount(4)
   await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit')
   await expect(page.getByLabel('Notes (optional)', { exact: true })).toHaveValue('Edited preview note')
@@ -122,7 +122,7 @@ test('standalone imports use the library editor; duplicate names require rename 
   await cardAction(page, exercise, 'Edit')
   await expect(page.getByLabel('Instructions (optional)', { exact: true })).toHaveValue(workoutFixture().workout.instructions)
   await button(page, 'Cancel').click()
-  await button(page, 'Import AI Output').click(); await preview(page, workoutFixture()); await button(page, 'Save exercise').click()
+  await button(page, 'Imported').click(); await preview(page, workoutFixture()); await button(page, 'Save exercise').click()
   await expect(page.getByRole('alert')).toContainText('already exists')
   await page.getByLabel('Exercise name', { exact: true }).fill('Guest renamed import')
   const other = await context.newPage(); await other.goto('./'); await button(other, 'Settings').click()
@@ -137,7 +137,7 @@ test('standalone imports use the library editor; duplicate names require rename 
 })
 
 test('failed import saves retain edits and roll back tags; rapid retry saves once with reachable light-theme controls', async ({ page }, testInfo) => {
-  await open(page); await button(page, 'Close').click(); await button(page, 'Settings').click(); await button(page, 'Light').click(); await button(page, 'Create').click(); await button(page, 'Import AI Output').click()
+  await open(page); await button(page, 'Close').click(); await button(page, 'Settings').click(); await button(page, 'Light').click(); await button(page, 'Create').click(); await button(page, 'Imported').click()
   await preview(page, planFixture()); await page.getByLabel('Plan name', { exact: true }).fill('Recoverable import')
   const before = await counts(page)
   await page.evaluate(() => {

@@ -5,20 +5,42 @@ local profiles/settings, photos, dated weights, and an exercise library with
 Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
+A workout is an ordered collection of exercises; an exercise is one individual
+movement. Create uses Yes/No for unique weeks, consistent top-level field spacing,
+and centered Add exercise/Add workout buttons. Exercise tag assignments use the
+same compact, scrollable pills as library browsing; selections and new tags stay
+in the draft until saved. Names, notes and imported text are never renamed.
+See [Create verification](docs/create-terminology-verification.md).
+
 Plans now support ordered unique-week cycles as well as the existing repeating
-lineup. Each unique week has 1-7 training days; its count must divide the finite
+lineup. Each unique week has 1-7 workouts; its count must divide the finite
 plan duration. Create preserves input during mode/count changes and confirms
 populated reductions. Calendar assigns weekdays separately for each definition.
 Train uses actual program week numbers; postponed weeks do not advance the cycle.
-Progress counts actual prescribed days (four weeks alternating four/three days
+Progress counts actual prescribed workouts (four weeks alternating four/three workouts
 have 14). Existing instances and performed snapshots stay independent of template
 edits. Dirty Create forms use an in-app Cancel/Leave warning, including Settings
 navigation; genuine browser reload/close retains native unload protection.
 
-The database remains `boros` v5 without a migration or record reset. AI **v4**
-accepts strict v1-v3 payloads; backup **v10** reads strict v1-v9 archives and adds
-weekly definitions and set identities to JSON/CSV. See [AI format](docs/ai-formatting.md),
-[backup format](docs/backup-format.md), and [cycle verification](docs/unique-weeks-verification.md).
+Create now has **Plan / Workout / Exercise** and a full-width **Imported** action.
+The independent Workout library supports editing, duplication and archive/restore.
+Add workout in a plan copies a library template into the selected week with fresh
+execution IDs. Editing any copy leaves its template and other copies unchanged.
+
+Train offers existing library workouts and custom workouts without requiring a
+plan. Custom Save defaults to session-only; Yes also creates a reusable template
+atomically, with a supplied name or the next available `Custom Workout (n)` name.
+Results and private training notes never become template defaults. Explicit Save,
+including partial Save, completes a workout; exercise statistics use actual results.
+Calendar reviews saved workouts in a modal with historical note dialogs. There is
+no Train Saved sessions entry point. Unfinished drafts still recover after reload.
+
+The database is still named `boros`; additive **v6** creates only the workout store.
+AI **v5** distinguishes Plan, Workout and Exercise while reading strict v1-v4
+contracts (legacy `workout` still means one exercise). Backup **v11** includes
+workouts and standalone/custom records and reads strict v1-v10 archives. See
+[AI format](docs/ai-formatting.md), [backup format](docs/backup-format.md), and
+[workout verification](docs/workout-library-verification.md).
 
 The preceding revision adds session-only exercises and sets, including explicitly
 ordered extra superset rounds, with recovery and frozen history. Settings preserves
@@ -262,13 +284,13 @@ an upgrade, reload that tab; never delete its database as a workaround.
 ## Manual plans
 
 Select a Create plan card to read its saved details: title, duration (`No end
-date` for legacy unbounded plans), training/rest-day counts, and ordered days.
+date` for legacy unbounded plans), workout/rest-day counts, and ordered days.
 Each exercise shows its saved set/rep/RIR targets, including explicit zero and
 accurate per-set details when targets vary. Repeated occurrences stay separate.
 Supersets use Train's execution order and one shared bordered member box beneath
 their saved Superset number; following standalone exercises remain outside it.
 
-Optional **Instructions** and **Plan note** are independent plain-text fields,
+Optional **Instructions** and **Note (optional):** are independent plain-text fields,
 each up to 20,000 characters. Details show nonblank Instructions and Note after
 the last day, preserving newlines. Nothing is inferred from exercise text or
 copied between fields. Both survive saves/duplicates; unsaved forms remain
@@ -284,9 +306,9 @@ confirmation and keeps history/runs. Closing or pressing Escape dismisses only
 the top popup; keyboard focus returns to its opener. Long details scroll inside
 the dialog while the background stays locked.
 
-Create Plan builds 1-7 ordered training days and displays `7 - days` rest days.
-Day count is derived from the actual day array, never saved as a second number.
-Name each day and add at least one exercise before saving. Incomplete input may
+Create Plan builds 1-7 ordered workouts per weekly definition and displays the corresponding rest-day count.
+Workout count is derived from the actual `days` array, never saved as a second number.
+Name each workout and add at least one exercise before saving. Incomplete input may
 remain in the editor; validation or a failed write preserves it. Plan/day names
 allow up to 120 characters, and each day supports up to 100 exercise occurrences.
 Prescription limits are the same as the library editor.
@@ -313,21 +335,21 @@ modal with Edit, Duplicate and Archive (Restore for archived records). Escape
 closes the top popup, returning focus to its opener. Library actions affect only
 the standalone template; plans and history keep their snapshots.
 Adjacent arrows and an occurrence popup expose **Edit, Duplicate, Move, Delete**
-in that order, with red Delete. Day sections are lighter than nested cards in both
+in that order, with red Delete. Workout sections are lighter than nested cards in both
 themes. Public addresses and existing dirty-form/unload protections are unchanged.
 
-Use the adjacent day/exercise arrows to change order. **Move** opens a dialog of
-other training days; choose a destination or use Cancel/Escape. Full days are
+Use the adjacent workout/exercise arrows to change order. **Move** opens a dialog of
+other workouts; choose a destination or use Cancel/Escape. Full workouts are
 disabled. Cancel restores focus to the occurrence action button; a successful move focuses the moved
-occurrence. Moving a member to another day makes it standalone.
+occurrence. Moving a member to another workout makes it standalone.
 Renaming, editing, and moving retain IDs; added occurrences and duplicated plans
-receive new IDs for their contents. Removing days/exercises or reducing the day
+receive new IDs for their contents. Removing workouts/exercises or reducing the workout
 count requires confirmation. The shared prescription editor applies changes to the
 unsaved plan; Save plan commits the entire plan. Editing/archiving a source cannot
 change another saved plan. Plan-specific tag edits stay inside the snapshot and
 do not rename or create library tag records.
 
-Plan cards show a bold name and a smaller training-day/rest-day/duration summary.
+Plan cards show a bold name and a smaller workout/rest-day/duration summary.
 Legacy unbounded plans are labeled honestly. Open a card for Edit, Duplicate or
 Archive; archived cards retain Restore. Actions use keyboard-accessible dialogs
 with Escape and focus restoration.
@@ -470,7 +492,7 @@ exhaustion, and large-data performance still need the checks recorded in TODO.md
 Train's **Add Plan** card opens the same plan cards used in Create. One click
 appends immediately and closes the popup; duplicate additions are harmless. Cards
 remain visible with one selection. Beneath the name, they show the current program
-week, then `3 weeks · 3 training days · 4 rest days` using the committed instance.
+week, then `3 weeks · 3 workouts · 4 rest days` using the committed instance.
 Upcoming, Paused and Ended boundaries do not invent a week number. Excluded weeks
 delay progression; browsing another week does not change this main-card label.
 Cards use one column on phones and two on wider screens. Add Plan and the
@@ -480,7 +502,7 @@ Opening a plan shows its title, a Monday-Sunday week range, **Week N** and verti
 cards. Arrow buttons change weeks; the date-range button opens a date picker.
 Scheduled cards show weekday and Pending, Due Today, Past Due, Completed or Skipped
 using the schedule's saved time zone. Unscheduled weekly programs show Pending,
-Completed or Skipped. Training days use saved order as a visual Monday-onward
+Completed or Skipped. Workouts use saved order as a visual Monday-onward
 layout, with noninteractive Rest rows for other weekdays. This does not assign
 Calendar dates. Scheduled weeks keep actual weekdays, including separate retained
 occurrences that coincide on one date. Empty/excluded/inactive weeks never gain
@@ -528,7 +550,7 @@ the exact profile/run/template has an explicit valid closure record. The old
 Remove from Train action did not record one: deselection, archiving, a name match
 or Stop Scheduling alone is insufficient. Ambiguous legacy drafts remain recoverable.
 
-Each start copies the complete training-day prescription: names, order, set
+Each start copies the complete workout prescription: names, order, set
 targets, rest, instructions, tutorial, tags, notes, and source references. Later
 source edits/archiving cannot rewrite drafts or completed logs. Drafts/sessions
 use stable profile-owned IDs and revisions. Database v4 adds only `drafts`,
@@ -680,7 +702,7 @@ Month is divided into complete Monday–Sunday sections labeled Week 1, Week 2, 
 These are calendar rows, not program weeks. Each row has seven aligned columns;
 on narrow screens the row scrolls horizontally. Day/Week remain single periods.
 Completed events stay actionable,
-greyed and struck through. Cards show only plan name, smaller training-day name,
+greyed and struck through. Cards show only plan name, smaller workout name,
 and a status pill. Partial logs and drafts show Incomplete; full sessions and explicit
 completion markers show Completed. Past uncompleted
 events show Due Today or Past Due in their own schedule time zone. Clear in Train resets input, never calendar
@@ -692,7 +714,7 @@ is unavailable. Records remain in IndexedDB. All screens still use the same publ
 address and static-hosting rules.
 
 **Add Plan** reuses Create's Search, Sort and plan cards. Cards show weeks,
-training days and rest days in that order; legacy unbounded durations stay explicit.
+workouts and rest days in that order; legacy unbounded durations stay explicit.
 Archived plans and templates with any active scheduled or unscheduled run are
 excluded. The selected Calendar date supplies the starting Monday; otherwise the
 saved profile zone supplies today's Monday. This context stays fixed while browsing.
@@ -1201,7 +1223,7 @@ sort key. Tags/Clear share one row; ANY matching stays unchanged. The compact
 selected pill no longer inherits the old outer border/shadow; its 44 px target and
 keyboard focus remain. Create/Progress standalone exercise cards share name and
 Added: dd/mm/yyyy from the actual library creation date. Plan occurrences retain
-their training-day subtitle. Create keeps one divider before Plans.
+their workout subtitle. Create keeps one divider before Plans.
 
 Settings Data retains the browser-storage notice, Download, Upload and guarded
 Clear Data. The privacy warning is one shared modal; processing/cancel/failure
