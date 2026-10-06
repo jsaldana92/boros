@@ -1,1 +1,0 @@
-import{jt as e}from"./index-DWemX7cz.js";import{n as t}from"./library-CkswQKnp.js";var n=e();function r({search:e,sort:r,onSearch:i,onSort:a}){return(0,n.jsx)(t,{noun:`plans`,search:e,sort:r,onSearch:i,onSort:a})}export{r as t};

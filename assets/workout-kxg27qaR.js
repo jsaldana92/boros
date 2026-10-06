@@ -1,1 +1,0 @@
-import{d as e,l as t,v as n}from"./index-DWemX7cz.js";var r=t.omit({sourceWorkoutId:!0}).superRefine((e,t)=>{let r=n.safeParse({name:e.name,days:[e]});r.success||r.error.issues.forEach(e=>t.addIssue({...e,path:e.path[0]===`days`?e.path.slice(2):e.path}))}),i=e=>r.parse(structuredClone(e)),a=t=>({...e(i(t)),sourceWorkoutId:t.id});export{r as n,i as r,a as t};
