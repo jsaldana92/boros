@@ -1,3 +1,4 @@
+import { initialStructure, sessionRounds, validateAmendment, type SessionSnapshot } from '../schemas/session-structure.ts'
 import { planInstructionsSnapshot } from '../schemas/plan.ts'
 import { previousResults } from '../lib/previous-results.ts'
 import { monday } from '../lib/calendar-dates.ts'
@@ -5,12 +6,12 @@ import type { WeightUnit } from '../schemas/profile.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { z } from 'zod'
-import { daySchema, roundCount, trainingBlocks } from '../schemas/plan.ts'
+import { daySchema, trainingBlocks } from '../schemas/plan.ts'
 import { occurrences, occurrenceKey, dateSchema, programWeek } from '../schemas/schedule.ts'
 import { assessSession, blankSession, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
 
 export function sessionService(database: BorosDatabase) {
-  const tables = [database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules]
+  const tables = [database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises]
   const owner = async (profileId: string) => { const profile = await database.profiles.get(profileId); if (!profile) throw new Error('This profile is unavailable. Nothing was saved.'); return profile }
   const draft = async (profileId: string, id: string) => { const value = await database.drafts.get([profileId, id]); if (!value) throw new Error('This draft is unavailable in this profile.'); return value }
   const editable = async (value: SessionDraft, revision: number) => {
@@ -37,7 +38,7 @@ export function sessionService(database: BorosDatabase) {
         if (existing) return { draft: existing }
         if (!event) throw new Error('This occurrence changed or needs mapping repair. Refresh Calendar.')
         const now = new Date().toISOString(), day = daySchema.parse(structuredClone(event.day))
-        const value: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: event.planId, sourceDayId: dayId, occurrence: event.ref, occurrenceKey: key, activeSourceKey: `scheduled:${key}`, planName: event.planName, ...planInstructionsSnapshot(event.planInstructions), day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
+        const value: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: event.planId, sourceDayId: dayId, occurrence: event.ref, occurrenceKey: key, activeSourceKey: `scheduled:${key}`, planName: event.planName, ...planInstructionsSnapshot(event.planInstructions), day, structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
         await database.drafts.add(value); return { draft: value }
       })
     },
@@ -62,14 +63,21 @@ export function sessionService(database: BorosDatabase) {
         const plan = await database.plans.get([profileId, planId]), source = plan?.days.find((day) => day.id === dayId)
         if (!plan || plan.archivedAt || !source) throw new Error('This saved training day is unavailable. Choose an active plan.')
         const day = daySchema.parse(structuredClone(source)), now = new Date().toISOString()
-        const result: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: planId, sourceDayId: dayId, activeSourceKey: key, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), day, input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
+        const result: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: planId, sourceDayId: dayId, activeSourceKey: key, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), day, structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
         await database.drafts.add(result); return result
       })
     },
-    async update(profileId: string, id: string, revision: number, raw: SessionInput) {
+    async update(profileId: string, id: string, revision: number, raw: SessionInput, snapshot?: SessionSnapshot) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId); const value = await draft(profileId, id); await editable(value, revision)
-        const result = { ...value, input: validateDraftInput(raw, value.day), revision: value.revision + 1, updatedAt: new Date().toISOString() }
+        if (snapshot) {
+          validateAmendment(value, snapshot)
+          for (const addition of snapshot.day.exercises.slice(value.day.exercises.length)) {
+            if (addition.source?.kind !== 'exercise' || !await database.exercises.get([profileId, addition.source.id])) throw new Error('An added exercise is unavailable in this profile. Your session input is kept.')
+          }
+        }
+        const next = snapshot ? { ...value, day: structuredClone(snapshot.day), structure: structuredClone(snapshot.structure) } : value
+        const result = { ...next, input: validateDraftInput(raw, next.day), revision: value.revision + 1, updatedAt: new Date().toISOString() }
         await database.drafts.put(result); return result
       })
     },
@@ -106,7 +114,7 @@ export function sessionService(database: BorosDatabase) {
           const existing = await database.sessions.where('[profileId+occurrenceKey]').equals([profileId, value.occurrenceKey]).first()
           if (existing) return existing
         }
-        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, sourcePlanId: value.sourcePlanId, sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), planName: value.planName, ...planInstructionsSnapshot(value.planInstructions), day: structuredClone(value.day), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
+        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, sourcePlanId: value.sourcePlanId, sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), planName: value.planName, ...planInstructionsSnapshot(value.planInstructions), day: structuredClone(value.day), ...(value.structure ? { structure: structuredClone(value.structure) } : {}), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
         await database.sessions.add(result)
         await database.drafts.put({ ...value, input, finalizedAt: completedAt, activeSourceKey: undefined, updatedAt: loggedAt, revision: value.revision + 1 })
         await stopOwned(profileId, id); return result
@@ -119,12 +127,10 @@ export function sessionService(database: BorosDatabase) {
         if (exercise?.groupId) throw new Error('Use the superset round rest, not a member rest.')
         if (!exercise || !Number.isInteger(setIndex) || setIndex < 0 || setIndex >= exercise.prescription.sets.length) throw new Error('This rest position is unavailable.')
         const afterExercise = setIndex === exercise.prescription.sets.length - 1
-        if (afterExercise && index === value.day.exercises.length - 1) throw new Error('There is no next exercise for this rest.')
         const seconds = (afterExercise ? exercise.prescription.restAfterSeconds : exercise.prescription.restBetweenSeconds) ?? manualSeconds
-        if (seconds === undefined) throw new Error('Enter a rest duration in seconds.')
-        const endAt = timerEnd(seconds)
+        const timing = seconds === undefined ? { mode: 'countup' as const, startedAt: new Date().toISOString() } : { mode: 'countdown' as const, durationSeconds: seconds, endAt: timerEnd(seconds) }
         if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
-        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `${exercise.prescription.name}: ${afterExercise ? 'between exercises' : `after set ${setIndex + 1}`}`, durationSeconds: seconds, endAt }
+        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `${exercise.prescription.name}: ${afterExercise ? 'between exercises' : `after set ${setIndex + 1}`}`, ...timing }
         await database.restTimers.put(timer); return timer
       })
     },
@@ -132,13 +138,12 @@ export function sessionService(database: BorosDatabase) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId); const value = await draft(profileId, draftId); await editable(value, revision)
         const blocks = trainingBlocks(value.day), index = blocks.findIndex((block) => block.group?.id === groupId), block = blocks[index]
-        if (!block?.group || !Number.isInteger(round) || round < 0 || round >= roundCount(block.members)) throw new Error('This superset rest position is unavailable.')
-        const after = round === roundCount(block.members) - 1
+        if (!block?.group || !Number.isInteger(round) || round < 0 || round >= sessionRounds(block.members, value.structure).length) throw new Error('This superset rest position is unavailable.')
+        const after = round === sessionRounds(block.members, value.structure).length - 1
         const seconds = (after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds) ?? manualSeconds
-        if (seconds === undefined) throw new Error('Enter a rest duration in seconds.')
-        const endAt = timerEnd(seconds)
+        const timing = seconds === undefined ? { mode: 'countup' as const, startedAt: new Date().toISOString() } : { mode: 'countdown' as const, durationSeconds: seconds, endAt: timerEnd(seconds) }
         if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
-        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `Superset ${block.group.number}: ${after ? 'after group' : `after round ${round + 1}`}`, durationSeconds: seconds, endAt }
+        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `Superset ${block.group.number}: ${after ? 'after group' : `after round ${round + 1}`}`, ...timing }
         await database.restTimers.put(timer); return timer
       })
     },
@@ -146,7 +151,7 @@ export function sessionService(database: BorosDatabase) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
         const timer = await database.restTimers.get('active')
-        if (!timer || timer.token !== token || timer.profileId !== profileId || timer.draftId !== draftId || timer.alertedAt || Date.parse(timer.endAt) > Date.now()) return false
+        if (!timer || timer.token !== token || timer.profileId !== profileId || timer.draftId !== draftId || timer.mode === 'countup' || timer.alertedAt || Date.parse(timer.endAt) > Date.now()) return false
         await database.restTimers.put({ ...timer, alertedAt: new Date().toISOString() }); return true
       })
     },
@@ -156,7 +161,7 @@ export function sessionService(database: BorosDatabase) {
         const timer = await database.restTimers.get('active')
         if (!timer || timer.profileId !== profileId || timer.draftId !== draftId || timer.token !== token) throw new Error('This timer changed or is unavailable in this session.')
         if (action === 'stop') await database.restTimers.delete('active')
-        else await database.restTimers.put({ ...timer, token: createId(), alertedAt: undefined, endAt: timerEnd(timer.durationSeconds) })
+        else await database.restTimers.put({ ...timer, token: createId(), alertedAt: undefined, ...(timer.mode === 'countup' ? { startedAt: new Date().toISOString() } : { endAt: timerEnd(timer.durationSeconds) }) })
       })
     },
   }

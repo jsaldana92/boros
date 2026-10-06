@@ -49,7 +49,7 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
     const savedDraft = drafts.find((d) => d.profileId === profileId && d.id === session.draftId && d.finalizedAt && d.sourcePlanId === session.sourcePlanId && d.sourceDayId === session.sourceDayId)
     for (const [index, occurrence] of session.day.exercises.entries()) {
       const results = session.exercises.find((e) => e.id === occurrence.id)?.sets ?? []
-      const sets = results.flatMap((result, s) => validActual(result) ? [{ id: `${session.id}:${occurrence.id}:${s}`, index: s, result }] : [])
+      const sets = results.flatMap((result, s) => validActual(result) ? [{ id: `${session.id}:${occurrence.id}:${session.structure?.exercises[index]?.sets[s]?.id ?? s}`, index: s, result }] : [])
       const itemKey = occurrenceItemKey(session.day.id, occurrence.id), exerciseKey = exerciseIdentity(session.sourcePlanId, session.day.id, occurrence)
       const id = `${instanceId}:${session.occurrence?.key ?? session.id}:${occurrence.id}`
       const prior = outcomes.get(id), count = occurrence.prescription.sets.length

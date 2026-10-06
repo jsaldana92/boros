@@ -4,7 +4,7 @@ import { resolveTags } from './tags.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { exerciseToInput } from './exercises.ts'
 import { nameKey } from '../schemas/profile.ts'
-import { duplicateDay, planInputSchema, planToInput, type ExerciseSource, type Plan, type PlanInput } from '../schemas/plan.ts'
+import { duplicateStructure, planInputSchema, planToInput, type ExerciseSource, type Plan, type PlanInput } from '../schemas/plan.ts'
 import type { ExerciseInput } from '../schemas/exercise.ts'
 import { appendRevision } from '../schemas/schedule.ts'
 import { localToday, nextMonday } from '../lib/calendar-dates.ts'
@@ -58,7 +58,7 @@ export function planService(database: BorosDatabase) {
         if (creationId) await resolveTags(database, profileId, input.days.flatMap((day) => day.exercises.flatMap((exercise) => exercise.prescription.tagNames)), now)
         const result: Plan = { ...input, profileId, id: old?.id ?? creationId ?? createId(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.plans.put(result)
-        if (old && (old.days.length !== result.days.length || old.days.some((day) => !result.days.some((next) => next.id === day.id)))) {
+        if (old && (JSON.stringify(old.weeks) !== JSON.stringify(result.weeks) || old.days.length !== result.days.length || old.days.some((day) => !result.days.some((next) => next.id === day.id)))) {
           const schedules = await database.schedules.where('[profileId+planId]').equals([profileId, result.id]).toArray()
           for (const schedule of schedules.filter((item) => !item.stoppedFrom)) {
             const last = schedule.revisions.at(-1)!
@@ -89,7 +89,7 @@ export function planService(database: BorosDatabase) {
       const names = new Set(plans.filter((plan) => !plan.archivedAt).map((plan) => plan.nameKey))
       let suffix = 1, name = `${original.name.slice(0, 100)} (copy)`
       while (names.has(nameKey(name))) name = `${original.name.slice(0, 100)} (copy ${++suffix})`
-      return { ...planToInput(original), name, days: original.days.map(duplicateDay) }
+      return { ...planToInput(original), name, ...duplicateStructure(original) }
     },
   }
 }

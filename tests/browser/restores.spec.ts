@@ -114,9 +114,9 @@ test('clear cancellation and confirmation, failure rollback and stale preview re
 test('invalid ZIP and failed image decoding remain recoverable; cancel/navigation/profile-switch abandon temporary uploads', async ({ page }) => {
   const f = await fixture(page), before = await records(page)
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'bad.zip', mimeType: 'application/zip', buffer: Buffer.from('not zip') }); await expect(page.getByRole('alert')).toContainText('Invalid ZIP'); expect(await records(page)).toEqual(before)
-  const zip = await JSZip.loadAsync(f.bytes), manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = 99; zip.file('manifest.json', JSON.stringify(manifest))
+  const zip = await JSZip.loadAsync(f.bytes), manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = 109; zip.file('manifest.json', JSON.stringify(manifest))
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'future.zip', mimeType: 'application/zip', buffer: await zip.generateAsync({ type: 'nodebuffer' }) }); await expect(page.getByRole('alert')).toContainText('Update Boros')
-  manifest.backupSchemaVersion = 8
+  manifest.backupSchemaVersion = 10
   const data = JSON.parse(await zip.file('data.json')!.async('string')); data.assets[0].width = 2; manifest.assets.find((a) => a.id === data.assets[0].id).width = 2
   const payload = new TextEncoder().encode(JSON.stringify(data)), entry = manifest.inventory.find((i) => i.path === 'data.json'); entry.bytes = payload.length; entry.sha256 = await sha256(payload)
   zip.file('data.json', payload); zip.file('manifest.json', JSON.stringify(manifest))

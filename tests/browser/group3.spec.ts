@@ -76,8 +76,8 @@ test('concurrent Add Plan appends safely; failed selection and draft writes reta
   await page.evaluate(() => (window as any).recoverPrefs()); await page.getByRole('dialog').getByRole('article', { name: 'Plan Beta', exact: true }).getByRole('button').click(); await expect(page.getByRole('dialog')).toHaveCount(0)
   await startWeekly(page, 'Alpha', 'Workout'); await page.evaluate(() => { const put = IDBObjectStore.prototype.put; (window as any).recover = () => { IDBObjectStore.prototype.put = put }; IDBObjectStore.prototype.put = function (...args) { if (this.name === 'drafts') throw new DOMException('Draft disk full', 'QuotaExceededError'); return put.apply(this, args) } })
   await field(page, 'Press set 1 Weight (kg)').fill('12.'); await expect(page.getByRole('alert')).toContainText('Draft disk full')
-  await button(page, 'Settings').click(); await button(page, 'Stay').click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
-  await button(page, 'Cancel').click(); await button(page, 'Stay').click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
+  await button(page, 'Settings').click(); await expect(page.getByRole('alert').first()).toContainText('Draft disk full'); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
+  await button(page, 'Cancel').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('12.')
   await page.evaluate(() => (window as any).recover()); await button(page, 'Retry draft save').click(); await waitForDraft(page); await second.close()
 })
 

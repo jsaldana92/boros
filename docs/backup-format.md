@@ -1,9 +1,9 @@
-# Boros profile backup, schema 8 (schemas 1–7 supported)
+# Boros profile backup, schema 10 (schemas 1-9 supported)
 
 Export was implemented in Phase 8; reviewed restore and profile Clear Data are
 implemented in Phase 9. This remains separate from the external AI interchange
-format. Calendar run refinements now write backup schema 8; database version 5 stays unchanged. Strict
-schema 1–7/database v5 backups remain supported through the compatibility path below. An isolated
+format. Unique-week cycles now write backup schema 10; database version 5 stays unchanged. Strict
+schema 1-9/database v5 backups remain supported through the compatibility path below. An isolated
 export → import under a new name → export comparison verifies canonical records,
 relationships and original image bytes, with the identity exceptions below.
 
@@ -80,6 +80,60 @@ and `csv/occurrence_exceptions.csv` adds a linked table, for **29 CSV tables**.
 Strict v1–v7 field sets and CSV layouts remain frozen; those versions reject
 v8-only fields. Absent optional fields stay absent. IndexedDB stays `boros` v5;
 no store, index, database name, eager migration, or reset is introduced.
+
+Schema 9 adds optional session-only `structure` to drafts and completed sessions:
+`{ amended: boolean, exercises: [{ id, sets: [{ id, round }] }] }`. Exercise entries
+match the frozen day order; every set has a UUID and a positive, ordered round.
+The arrays match prescription/result counts. Round numbers permit unequal
+supersets to append all new member sets in one new final round without fabricating
+intermediate results. Existing prescriptions and set IDs cannot be overwritten by
+an amendment. New sessions allocate identities at start; legacy sessions acquire
+them only when amended. Older stored records are not eagerly rewritten.
+
+The draft's frozen `day` contains the full amended prescriptions, independent
+exercise occurrences and source-library references. `amended: true` keeps a
+structure-only draft recoverable after Clear. Completion copies the same structure
+into history; draft/session metadata must agree. New-profile restore retains set
+and occurrence IDs within the new profile scope. Existing family merge rules and
+source-reference remapping apply unchanged. Plan definitions and AI v3 do not gain
+session-only fields. Statistics include the added results; program day totals do
+not increase.
+
+`csv/session_structure.csv` adds owner kind/ID, amendment flag, occurrence ID, set
+order, set ID and round: **30 CSV tables** in v9. Strict v1-v8 schemas/CSV layouts
+remain frozen and reject the new fields. CRC/SHA-256, linked snapshots, photo bytes
+and original version-specific CSV checks run before envelope promotion. Active
+count-up/countdown timers and the Settings return pointer remain excluded from
+backups. IndexedDB stays `boros` v5: no store/index migration or reset.
+
+Schema 10 adds optional `weeks: [{ id, dayIds }]` to a plan and each frozen
+schedule revision. It is an ordered cycle of at least two definitions. Each
+`dayIds` array owns 1-7 ordered days; concatenating the arrays must exactly equal
+the flattened `days` array, with no omissions, duplicates or foreign references.
+Absent `weeks` retains the original single repeating lineup and legacy unbounded
+behavior. Unique cycles require a finite duration divisible by their count.
+
+Cycle prescription occurrences carry ordered `setIds` UUIDs, one per target.
+Week, day, group, occurrence and set identities are unique within the prescription.
+New session structures reuse prescribed set identities; session additions append
+fresh identities without changing the plan. Legacy snapshots remain untouched.
+Mappings retain `dayId`/`weekday` entries, validated independently inside each
+unique week; Monday may be used in multiple definitions. Actual program week is
+resolved after excluding postponed gaps, independently of definition index and
+calendar date. New cycle runs use distinct `scheduleId:dayId:week-N` keys; old keys
+remain unchanged. Revisions, protected exceptions, drafts, frozen outcomes and
+completed sessions retain their existing reference and checksum validation.
+
+Readable v10 exports have **31 CSV tables**. `unique_weeks.csv` links owner kind,
+plan/run ID, schedule revision ID, week UUID/order, and day UUID/order.
+`prescription_sets.csv` adds `setId` for stable target correspondence; older
+snapshots leave it blank. Existing assignment rows join to definitions through
+their day IDs. Original v1-v9 fields, table inventories and columns remain frozen;
+v9 rejects cycle-only fields. Validation of original bytes, CRC, SHA-256, CSVs
+and photos happens before promotion of the in-memory envelope to v10. Restore
+retains whole-plan-family precedence and internal references; no browser data is
+cleared or eagerly rewritten. IndexedDB remains `boros` v5, with no store/index
+migration. Timers and navigation preferences remain excluded.
 
 After merge precedence and identity remapping, restore removes only unfinished
 drafts whose exact profile/run/source-plan belongs to an explicitly closed run,
@@ -180,7 +234,7 @@ package value is not an invented release number.
 
 | Field | Meaning |
 | --- | --- |
-| `format`, `backupSchemaVersion` | `boros-profile-backup`, 8 for new exports; independent of AI/database versions |
+| `format`, `backupSchemaVersion` | `boros-profile-backup`, 10 for new exports; independent of AI/database versions |
 | `databaseSchemaVersion`, `app` | Actual supported source database version and package name/version |
 | `profile` | The captured profile's ID, name, and Guest/named kind; no active-profile selection reference |
 | `snapshotAt` | UTC timestamp at the end of the consistent read transaction |
@@ -266,11 +320,11 @@ validated in increasing Monday order and select the applicable boundary without
 rewriting earlier occurrences. Started/completed exceptions remain valid beyond
 a later end date. Plan edits do not alter the frozen schedule boundary.
 
-Upload accepts versions 1–8 with matching manifest/data versions and database
+Upload accepts versions 1-10 with matching manifest/data versions and database
 v5. It checks original ZIP paths/limits, CRC, byte lengths and SHA-256 inventory
 before validating records against the version-specific strict field set, linked
 references, CSV inventory/counts and original assets. Only after all checks pass,
-v1–v7 canonical data is cloned with a v8 envelope; no group/duration/preference,
+v1-v9 canonical data is cloned with a v10 envelope; no group/duration/preference,
 historical week, closure, hidden flag, exception or plan instructions are invented and
 the source ZIP/manifest bytes are not rewritten. Unsupported future versions fail.
 The returned manifest remains the original validated version for provenance.
@@ -398,7 +452,7 @@ permissions and physical mobile save-sheet behavior still need manual checks.
 
 ## Upload validation and limits (Phase 9)
 
-Settings → Data → **Backup ZIP** accepts an original Boros schema 1–8/database v5
+Settings → Data → **Backup ZIP** accepts an original Boros schema 1-10/database v5
 export. Unsupported versions explain that the user must update Boros or choose a
 supported export. Import never guesses at a future schema or reads AI interchange
 as a backup. Parsing, hashing, CSV row checks and image decoding run in a worker,
@@ -567,7 +621,7 @@ remove them. Do not delete the source to test a move.
    actual original ZIP is present/readable on disk; “Download started” cannot
    confirm filesystem success. Repeat separately for each desired profile.
 2. At the verified target address, use Settings → Data → Backup ZIP. Select the
-   original schema 1–8/database v5 ZIP; do not unpack/repackage it or import CSVs.
+   original schema 1-10/database v5 ZIP; do not unpack/repackage it or import CSVs.
    Review validation and counts. Prefer **Import under a new name** with an unused
    name if a name conflict exists; merge/replace have the destructive whole-family
    semantics documented above. Review, acknowledge and Confirm and save.

@@ -5,12 +5,35 @@ local profiles/settings, photos, dated weights, and an exercise library with
 Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
 the authoritative plan and verification record.
 
-The latest local revision restores horizontal, collapsible Month weeks, remembers
-Calendar's Day/Week/Month view, and unifies list filters and exercise cards. Settings
-creates independent Guest profiles through its dropdown and confirms Download in
-one scoped dialog. New actions use the device timezone; saved historical context
-is preserved. Bottom tabs include an extra 16 px gesture buffer, plus the device
-safe area. See [interface refinements verification](docs/interface-refinements-verification.md).
+Plans now support ordered unique-week cycles as well as the existing repeating
+lineup. Each unique week has 1-7 training days; its count must divide the finite
+plan duration. Create preserves input during mode/count changes and confirms
+populated reductions. Calendar assigns weekdays separately for each definition.
+Train uses actual program week numbers; postponed weeks do not advance the cycle.
+Progress counts actual prescribed days (four weeks alternating four/three days
+have 14). Existing instances and performed snapshots stay independent of template
+edits. Dirty Create forms use an in-app Cancel/Leave warning, including Settings
+navigation; genuine browser reload/close retains native unload protection.
+
+The database remains `boros` v5 without a migration or record reset. AI **v4**
+accepts strict v1-v3 payloads; backup **v10** reads strict v1-v9 archives and adds
+weekly definitions and set identities to JSON/CSV. See [AI format](docs/ai-formatting.md),
+[backup format](docs/backup-format.md), and [cycle verification](docs/unique-weeks-verification.md).
+
+The preceding revision adds session-only exercises and sets, including explicitly
+ordered extra superset rounds, with recovery and frozen history. Settings preserves
+the active session and timestamp timer; returning Train reopens it for the same
+profile. Create/Calendar/Progress ask before discarding an open session. Clear
+retains additions; Cancel/Leave removes only that active draft. Unspecified REST
+counts up, positive REST counts down, and explicit zero remains no timed rest.
+
+Month defaults to today's expanded week on phones and all weeks on desktop. Phone
+weeks show about two cards and scroll horizontally; Today reveals today's card.
+Progress includes current and previous plan runs. Support defaults to the approved
+https://ko-fi.com/jhonatansaldana destination, with validated VITE_KOFI_URL overrides.
+That revision kept database `boros` v5 and AI v3 and introduced backup v9 for session set IDs and
+rounds, reading strict v1-v8 archives. See
+[Calendar/Train verification](docs/calendar-train-session-verification.md).
 
 The preceding revision adds read-only Create plan details and optional plan
 Instructions through editing, duplication, AI import, frozen training snapshots
@@ -586,7 +609,7 @@ before the next exercise. Each uses its own prescribed duration in seconds.
 Supersets instead expose exactly one boundary after each round: inter-round rest
 before the next round, post-group rest after the final round even when it ends
 the session. There is no timed rest between members and no double final boundary.
-Missing rest offers manual duration entry; explicit zero is labeled no timed rest.
+Missing rest starts a timestamp-based count-up timer; explicit zero is labeled no timed rest.
 One active timer exists per local database, with an owning profile/draft, unique
 token, configured duration, and UTC end timestamp. Starting another timer replaces
 it. Switching profiles hides another profile's timer; stop/reset require its owner
@@ -1035,7 +1058,7 @@ the old address, then import its original ZIP at the new one, preferably under a
 new name. Verify reload, plans/sessions/photos and another profile before retiring
 the source. Follow the [cross-origin procedure](docs/backup-format.md#moving-between-website-addresses).
 
-Restore supports original **backup schemas 1–8 / database schema 5** exports, not CSV
+Restore supports original **backup schemas 1–9 / database schema 5** exports, not CSV
 reconstruction, future schemas or arbitrary repackaged ZIPs. The size/entry/photo
 limits and whole-family merge behavior above remain in force. An export can exceed
 restore limits; keep the original ZIP. Memory/device limits, physical phone/AT and

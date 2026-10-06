@@ -1,30 +1,31 @@
 import { EditorTitle } from './EditorTitle'
 import { TagDropdown } from './TagDropdown'
 import { RestInput } from '../../components/ui/RestInput'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { tagNameSchema, type ExerciseInput, type Tag } from '../../schemas/exercise'
 import { nameKey } from '../../schemas/profile'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { blankSet, parseForm, toForm, type SetFields } from './form'
 
-export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save exercise', initialDirty = false, onDirty, onSubmit, onClose, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: () => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void }) {
-  const [dirty, markDirty] = useState(initialDirty)
-  const setDirty = (value: boolean) => { markDirty(value); if (value) onDirty() }
+export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save exercise', initialDirty = false, onDirty, onSubmit, onClose, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void }) {
   const [form, setForm] = useState(() => toForm(initial))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const submitting = useRef(false)
   const [tag, setTag] = useState('')
+  const [baseline] = useState(() => JSON.stringify(toForm(initial)))
+  const dirty = initialDirty || JSON.stringify(form) !== baseline || !!tag.trim()
+  useEffect(() => { onDirty(dirty) }, [dirty, onDirty])
   const [confirm, setConfirm] = useState<{ title: string; message: string; action: () => void }>()
   const formRef = useRef<HTMLFormElement>(null)
-  const change = (field: 'name' | 'count' | 'instructions' | 'notes' | 'tutorialUrl', value: string) => { setForm((current) => ({ ...current, [field]: value })); setDirty(true) }
-  const setValue = (index: number, field: keyof SetFields, value: string) => { setForm((current) => ({ ...current, sets: current.sets.map((set, i) => i === index ? { ...set, [field]: value } : set) })); setDirty(true) }
+  const change = (field: 'name' | 'count' | 'instructions' | 'notes' | 'tutorialUrl', value: string) => { setForm((current) => ({ ...current, [field]: value })) }
+  const setValue = (index: number, field: keyof SetFields, value: string) => { setForm((current) => ({ ...current, sets: current.sets.map((set, i) => i === index ? { ...set, [field]: value } : set) })) }
   const applyCount = () => {
     const count = Number(form.count)
     if (!/^\d+$/.test(form.count.trim()) || !Number.isInteger(count) || count < 1 || count > 100) { setErrors((current) => ({ ...current, count: 'Use a whole number from 1 to 100.' })); return }
-    const apply = () => { setForm((current) => ({ ...current, sets: Array.from({ length: count }, (_, index) => current.sets[index] ?? blankSet()) })); setErrors({}); setDirty(true) }
+    const apply = () => { setForm((current) => ({ ...current, sets: Array.from({ length: count }, (_, index) => current.sets[index] ?? blankSet()) })); setErrors({}) }
     if (count < form.sets.length && form.sets.slice(count).some((set) => Object.values(set).some((value) => value.trim()))) setConfirm({ title: 'Remove customized sets?', message: `Reducing to ${count} sets discards the targets in the removed sets.`, action: apply })
     else apply()
   }
@@ -32,7 +33,7 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
     const parsed = tagNameSchema.safeParse(name)
     if (!parsed.success) { setErrors((current) => ({ ...current, tag: parsed.error.issues[0].message })); return }
     if (form.tagNames.length >= 50) { setErrors((current) => ({ ...current, tag: 'Use at most 50 tags.' })); return }
-    if (!form.tagNames.some((existing) => nameKey(existing) === nameKey(name))) { setForm((current) => ({ ...current, tagNames: [...current.tagNames, parsed.data] })); setDirty(true) }
+    if (!form.tagNames.some((existing) => nameKey(existing) === nameKey(name))) { setForm((current) => ({ ...current, tagNames: [...current.tagNames, parsed.data] })) }
     setTag(''); setErrors((current) => ({ ...current, tag: '' }))
   }
   return <section className="exercise-editor" aria-label={title}>
@@ -55,11 +56,11 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
         {form.sets.map((set, index) => <fieldset className="set-fields" key={index}><legend>Set {index + 1}</legend><div className="prescription-grid">
           {([['repMin', 'Reps minimum'], ['repMax', 'Reps maximum (optional)'], ['rirMin', 'RIR minimum (optional)'], ['rirMax', 'RIR maximum (optional)']] as const).map(([field, label]) => <Field key={field} label={`Set ${index + 1} ${label}`} inputMode="numeric" required={field === 'repMin'} value={set[field]} error={errors[`sets.${index}.${field}`]} onChange={(e) => setValue(index, field, e.target.value)} />)}
         </div>{index === 0 && <button className="apply-all" type="button" onClick={() => {
-          const apply = () => { setForm((current) => ({ ...current, sets: current.sets.map(() => ({ ...current.sets[0] })) })); setDirty(true) }
+          const apply = () => { setForm((current) => ({ ...current, sets: current.sets.map(() => ({ ...current.sets[0] })) })) }
           if (form.sets.slice(1).some((set) => Object.values(set).some((value) => value.trim()) && JSON.stringify(set) !== JSON.stringify(form.sets[0]))) setConfirm({ title: 'Replace set targets?', message: 'This replaces all other set targets with the reps and RIR from set 1.', action: apply })
           else apply()
         }}>Apply to All</button>}</fieldset>)}
-        <div className="rest-pair">{(['restBetweenSeconds', 'restAfterSeconds'] as const).map((key) => <div key={key}><RestInput label={key === 'restBetweenSeconds' ? 'Rest between sets (optional)' : 'Rest after exercise (optional)'} value={form[key]} errors={{ minutes: errors[`${key}.minutes`], seconds: errors[`${key}.seconds`] }} onChange={(value) => { setForm((current) => ({ ...current, [key]: value })); setDirty(true) }} /></div>)}</div>
+        <div className="rest-pair">{(['restBetweenSeconds', 'restAfterSeconds'] as const).map((key) => <div key={key}><RestInput label={key === 'restBetweenSeconds' ? 'Rest between sets (optional)' : 'Rest after exercise (optional)'} value={form[key]} errors={{ minutes: errors[`${key}.minutes`], seconds: errors[`${key}.seconds`] }} onChange={(value) => { setForm((current) => ({ ...current, [key]: value })) }} /></div>)}</div>
         <p className="muted">Blank rest is unspecified. 0 means no timed rest.</p>
         <TextareaField label="Instructions (optional)" maxLength={20000} value={form.instructions} error={errors.instructions} onChange={(e) => change('instructions', e.target.value)} />
         <TextareaField label="Notes (optional)" maxLength={20000} value={form.notes} error={errors.notes} onChange={(e) => change('notes', e.target.value)} />
@@ -67,7 +68,7 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
         <p className="muted">HTTPS YouTube video links only. Videos are never loaded automatically.</p>
         <fieldset className="tag-editor"><legend>Tags (optional)</legend><TagDropdown tags={tags} selected={form.tagNames} onChoose={addTag} />
           <div className="actions"><Field label="New tag" value={tag} maxLength={80} error={errors.tag || errors.tagNames} onChange={(e) => setTag(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tag) } }} /><button type="button" onClick={() => addTag(tag)}>Add</button></div>
-          <p className="muted">Tags are saved with this prescription.</p><div className="tag-list">{form.tagNames.map((name) => <button key={nameKey(name)} type="button" aria-label={`Remove tag ${name}`} onClick={() => { setForm((current) => ({ ...current, tagNames: current.tagNames.filter((value) => value !== name) })); setDirty(true) }}>{name} ×</button>)}</div>
+          <p className="muted">Tags are saved with this prescription.</p><div className="tag-list">{form.tagNames.map((name) => <button key={nameKey(name)} type="button" aria-label={`Remove tag ${name}`} onClick={() => { setForm((current) => ({ ...current, tagNames: current.tagNames.filter((value) => value !== name) })) }}>{name} ×</button>)}</div>
         </fieldset>
         {error && <p role="alert">{error}</p>}
         <div className="actions"><button type="submit" className="primary">{busy ? 'Saving...' : saveLabel}</button><button type="button" onClick={() => {

@@ -1,3 +1,4 @@
+import type { Screen } from './navigation-preference'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { profiles, type ProfileSnapshot } from '../db/profiles'
@@ -10,8 +11,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [initError, setInitError] = useState<Error>()
   const [attempt, setAttempt] = useState(0)
   const [dirty, setDirty] = useState(false)
-  const leaveGuard = useRef<(() => Promise<boolean>) | undefined>(undefined)
-  const registerLeaveGuard = useCallback((guard: () => Promise<boolean>) => { leaveGuard.current = guard; return () => { if (leaveGuard.current === guard) leaveGuard.current = undefined } }, [])
+  const leaveGuard = useRef<((destination?: Screen) => Promise<boolean>) | undefined>(undefined)
+  const registerLeaveGuard = useCallback((guard: (destination?: Screen) => Promise<boolean>) => { leaveGuard.current = guard; return () => { if (leaveGuard.current === guard) leaveGuard.current = undefined } }, [])
   const [dataNotice, setDataNotice] = useState('')
   const cached = useRef<{ snapshot: ProfileSnapshot; profileList: Profile[]; settings: WorkspaceSettings } | undefined>(undefined)
   useEffect(() => {
@@ -40,7 +41,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', prevent)
   }, [dirty])
   const allowLeave = () => !dirty || window.confirm('Discard your unsaved changes?')
-  const requestLeave = async () => leaveGuard.current ? leaveGuard.current() : allowLeave()
+  const requestLeave = async (destination?: Screen) => leaveGuard.current ? leaveGuard.current(destination) : allowLeave()
   const error = initError || result?.error
   const incompatible = error instanceof BrowserCompatibilityError
   if (error && !available?.data) return <main className="startup"><h1>{incompatible ? 'Browser compatibility issue' : 'Browser storage unavailable'}</h1><p role="alert">{error.message}</p>{!incompatible && <p>Check browser storage permissions and available space, then retry. A profile restored or cleared in another tab must be reopened.</p>}<button onClick={() => { setInitError(undefined); setAttempt((value) => value + 1) }}>{incompatible ? 'Retry opening workspace' : 'Retry storage'}</button></main>

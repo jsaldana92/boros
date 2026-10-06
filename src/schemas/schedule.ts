@@ -1,15 +1,16 @@
 import { z } from 'zod'
-import { planInstructionsSnapshot, positiveInteger, type TrainingDay } from './plan.ts'
+import { planInstructionsSnapshot, positiveInteger, resolveWeek, planWeeks, type UniqueWeek, type TrainingDay } from './plan.ts'
 import { addDays, dateRange, monday, validDate, validZone, weekday } from '../lib/calendar-dates.ts'
 
 export const dateSchema = z.string().refine(validDate, 'Enter a valid calendar date.')
 export const mappingSchema = z.array(z.object({ dayId: z.string().uuid(), weekday: z.number().int().min(0).max(6) }).strict()).min(1).max(7)
   .refine((items) => new Set(items.map((item) => item.dayId)).size === items.length, 'Assign every training day exactly once.')
   .refine((items) => new Set(items.map((item) => item.weekday)).size === items.length, 'Choose a distinct weekday for each training day.')
-export const scheduleInputSchema = z.object({ planId: z.string().uuid(), planRevision: z.number().int().positive(), startWeek: dateSchema.refine((date) => validDate(date) && monday(date) === date, 'Choose a Monday for the starting week.'), timeZone: z.string().refine(validZone, 'Choose a supported IANA time zone.'), mapping: mappingSchema }).strict()
+export const cycleMappingSchema = z.array(z.object({ dayId: z.string().uuid(), weekday: z.number().int().min(0).max(6) }).strict()).min(1).refine((items) => new Set(items.map((item) => item.dayId)).size === items.length, 'Assign every training day exactly once.')
+export const scheduleInputSchema = z.object({ planId: z.string().uuid(), planRevision: z.number().int().positive(), startWeek: dateSchema.refine((date) => validDate(date) && monday(date) === date, 'Choose a Monday for the starting week.'), timeZone: z.string().refine(validZone, 'Choose a supported IANA time zone.'), mapping: cycleMappingSchema }).strict()
 export type Mapping = z.infer<typeof mappingSchema>
 export type ScheduleInput = z.infer<typeof scheduleInputSchema>
-export interface ScheduleRevision { id: string; effectiveFrom: string; effectiveUntil?: string; createdAt: string; planRevision: number; planName: string; planInstructions?: string; days: TrainingDay[]; mapping: Mapping; needsRepair?: boolean; unscheduled?: true }
+export interface ScheduleRevision { id: string; effectiveFrom: string; effectiveUntil?: string; createdAt: string; planRevision: number; planName: string; planInstructions?: string; days: TrainingDay[]; weeks?: UniqueWeek[]; mapping: Mapping; needsRepair?: boolean; unscheduled?: true }
 export interface DurationChange { id: string; effectiveFrom: string; durationWeeks?: number; endDate?: string }
 export interface OccurrenceOutcome { id: string; ref: OccurrenceRef; day: TrainingDay; planName: string; planInstructions?: string; status: 'skipped' | 'completed' | 'pending'; recordedAt: string; updatedAt: string; revision: number }
 export interface WeekMove { id: string; fromWeek: string; direction: 1 | -1; recordedAt: string }
@@ -37,8 +38,9 @@ export function programEnd(start: string, duration?: number, gaps: string[] = []
   if (end) for (const gap of [...gaps].sort()) if (gap >= start && gap <= end) end = addDays(end, 7)
   return end
 }
-export function validateMapping(mapping: Mapping, days: TrainingDay[]) {
-  mappingSchema.parse(mapping)
+export function validateMapping(mapping: Mapping, days: TrainingDay[], weeks?: UniqueWeek[]) {
+  cycleMappingSchema.parse(mapping)
+  for (const definition of planWeeks({ days, weeks })) mappingSchema.parse(mapping.filter((item) => definition.days.some((day) => day.id === item.dayId)))
   if (mapping.length !== days.length || days.some((day) => !mapping.some((item) => item.dayId === day.id))) throw new Error('Map every current training day to one distinct weekday.')
 }
 export function revisionAt(schedule: Schedule, date: string) { return schedule.revisions.findLast((item) => item.effectiveFrom <= date && (!item.effectiveUntil || date < item.effectiveUntil)) }
@@ -47,7 +49,8 @@ export function occurrences(schedule: Schedule, start: string, end: string): Occ
     if (!scheduleActiveOn(schedule, date)) return []
     const revision = revisionAt(schedule, date)
     if (!revision || revision.needsRepair) return []
-    const assignment = revision.mapping.find((item) => item.weekday === weekday(date)), day = revision.days.find((item) => item.id === assignment?.dayId)
+    const definition = resolveWeek(revision, programWeek(schedule, monday(date)))
+    const assignment = revision.mapping.find((item) => item.weekday === weekday(date) && definition.days.some((day) => day.id === item.dayId)), day = definition.days.find((item) => item.id === assignment?.dayId)
     const week = schedule.identity ? programWeek(schedule, monday(date)) : undefined
     if (day && schedule.occurrenceExceptions?.some((ref) => ref.dayId === day.id && ref.scheduledWeek === monday(date))) return []
     return day ? [{ planId: schedule.planId, planName: revision.planName, ...planInstructionsSnapshot(revision.planInstructions), day, ref: { key: occurrenceKey(schedule.id, day.id, date, week), scheduleId: schedule.id, dayId: day.id, scheduledDate: date, scheduledWeek: monday(date), timeZone: schedule.timeZone, scheduleRevisionId: revision.id, ...(week === undefined ? {} : { programWeek: week }), ...(schedule.kind === 'unscheduled' || revision.unscheduled ? { unscheduled: true as const } : {}) } }] : []

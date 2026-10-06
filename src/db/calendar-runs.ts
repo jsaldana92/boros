@@ -21,7 +21,7 @@ export function calendarRunService(database: BorosDatabase) {
     if (runLifecycle(run, sessions).previous) throw new Error('This run has ended. Add the plan as a new run to continue.')
     const effectiveFrom = [run.startWeek, monday(localToday(run.timeZone))].sort().at(-1)!
     const source = revisionAt(run, effectiveFrom) ?? run.revisions.at(-1)!
-    if (mapping) validateMapping(mapping, source.days)
+    if (mapping) validateMapping(mapping, source.days, source.weeks)
     // Persist references, not reconstructed dates. An opened draft is protected
     // even before its first input, and future recorded work is retained too.
     const protectedRefs = new Map<string, OccurrenceRef>()
@@ -51,7 +51,7 @@ export function calendarRunService(database: BorosDatabase) {
           const plan = await database.plans.get([profileId, item.input.planId])
           if (!plan || plan.archivedAt) throw new Error('A selected plan is unavailable or archived. Remove it from the selection.')
           if (plan.revision !== item.input.planRevision) throw new Error('A selected plan changed. Edit its pending configuration before saving.')
-          validateMapping(item.input.mapping, plan.days)
+          validateMapping(item.input.mapping, plan.days, plan.weeks)
         }
         const saved = []
         for (const item of batch) { saved.push(await scheduleService(database).create(profileId, item.input, item.id)); await linkActivePlan(database, profileId, item.input.planId) }

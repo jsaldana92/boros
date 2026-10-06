@@ -47,7 +47,7 @@ test('existing plans repair into standalone templates; library notes save direct
   await f(page, 'Notes (optional)').fill('Saved directly on the template')
   await b(page, 'Cancel').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(f(page, 'Notes (optional)')).toHaveValue('Saved directly on the template')
-  page.once('dialog', (dialog) => dialog.dismiss()); await b(page, 'Calendar').click()
+  await b(page, 'Calendar').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await b(page, 'Save exercise').click()
   expect(await records(page)).toEqual([repaired])
   await cardAction(page, planCard(page), 'Duplicate'); await b(page, 'Save plan').click()
@@ -140,7 +140,9 @@ test('both themes: compact scrollable cards, keyboard dialogs, footer placement,
 test('A20 B8 rounds expose one correct rest each, including final block and timer recovery', async ({ page }) => {
   await seed(page, true); await startWeekly(page, 'Existing AI', 'First')
   const rounds = page.locator('.superset-round'); await expect(rounds).toHaveCount(2)
-  for (let i = 0; i < 2; i++) { await expect(rounds.nth(i).locator('.training-set')).toHaveCount(2); await expect(rounds.nth(i).locator('.rest-control')).toHaveCount(1) }
+  for (let i = 0; i < 2; i++) await expect(rounds.nth(i).locator('.training-set')).toHaveCount(2)
+  await expect(rounds.first().locator('.rest-control')).toHaveCount(1); await expect(rounds.last().locator('.rest-control')).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Superset 1', exact: true }).getByRole('button', { name: 'REST Superset 1 after group', exact: true })).toHaveCount(1)
   await expect(rounds.first()).toContainText('20'); await expect(rounds.first()).toContainText('8')
   await b(page, 'REST Superset 1 after round 1').click(); await expect(page.getByRole('timer')).toContainText('1:15')
   await closeTimer(page); await b(page, 'REST Superset 1 after group').click(); await expect(page.getByRole('timer')).toContainText('3:00')

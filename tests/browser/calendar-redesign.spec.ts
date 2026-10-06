@@ -25,7 +25,7 @@ async function scheduled(page: Page) { await setup(page); await preview(page); a
 
 test('pointer down/up does not move the occurrence or lose its click; phone tap and keyboard controls', async ({ page }, info) => {
   await scheduled(page)
-  await b(page, 'Week 4').click()
+  if (await b(page, 'Week 4').getAttribute('aria-expanded') === 'false') await b(page, 'Week 4').click()
   const event = page.getByRole('region', { name: '2026-10-19', exact: true }).locator('.calendar-event')
   await event.evaluate(el => { const nav = document.querySelector('.main-nav')!.getBoundingClientRect(); window.scrollBy(0, el.getBoundingClientRect().bottom - nav.top - 10) })
   const before = await event.boundingBox(), y = await page.evaluate(() => scrollY)

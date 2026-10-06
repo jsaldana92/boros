@@ -1,9 +1,9 @@
-import { planInstructionsSnapshot } from '../schemas/plan.ts'
+import { planInstructionsSnapshot, weekSnapshot } from '../schemas/plan.ts'
 import { assertCalendarAssignment } from './calendar-assignment.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { db, type BorosDatabase } from './database.ts'
-import { appendRevision, dateSchema, mappingSchema, occurrences, scheduleEnd, programEnd, scheduleInputSchema, validateMapping, type Mapping, type Occurrence, type OccurrenceOutcome, type Schedule, type ScheduleInput } from '../schemas/schedule.ts'
+import { appendRevision, dateSchema, cycleMappingSchema, occurrences, scheduleEnd, programEnd, scheduleInputSchema, validateMapping, type Mapping, type Occurrence, type OccurrenceOutcome, type Schedule, type ScheduleInput } from '../schemas/schedule.ts'
 import { addDays, localToday, monday, nextMonday, weekday } from '../lib/calendar-dates.ts'
 import type { CompletedSession, SessionDraft } from '../schemas/session.ts'
 
@@ -16,7 +16,7 @@ export function scheduleService(database: BorosDatabase) {
   const get = async (profileId: string, id: string) => { const value = await database.schedules.get([profileId, id]); if (!value) throw new Error('This schedule is unavailable in this profile.'); return value }
   const preview = async (profileId: string, raw: ScheduleChange): Promise<ChangePreview> => {
     await owner(profileId)
-    const change = z.object({ scheduleId: z.string().uuid(), revision: z.number().int().positive(), effectiveFrom: dateSchema, kind: z.enum(['remap', 'stop', 'duration']), mapping: z.array(z.object({ dayId: z.string().uuid(), weekday: z.number().int().min(0).max(6) }).strict()).max(7) }).strict().parse(raw), schedule = await get(profileId, change.scheduleId)
+    const change = z.object({ scheduleId: z.string().uuid(), revision: z.number().int().positive(), effectiveFrom: dateSchema, kind: z.enum(['remap', 'stop', 'duration']), mapping: z.array(z.object({ dayId: z.string().uuid(), weekday: z.number().int().min(0).max(6) }).strict()) }).strict().parse(raw), schedule = await get(profileId, change.scheduleId)
     if (schedule.revision !== change.revision) throw new Error('This schedule changed. Cancel and reopen it before making a new preview.')
     if (schedule.stoppedFrom) throw new Error('This schedule is already stopped.')
     dateSchema.parse(change.effectiveFrom)
@@ -26,12 +26,14 @@ export function scheduleService(database: BorosDatabase) {
     if (!plan) throw new Error('The source plan is unavailable.')
     if (change.kind === 'duration' && weekday(change.effectiveFrom) !== 0) throw new Error('Duration changes must begin on a Monday.')
     if (change.kind === 'remap') {
-      mappingSchema.parse(change.mapping)
+      cycleMappingSchema.parse(change.mapping)
       if (weekday(change.effectiveFrom) !== 0) throw new Error('Mapping changes must begin on a Monday.')
-      validateMapping(change.mapping, plan.days)
+      validateMapping(change.mapping, plan.days, plan.weeks)
     }
     const drafts = (await database.drafts.where('profileId').equals(profileId).toArray()).filter((draft) => !draft.finalizedAt && draft.occurrence?.scheduleId === schedule.id && draft.occurrence.scheduledDate >= change.effectiveFrom).sort((a, b) => a.id.localeCompare(b.id))
     const boundary = change.kind === 'duration' ? { durationWeeks: plan.durationWeeks, endDate: programEnd(schedule.startWeek, plan.durationWeeks, schedule.excludedWeeks) } : schedule.durationChanges?.at(-1) ?? schedule
+    const definitions = change.kind === 'remap' ? [plan] : schedule.revisions.filter((r) => !r.effectiveUntil || r.effectiveUntil > change.effectiveFrom)
+    if (change.kind !== 'stop' && definitions.some((r) => r.weeks && (!boundary.durationWeeks || boundary.durationWeeks % r.weeks.length !== 0))) throw new Error('The duration must contain complete unique-week cycles. Update the duration or week definitions before applying this change.')
     return { change, planName: plan.name, startWeek: schedule.startWeek, durationWeeks: boundary.durationWeeks, endDate: boundary.endDate, fingerprint: JSON.stringify([schedule.revision, plan.revision, drafts.map((draft) => [draft.id, draft.revision])]), conflicts: drafts.map((draft) => ({ id: draft.id, date: draft.occurrence!.scheduledDate, name: draft.day.name })) }
   }
   return {
@@ -45,10 +47,10 @@ export function scheduleService(database: BorosDatabase) {
         const plan = await database.plans.get([profileId, input.planId])
         if (!plan || plan.archivedAt) throw new Error('Choose an active plan.')
         if (plan.revision !== input.planRevision) throw new Error('The plan changed after your preview. Cancel and reopen Add Plan.')
-        validateMapping(input.mapping, plan.days)
+        validateMapping(input.mapping, plan.days, plan.weeks)
         const now = new Date().toISOString()
         const endDate = scheduleEnd(input.startWeek, plan.durationWeeks)
-        const schedule: Schedule = { id, profileId, planId: plan.id, revision: 1, startWeek: input.startWeek, ...(endDate ? { durationWeeks: plan.durationWeeks, endDate } : {}), timeZone: input.timeZone, createdAt: now, updatedAt: now, revisions: [{ id: createId(), effectiveFrom: input.startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), mapping: input.mapping }] }
+        const schedule: Schedule = { ...(plan.weeks ? { identity: 'program-week' as const } : {}), id, profileId, planId: plan.id, revision: 1, startWeek: input.startWeek, ...(endDate ? { durationWeeks: plan.durationWeeks, endDate } : {}), timeZone: input.timeZone, createdAt: now, updatedAt: now, revisions: [{ id: createId(), effectiveFrom: input.startWeek, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), ...weekSnapshot(plan), mapping: input.mapping }] }
         await assertCalendarAssignment(database, schedule)
         await database.schedules.add(schedule); return schedule
       })
@@ -65,7 +67,7 @@ export function scheduleService(database: BorosDatabase) {
         else if (change.kind === 'duration') result.durationChanges = [...(schedule.durationChanges ?? []).filter((item) => item.effectiveFrom < change.effectiveFrom), { id: createId(), effectiveFrom: change.effectiveFrom, ...(fresh.durationWeeks === undefined ? {} : { durationWeeks: fresh.durationWeeks, endDate: fresh.endDate }) }]
         else {
           const plan = (await database.plans.get([profileId, schedule.planId]))!
-          result = { ...result, revisions: appendRevision(schedule, { id: createId(), effectiveFrom: change.effectiveFrom, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), mapping: change.mapping }) }
+          result = { ...result, revisions: appendRevision(schedule, { id: createId(), effectiveFrom: change.effectiveFrom, createdAt: now, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), days: structuredClone(plan.days), ...weekSnapshot(plan), mapping: change.mapping }) }
         }
         if (change.kind !== 'stop') await assertCalendarAssignment(database, result)
         await database.schedules.put(result); return result

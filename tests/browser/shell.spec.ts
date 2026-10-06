@@ -5,7 +5,7 @@ const destinations = [
   ['Progress', 'progress'], ['Settings', 'settings'],
 ]
 
-test('navigation, remembered refresh, unchanged address, and runtime errors', async ({ page }, info) => {
+test('navigation, remembered refresh, unchanged address, and runtime errors', async ({ page }, _info) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('console', (message) => { if (message.type() === 'error') errors.push(`${message.text()} ${message.location().url}`) })
@@ -28,12 +28,7 @@ test('navigation, remembered refresh, unchanged address, and runtime errors', as
   await expect(page).toHaveURL(address)
   await expect(page.getByRole('button', { name: 'Support Boros' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  if (new URL(info.project.use.baseURL!).port === '5173') {
-    await expect(page.getByRole('button', { name: 'Support Boros' })).toBeDisabled()
-    await expect(page.getByText('Support link coming soon.')).toBeVisible()
-  } else {
-    await expect(page.getByRole('link', { name: 'Support Boros' })).toHaveAttribute('href', 'https://ko-fi.com/jhonatansaldana')
-  }
+  await expect(page.getByRole('link', { name: 'Support Boros' })).toHaveAttribute('href', 'https://ko-fi.com/jhonatansaldana')
   expect(errors).toEqual([])
 })
 

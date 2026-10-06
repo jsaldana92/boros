@@ -1,3 +1,4 @@
+import { CreateLeaveGuard } from './CreateLeaveGuard'
 import { EditorTitle } from './EditorTitle'
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -29,7 +30,7 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
   useEffect(() => { setDirty(!!text.trim() || !!preview) }, [text, preview, setDirty])
   const instructions = formattingInstructions(kind)
   const cancelPreview = () => { setPreview(undefined); requestAnimationFrame(() => document.getElementById('validate-import')?.focus()) }
-  return <section className="import-panel" aria-label="Import AI Output">
+  return <section className="import-panel" aria-label="Import AI Output"><CreateLeaveGuard kind={preview?.draft.kind === 'workout' ? 'exercise' : 'plan'} enabled={preview?.draft.kind !== 'plan'} />
     {!preview && <EditorTitle path={['Create', 'AI']} />}
     {!preview ? <>
       <p className="muted">Use these instructions with your own request in an external chatbot, then paste its JSON here. Boros does not connect to an AI service.</p>

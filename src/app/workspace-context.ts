@@ -1,3 +1,4 @@
+import type { Screen } from './navigation-preference'
 import { createContext, useContext } from 'react'
 import type { Profile, Theme } from '../schemas/profile'
 import type { ProfileSnapshot } from '../db/profiles'
@@ -11,8 +12,8 @@ export interface Workspace {
   dirty: boolean
   setDirty: (value: boolean) => void
   allowLeave: () => boolean
-  requestLeave: () => Promise<boolean>
-  registerLeaveGuard: (guard: () => Promise<boolean>) => () => void
+  requestLeave: (destination?: Screen) => Promise<boolean>
+  registerLeaveGuard: (guard: (destination?: Screen) => Promise<boolean>) => () => void
   select: (id: string) => Promise<void>
   dataNotice: string
   useCreated: (id: string, notice?: string) => void

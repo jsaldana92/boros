@@ -38,7 +38,8 @@ test('civil arithmetic: Sunday/Monday, leap days, month/year, DST and differing 
 
 test('validation, stable IDs, overlapping schedules, range-only generation and profile isolation', async (t) => {
   const { db, profiles, id, plans, plan, service, schedule, input, sessions } = await setup(t)
-  for (const invalid of [{ ...input, startWeek: '2025-01-07' }, { ...input, startWeek: '2025-02-30' }, { ...input, timeZone: 'Invalid/Zone' }, { ...input, mapping: input.mapping.map((item) => ({ ...item, weekday: 0 })) }]) assert.equal(scheduleInputSchema.safeParse(invalid).success, false)
+  for (const invalid of [{ ...input, startWeek: '2025-01-07' }, { ...input, startWeek: '2025-02-30' }, { ...input, timeZone: 'Invalid/Zone' }]) assert.equal(scheduleInputSchema.safeParse(invalid).success, false)
+  await assert.rejects(service.create(id, { ...input, mapping: input.mapping.map((item) => ({ ...item, weekday: 0 })) }), /distinct weekday/)
   await assert.rejects(service.create(id, { ...input, mapping: input.mapping.slice(1) }), /every current/)
   await assert.rejects(service.create(id, input), /already has an active instance/)
   const different = await plans.save(id, { ...planToInput(plan), name: 'Different template', durationWeeks: 104 })

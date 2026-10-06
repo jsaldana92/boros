@@ -215,6 +215,15 @@ for (const legacyPlan of [false, true]) test(`same-context published releases an
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Current Plans'); await expect(page.getByRole('dialog')).toHaveCount(0)
         await button(page, 'Back').click(); await button(page, 'Calendar menu').click(); await button(page, 'Previous Plans').click()
         await page.getByRole('article', { name: 'Run Weekly update program', exact: true }).getByRole('button').click(); await button(page, 'Hide').click()
+        // The new cycle contract must survive the SECOND build in this SAME
+        // browser context too, alongside the unchanged old release fixture.
+        await button(page, 'Create').click(); await button(page, 'Import AI Output').click()
+        await field(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 4, kind: 'plan', plan: { mode: 'unique', name: 'Cycle update program', durationWeeks: 4, uniqueWeekCount: 2, weeks: [1, 2].map((week) => ({ trainingDaysPerWeek: 1, days: [{ name: `Cycle week ${week}`, exercises: [{ name: 'Cycle press', sets: [{ reps: { min: week * 5, max: week * 5 }, rir: { min: 0, max: 0 } }] }] }] })) } }))
+        await button(page, 'Validate and preview').click(); await button(page, 'Save plan').click()
+        await expect(page.getByRole('article', { name: 'Plan Cycle update program', exact: true })).toBeVisible()
+        await button(page, 'Train').click(); await button(page, 'Add Plan').click(); await page.getByRole('dialog').getByRole('article', { name: 'Plan Cycle update program', exact: true }).getByRole('button').click()
+        await page.getByRole('article', { name: 'Plan Cycle update program', exact: true }).getByRole('button').click(); await page.locator('.training-day-card').click(); await button(page, 'Skip').click()
+        await button(page, 'Next week').click(); await expect(page.locator('.training-day-card')).toContainText('Cycle week 2'); await button(page, 'Move Training to Next Week').click(); await button(page, 'Confirm move').click()
         await button(page, 'Settings').click(); await page.getByRole('group', { name: 'Sound', exact: true }).getByRole('button', { name: 'On', exact: true }).click()
         await expect(page.getByRole('group', { name: 'Sound', exact: true }).getByRole('button', { name: 'On', exact: true })).toHaveAttribute('aria-pressed', 'true')
         expected = await records(page)

@@ -3,6 +3,7 @@ import type { Screen } from './navigation-preference'
 
 export interface ScreenNavigation {
   trainingEntry?: { profileId: string; draftId?: string; sessionId?: string }
+  rememberTraining: (entry?: ScreenNavigation['trainingEntry']) => void
   screen: Screen
   returnScreen: Screen
   openScreen: (screen: Screen, trainingEntry?: ScreenNavigation['trainingEntry']) => void

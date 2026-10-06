@@ -429,3 +429,19 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 .library-exercise-card { padding: 12px 8px; }
 .library-exercise-card small { margin-top: 8px; }
 .backup-divider { border: 0; border-top: 1px solid var(--border); margin: 24px 0; }
+
+/* Session controls retain one divider before each post-block rest. */
+.rest-control { display: flex; justify-content: center; border: 0; margin: 8px 0; }
+.session-add { display: flex; justify-content: center; padding: 12px 0; }
+.post-exercise-rest, .session-add-exercise { border-top: 1px solid var(--border); }
+.rest-timer { text-align: center; }
+.training-session .training-exercise { border-top: 0; }
+@media (max-width: 639px) {
+  .calendar-view-month { grid-template-columns: repeat(7, minmax(0, 1fr)); width: calc(350% + 30px); }
+}
+
+.duration-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.unique-toggle { display: grid; gap: .45rem; }
+.unique-toggle button { width: fit-content; min-width: 4.5rem; }
+.unique-toggle [aria-checked="true"] { background: var(--action); color: var(--action-text); }
+.unique-week-heading { text-align: center; }

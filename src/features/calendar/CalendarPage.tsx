@@ -30,6 +30,9 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   const { allowLeave } = useWorkspace(), { openScreen } = useScreenNavigation(), instant = useCurrentInstant()
   const [dayAction, setDayAction] = useState<{ event: CalendarEvent; run: Schedule; displayDate: string }>()
   const [selection, setSelection] = useState<string>(), [view, setView] = useState<CalendarView>(readCalendarView)
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches)
+  useEffect(() => { const query = window.matchMedia('(max-width: 639px)'), update = () => setMobile(query.matches); query.addEventListener('change', update); return () => query.removeEventListener('change', update) }, [])
+  const todayScroll = useRef(false)
   const [weekExpansion, setWeekExpansion] = useState<{ month: string; weeks: string[] }>({ month: '', weeks: [] })
   const [destination, setDestination] = useState<'calendar' | 'current' | 'previous'>('calendar'), [menu, setMenu] = useState(false)
   const [editor, setEditor] = useState<{ schedule: Schedule } | { startWeek: string; zone: string }>(), [error, setError] = useState(''), [attempt, setAttempt] = useState(0), [busy, setBusy] = useState(false)
@@ -44,9 +47,20 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   }, [profileId, attempt])
   const data = library?.data, zone = browserZone(), today = localToday(zone, instant), date = selection ?? today, range = viewRange(date, view)
   const colors = library?.colors ?? {}
-  const monthKey = date.slice(0, 7), defaultWeek = today >= range.start && today <= range.end ? monday(today) : range.start
-  const expandedWeeks = weekExpansion.month === monthKey ? weekExpansion.weeks : [defaultWeek]
-  const showToday = () => { const current = localToday(zone), month = current.slice(0, 7); setSelection(current); setWeekExpansion({ month, weeks: [...new Set([...(weekExpansion.month === month ? expandedWeeks : []), monday(current)])] }) }
+  const monthKey = `${date.slice(0, 7)}/${mobile ? 'mobile' : 'desktop'}`, defaultWeeks = mobile ? today.slice(0, 7) === date.slice(0, 7) ? [monday(today)] : [] : dateRange(range.start, range.end).filter((_, i) => i % 7 === 0)
+  const expandedWeeks = weekExpansion.month === monthKey ? weekExpansion.weeks : defaultWeeks
+  const showToday = () => {
+    todayScroll.current = true
+    const current = localToday(zone), month = `${current.slice(0, 7)}/${mobile ? 'mobile' : 'desktop'}`, target = viewRange(current, 'month')
+    const existing = monthKey === month ? expandedWeeks : mobile ? [] : dateRange(target.start, target.end).filter((_, i) => i % 7 === 0)
+    setSelection(current); setWeekExpansion({ month, weeks: [...new Set([...existing, monday(current)])] })
+  }
+  useEffect(() => {
+    if (!todayScroll.current) return
+    todayScroll.current = false
+    const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>('.calendar-day[aria-current="date"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+    return () => cancelAnimationFrame(frame)
+  }, [selection, weekExpansion, view])
   const result = useLiveQuery(async () => {
     try { return { key: `${range.start}/${range.end}`, events: await calendarActivity.events(profileId, range.start, range.end), error: '' } } catch (error) { return { error: message(error) } }
   }, [profileId, range.start, range.end, attempt])

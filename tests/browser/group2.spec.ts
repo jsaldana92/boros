@@ -74,7 +74,7 @@ test('manual repeated library occurrences, group edits/duplication and duration 
   occurrences = page.locator('.plan-exercises > li[data-occurrence-id]'); await occurrences.nth(1).getByLabel('Superset', { exact: true }).check(); await occurrences.nth(2).getByLabel('Superset', { exact: true }).check()
   await page.screenshot({ path: info.outputPath('group-editor-light-320.png'), fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  page.once('dialog', dialog => dialog.dismiss()); await button(page, 'Calendar').click(); await expect(field(page, 'Plan name')).toHaveValue('Manual grouped')
+  await button(page, 'Calendar').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(field(page, 'Plan name')).toHaveValue('Manual grouped')
   await expect(page).toHaveURL(address)
 })
 
@@ -89,8 +89,8 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await field(page, 'Squat occurrence 1 set 1 Weight (kg)').fill('10'); await field(page, 'Squat occurrence 1 set 1 Repetitions').fill('5')
   await field(page, 'Squat occurrence 2 set 1 Weight (kg)').fill('40'); await field(page, 'Squat occurrence 2 set 1 Repetitions').fill('8')
   await button(page, 'Note for Squat occurrence 2').click(); await field(page, 'Note').fill('Only grouped squat'); await button(page, 'Apply note').click(); await saved(page)
-  await field(page, 'Rest Superset 1 after group seconds').fill('30'); await button(page, 'REST Superset 1 after group').click()
-  await expect(page.getByRole('timer')).toContainText('0:30')
+  await button(page, 'REST Superset 1 after group').click()
+  await expect(page.getByRole('timer')).toHaveText('00:00')
   await page.reload(); await page.getByRole('button', { name: new RegExp("^Resume Two-week supersets / Mixed day") }).click()
   await expect(field(page, 'Squat occurrence 1 set 1 Weight (kg)')).toHaveValue('10'); await expect(field(page, 'Squat occurrence 2 set 1 Weight (kg)')).toHaveValue('40')
   await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
@@ -111,7 +111,7 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await button(page, 'Settings').click();
   const pending = page.waitForEvent('download'); await confirmDownload(page)
   const bytes = await readFile((await (await pending).path())!), zip = await JSZip.loadAsync(bytes)
-  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(8)
+  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(10)
   expect(zip.file('csv/supersets.csv')).toBeTruthy()
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'groups.zip', mimeType: 'application/zip', buffer: bytes })
   await expect(page.getByRole('region', { name: 'Backup selection' })).toBeVisible()

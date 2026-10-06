@@ -1,4 +1,4 @@
-// Set VITE_KOFI_URL in .env.local when the owner's actual Ko-fi page is known.
+// Approved production destination; a configured override still passes validation.
 export function getSupportUrl(value: string | undefined): string | undefined {
   if (!value?.trim()) return undefined
   try {
@@ -11,4 +11,4 @@ export function getSupportUrl(value: string | undefined): string | undefined {
   }
 }
 
-export const supportUrl = getSupportUrl(import.meta.env.VITE_KOFI_URL)
+export const supportUrl = getSupportUrl(import.meta.env.VITE_KOFI_URL?.trim() || 'https://ko-fi.com/jhonatansaldana')

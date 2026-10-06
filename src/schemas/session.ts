@@ -1,3 +1,4 @@
+import type { SessionStructure } from './session-structure.ts'
 import { z } from 'zod'
 import type { TrainingDay } from './plan.ts'
 import type { OccurrenceRef } from './schedule.ts'
@@ -9,21 +10,25 @@ export const sessionInputSchema = z.object({ notes: z.string().max(20000), exerc
 export type ResultInput = z.infer<typeof resultInputSchema>
 export type SessionInput = z.infer<typeof sessionInputSchema>
 export interface SessionDraft {
+  structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; profileId: string; revision: number; sourcePlanId: string; sourceDayId: string; activeSourceKey?: string
   planName: string; planInstructions?: string; day: TrainingDay; input: SessionInput; startedAt: string; updatedAt: string; finalizedAt?: string
 }
 export type RecordedSet = { skipped: true } | { skipped: false; weightKg: number; load: number; unit: WeightUnit; reps: number; rir?: number }
 export interface CompletedSession {
+  structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; draftId: string; profileId: string; revision: number; sourcePlanId: string; sourceDayId: string
   planName: string; planInstructions?: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
   partial: boolean; startedAt: string; completedAt: string; loggedAt: string
 }
-export interface RestTimer { id: 'active'; token: string; profileId: string; draftId: string; label: string; durationSeconds: number; endAt: string; alertedAt?: string }
+export type RestTimer = { id: 'active'; token: string; profileId: string; draftId: string; label: string; alertedAt?: string } & ({ mode?: 'countdown'; durationSeconds: number; endAt: string } | { mode: 'countup'; startedAt: string })
 export const blankSession = (day: TrainingDay, unit: WeightUnit): SessionInput => ({ notes: '', exercises: day.exercises.map((exercise) => ({ id: exercise.id, notes: '', sets: exercise.prescription.sets.map(() => ({ load: '', reps: '', rir: '', unit, skipped: false })) })) })
 // Deliberate zero and explicit skips count; timer state and visual hints never do.
 export const hasSessionInput = (input: SessionInput) => !!input.notes || input.exercises.some((exercise) => !!exercise.notes || exercise.sets.some((set) => set.load !== '' || set.reps !== '' || set.rir !== '' || set.skipped))
+export const hasDraftProgress = (draft: SessionDraft) => !!draft.structure?.amended || hasSessionInput(draft.input)
+export const timerElapsed = (timer: RestTimer, now = Date.now()) => timer.mode === 'countup' ? Math.max(0, Math.floor((now - Date.parse(timer.startedAt)) / 1000)) : 0
 export function validateDraftInput(raw: SessionInput, day: TrainingDay) {
   const input = sessionInputSchema.parse(raw)
   if (input.exercises.length !== day.exercises.length || input.exercises.some((exercise, index) => exercise.id !== day.exercises[index].id || exercise.sets.length !== day.exercises[index].prescription.sets.length)) throw new Error('Results must match the saved prescription. Nothing was saved.')
@@ -52,7 +57,7 @@ export function assessSession(input: SessionInput) {
   }) }))
   return { errors, recorded, skipped, exercises }
 }
-export const timerRemaining = (timer: RestTimer, now = Date.now()) => Math.max(0, Math.ceil((Date.parse(timer.endAt) - now) / 1000))
+export const timerRemaining = (timer: RestTimer, now = Date.now()) => timer.mode === 'countup' ? 0 : Math.max(0, Math.ceil((Date.parse(timer.endAt) - now) / 1000))
 export function timerEnd(duration: number, now = Date.now()) {
   z.number().finite().int().nonnegative().max(Number.MAX_SAFE_INTEGER).parse(duration)
   const end = new Date(now + duration * 1000)

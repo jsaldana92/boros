@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
 Updated: 2026-10-05
-Status: Calendar/shared-filter/Create/Settings refinements complete in available local verification. Build/typecheck/lint/diff pass, data 198/198, Edge root/project desktop/phone 320/320, retained-context updates 6/6. Firefox 36/38 initially, affected-suite rerun 14/14. Physical release gates and production persistence investigation remain open.
-Current scope: horizontal collapsible Month weeks, remembered Calendar view, shared Search/Sort/Tags and library cards, transactional Guest creation, device timezone defaults, scoped Download confirmation and extra bottom-tab gesture spacing. Preserve all records. No commit, push, deploy or hosting changes.
+Status: Unique-week cycles are implemented and pass available local verification: build/typecheck/lint, 213/213 data tests, 564/564 static browser checks, Firefox 20/20 and retained-context updates 6/6. Physical release gates and production persistence investigation remain open.
+Current scope: repeating unique-week definitions throughout Create/Calendar/Train/Progress, AI v4, backup v10 and custom Create navigation warnings. Preserve earlier uncommitted amendments; no commit, push, deploy or hosting changes.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -70,7 +70,7 @@ These defaults make implementation concrete. They are design choices, not additi
 
 ### Prescriptions, drafts, and history
 
-- A plan contains 1–7 ordered training days. Rest days equal `7 - trainingDaysPerWeek`; the builder displays both counts.
+- A repeating plan contains 1-7 ordered training days. A unique-week plan has ordered definitions with 1-7 days each and a finite duration divisible by its definition count (at least two). Rest days are `7 - trainingDaysPerWeek` for that definition; variable compact counts use numeric ranges.
 - An exercise requires a name and at least one prescribed set. Set count and repetition targets are the only mandatory numeric inputs.
 - Each prescribed set has positive integer `reps.min` and `reps.max`; equal values mean a fixed target. Reject reversed ranges.
 - Each set may have an RIR range with nonnegative integer bounds. RIR 0 is valid. Missing RIR is unknown, not 0.
@@ -734,6 +734,25 @@ export acknowledgment UI. Prior checklists/handoffs remain historical.
 - [x] Firefox affected-suite rerun **14/14** after initial 36/38 (subpixel assertion and engine cleanup issue); all tested cases now have passing evidence. See [verification record](docs/interface-refinements-verification.md).
 - [ ] Physical phone gesture/keyboard/Safari/screen-reader checks, physical audio/vibration and live Ko-fi. Production persistence incident remains unresolved.
 
+### Calendar, Support, Train amendments and active Progress plans (2026-10-05)
+
+The 023f0206 request and the owner's missing-plan report supersede the previous
+manual-rest entry and Settings-destructive-leave behavior. Earlier verification
+records remain historical.
+
+- [x] Month keeps Monday-Sunday horizontally: about two mobile cards, seven desktop columns; only today's mobile week / all desktop weeks initially expand. Explicit toggles survive updates; Today expands and reveals its day without document overflow.
+- [x] Support defaults to approved `https://ko-fi.com/jhonatansaldana`, retains validated configuration and safe external-link attributes, removes coming-soon copy.
+- [x] REST controls centered; visible Skip with occurrence/set-specific accessible names. Add Set precedes one divider and post-exercise/group REST; post-group REST is outside the final round.
+- [x] Active-session Create/Calendar/Progress navigation uses exact Leaving day wording and Cancel/Leave. Confirmed deletion serializes against autosave, removes only the active draft/timer and preserves failed input. Unexpected unload keeps committed recovery.
+- [x] Settings flushes without destructive confirmation and remembers same-profile draft identity for Train/reload. Notes, additions and timestamp timers survive; changed display units convert actual loads. Failed flush stays actionable; switching profiles cannot retarget writes.
+- [x] Shared exercise picker, independent repeated additions and fresh occurrence/set IDs; single/multi-select and Cancel. Add Set copies prior targets with blank results; unequal supersets append all members to an explicit new final round. Clear keeps amended structure; Cancel discards it.
+- [x] Unspecified REST counts up from persisted UTC start; positive durations count down, explicit zero stays no timed rest. Reset/Stop and single active token preserved; count-up never claims a completion alarm.
+- [x] Database `boros` v5 stays unchanged. Optional session structure persists in draft/history, strict backup v9 and 30 CSV tables; original v1-v8 checksums/CSV/asset rules remain. Restore keeps IDs/rounds and frozen source provenance; no AI format change.
+- [x] Progress root cause confirmed: Plans explicitly passed the previous-only filter. Progress now includes active and previous runs; active cards open analytics without historical Hide/Delete actions. Added results participate in analytics; no inflation of planned-day totals.
+- [x] Data 204/204; build/typecheck/lint/diff and retained-origin/context release/rebuild checks 6/6. Includes a locked Settings-flush race regression. No owner data touched.
+- [x] Final affected production root/project desktop/phone matrix **388/388**, Firefox desktop/phone-sized focused **12/12**. Extra phone Today-return visibility/page-offset checks **1/1** each in two strengthened runs. [Exact results](docs/calendar-train-session-verification.md).
+- [ ] Physical phone/Safari/screen-reader/keyboard, actual device background timer/audio/vibration and live Ko-fi acceptance remain manual. Deployment-loss diagnosis remains unresolved.
+
 ## 6. Required test fixtures
 
 Build these fixtures as the relevant phase begins, using fictional people and tiny synthetic images.
@@ -745,6 +764,22 @@ Build these fixtures as the relevant phase begins, using fictional people and ti
 - [x] Renamed records that retain stable IDs; records with the same normalized names; ambiguous ID/name matches; zero RIR/rest; empty optional values; Unicode; commas; multiline notes; and formula-like text.
 - [x] Malformed/unsupported archives and AI payloads; missing or oversized assets; invalid references and ranges.
 - [x] Calendar cases around Sunday/Monday, New Year, leap days, daylight-saving transitions, and retained schedule zones after simulated device-zone changes.
+
+### Repeating cycles of unique training weeks (2026-10-05)
+
+This request supersedes the former single-lineup-only model. Historical phase
+and hash-routing handoffs remain evidence of their original revisions.
+
+- [x] Shared cycle resolver and ordered stable week/day/exercise/set identities; legacy repeating/unbounded records untouched; distinct actual-program-week completion keys.
+- [x] Exact Duration/toggle/count/Note/week labels, independent 1-7-day editors, valid divisors, recoverable invalid-duration input, and confirmed populated reductions/Off.
+- [x] Ordered details and honest count ranges; independent full-plan duplication and existing template/source ownership.
+- [x] Per-definition weekday mappings in staged Add Plan and existing reassignment; one active instance; protected snapshots/drafts, stale checks and transactional saves.
+- [x] Correct Train week content/rest rows, Calendar occurrence content, gap-aware progression, reset/end/re-add, stable hints and actual Progress denominators.
+- [x] AI v4 strict modes/counts/notes, local IDs, editable atomic import and strict v1-v3 readers. Backup v10 definitions/set identities, 31 CSV tables and strict v1-v9 validation/promotion.
+- [x] Exact custom Create Plan/Exercise Cancel/Leave dialogs, nested/AI draft protection, pristine navigation and native reload/close warnings. Train's Settings exception retained.
+- [x] Build/typecheck/lint; 213/213 data tests, including new cycle/lifecycle/history/hints/AI/backup and populated v5 reopen checks.
+- [x] Full production browser matrix 564/564, focused Firefox 20/20 and final same-context update/rebuild checks 6/6; final-source results recorded.
+- [ ] Physical phone keyboard/gestures, Safari, assistive technology, background timers/audio/vibration and live Ko-fi; prior production data-loss cause remains unresolved.
 
 ## 7. Inputs needed later
 
@@ -887,15 +922,23 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-05 | Progress is instance-scoped; Overall uses explicit library provenance | Repeated/superset occurrences stay separate; full-set completion and explicit skip evidence replace any-set completion; ambiguous legacy history remains plan-accessible |
 | 2026-10-05 | Program completion follows the shared finite resolved-workload lifecycle | Explicit complete/skip outcomes can resolve a program; elapsed dates or early End alone cannot. Paired extrema use actual sets and deterministic chronological ties |
 
+| 2026-10-05 | Session-only optional structure records stable set UUIDs and explicit round numbers; no IndexedDB upgrade | Preserve source plans, legacy records and unequal superset order; structure-only edits remain recoverable |
+| 2026-10-05 | Backup v9 freezes v1-v8 contracts; active timers/Settings return pointer remain excluded | Round/set metadata survives validated restore without weakening CRC/SHA-256 or changing AI v3 |
+| 2026-10-05 | Destination-aware Train guard: Settings flush/return versus explicit destructive navigation | Avoid accidental loss during unit/settings changes while preserving requested Leave behavior and stale-write protection |
+| 2026-10-05 | Progress shows active plus previous program instances | The previous-only presentation filter hid the owner's active plan despite its saved run and valid analytics |
+
+| Date | Decision | Reason |
+| ---- | -------- | ------ |
+| 2026-10-05 | Ordered optional week definitions partition flattened days; shared program-week resolver | Preserve existing day/source references and frozen records; excluded gaps do not advance cycles |
+| 2026-10-05 | AI v4 and backup v10; strict earlier contracts frozen; no IndexedDB migration | Add unambiguous cycles/set identities without reinterpreting old wire formats or resetting data |
+| 2026-10-05 | Create registers an in-app leave guard for the whole editor | Nested and AI input survives Cancel; Train retains its separate Settings detour |
+
 ## 9. Current checkpoint
 
-- Calendar/shared-filter/Create/Settings refinements are complete in available local verification; physical acceptance remains pending. Phase 10 stays **Verification pending**, Phase 11 **In progress**; prior phase/handoff records remain historical.
-- Calendar uses horizontal collapsible weeks, remembers the allowlisted view and retains state through Back. Create and Progress share filters and Added cards; selected tags retain compact geometry. Bottom navigation adds 16 px of gesture clearance plus the safe area.
-- New profile allocation/selection is transactional and concurrency-safe, with pre-creation dirty confirmation. Name shows effective values. New-action timezone defaults use the device; existing records and strict backup compatibility remain.
-- Download has one exact, ID-bound privacy confirmation. Upload/clear workflow, checksum validation, guards and failure handling stay functional.
-- Database **boros v5**, AI **v3**, backup **v8**. No dependency/schema/manifest/hosting change, commit, push, deploy or owner-data clearing.
-- Build/typecheck/lint/diff pass; data **198/198**. Edge production matrix **320/320**, retained-context updates **6/6**. Firefox initially **36/38**, then affected suites **14/14**; exact staged results in [verification record](docs/interface-refinements-verification.md).
-- Next: exact disposable-profile physical checks in that record. Production persistence root cause still needs original-context evidence; do not infer resolution from local rebuild checks.
+- Unique-week cycles complete in available local verification. Phase 10 remains **Verification pending**, Phase 11 **In progress**; earlier verified phases/handoffs preserved.
+- Database **boros v5**, AI **v4**, backup **v10** (strict v1-v9; 31 CSV tables). No dependencies, manifest/hosting changes or user-record reset.
+- Build/typecheck/lint/diff and data **213/213** pass. Full static Edge **564/564** (9.8 m), focused Firefox **20/20** (1.6 m), same-context four-stage persistence **6/6** (2.1 m), all on the final source. See [cycle verification](docs/unique-weeks-verification.md).
+- Next: the recorded disposable-profile physical-phone, Safari and assistive-technology checks; carry forward background timers/audio/vibration and live Ko-fi. Local update success does not resolve the owner's production data-loss incident.
 
 ## 10. Handoff entry template
 
@@ -1715,3 +1758,26 @@ Fresh verification against the final build (isolated contexts/test databases):
 - Validation: build/typecheck/lint/diff pass; data **198/198** (5.45 s); final affected static matrix **320/320** (5.3 m) at root/project paths and desktop/touch-phone sizes; Firefox first **36/38**, then affected-suite **14/14** (53.4 s) after test-coordinate tolerance and serial browser cleanup. Earlier broad desktop **123/131** had eight superseded expectations, all covered by the passing final affected matrix. Failures and exact commands are recorded, not hidden.
 - Persistence: final-source same-origin/context four-stage regression **6/6** (2.1 m), including two rebuilds, both normal and legacy-AI fixtures, active selection, stable IDs, records and photo bytes. Historical release setup stays untouched; only current Back/Guest UI assertions changed. Local success does not establish the production loss incident's cause.
 - Files/checks/manual steps: [interface verification](docs/interface-refinements-verification.md), updated README. Physical phones/gestures/software keyboards, Safari, screen readers, physical audio/vibration and live Ko-fi remain unverified. Next: the exact disposable-profile manual checks; no commit, push, deployment, hosting or owner-data clearing performed.
+
+### Handoff - Calendar, Support, Train amendments and active Progress plans (2026-10-05)
+
+- Status: complete in available local verification; physical release acceptance remains pending. Phase 10/11 statuses and earlier historical handoffs are unchanged.
+- Inspection: read attachment, TODO, navigation/workspace guards, draft/controller/timers, Calendar/Progress, strict backup/restore/CSV, configuration and existing tests. No applicable AGENTS.md found. Started clean at `6179937de8523885d9d8ba6c15d300a397044b36`.
+- Changes: responsive Month defaults/Today scroll; approved Support fallback; centered rests/Skip labels; Settings-specific nondestructive return; exact destructive leave; independent session exercise/set additions, persisted explicit superset rounds, stable set IDs, recoverable structure-only drafts, immutable history/analytics; count-up timers and backup v9.
+- Missing-plan cause: Progress passed `previous` to shared PlanRuns, excluding active schedules. It now includes both active and previous instances; Calendar's separate lists retain their existing filters and mutation guards.
+- Preservation: database name/stores/indexes v5 and AI v3 unchanged; versioned backup v9 accepts strict original v1-v8 archives. No source plan/library mutation, destructive migration, checksum/security bypass, dependency installation, manifest/hosting edit, commit, push, deploy or owner-data access.
+- Evidence: data **204/204**, production build/typecheck/lint/diff, Edge **388/388** root/project desktop/phone, Firefox **12/12**, and **6/6** same-origin retained-context upgrade/rebuild checks. A narrow Settings typing-during-flush race was prevented by locking the editor through its queued write, with a regression. Exact commands and intermediate fixture corrections are recorded in [verification](docs/calendar-train-session-verification.md).
+- Remaining/manual: disposable-profile real phone keyboard and gesture reachability; Safari and assistive technology; actual background/locked-device count-up/countdown, audio and vibration; open live Ko-fi. Production data-loss remains unresolved without same-context before/after evidence. See the verification record for exact steps.
+
+
+### Handoff - Repeating cycles of unique training weeks (2026-10-05)
+
+- Status: complete in available local verification; physical release acceptance remains pending. Prior phase statuses and historical handoffs remain as recorded.
+- Implemented: exact Create duration/toggle/count/Note/week controls, independent weekly editors, divisor validation and recoverable destructive-change confirmations; ordered previews and count ranges; shared actual-program-week resolution throughout Calendar, Train and Progress; per-week mappings, protected reassignment, gap-aware progression, correct 14-day alternating-cycle totals, independent completion identities and stable previous-result hints.
+- Preservation: optional ordered week definitions partition existing flattened day snapshots; legacy repeating/unbounded plans and old session identities are unchanged. New cycle sets carry stable UUIDs. Duplication remaps the complete structure; reset/end/re-add, session-only additions, ownership, stale-write checks and transaction boundaries remain intact. Database **boros v5** needs no store/index migration or record reset.
+- Contracts: AI **v4** explicitly distinguishes repeating and unique plans with strict original v1-v3 readers. Backup **v10** preserves week definitions, mappings, revisions, snapshots, gaps and set identities in JSON and **31** linked CSV tables. Original v1-v9 validation and CRC/SHA-256 checks precede promotion; whole-family restore and reference repair remain profile-scoped.
+- Navigation: exact custom Create Plan/Exercise Cancel/Leave dialogs protect parent/nested/AI input. Initial defaults, generated empty sections and reverted-empty fields do not trigger false warnings. Native real unload protection and the separate Train Settings detour remain.
+- Files: plan/schedule/session/AI/backup schemas and services; Create, Calendar, Train, shared detail/mapping/guard components and styles; analytics/hint helpers; focused and adapted data/browser/update tests; README, AI/backup docs, TODO and [verification record](docs/unique-weeks-verification.md).
+- Final verification: build/typecheck/lint/diff pass; data **213/213** (11.85 s); complete static Edge root/project-subpath desktop/phone **564/564** (9.8 m); focused Firefox desktop/phone **20/20** (1.6 m); final-source retained-context updates **6/6** (2.1 m). Four-stage updates retain the same context/origin through two historical release archives and two current builds, preserving original IDs, records, selection and photo bytes plus a new cycle/outcome/postponement between rebuilds. Desktop and phone screenshots were inspected. Intermediate failures and corrections are documented, not counted as passes.
+- Scope: retained the preceding uncommitted Calendar/Support/Train/Progress work at HEAD `6179937de8523885d9d8ba6c15d300a397044b36`. No dependencies installed, commit, push, deploy, manifest/hosting edit or owner-data access. The production disappearance report remains unresolved; these local upgrades do not establish a production cause or fix.
+- Next/manual: on a disposable profile on a physical phone, build a four-week/two-definition plan with four/three training days, assign weekdays independently, verify weeks 3/4 repeat 1/2 and Progress totals 14, then test a single completion and a postponed week. Check keyboard/gesture reachability and Cancel/Leave from a nested editor. Repeat focus/announcement checks with Safari and assistive technology. Carry forward locked-device timers/audio/vibration and live Ko-fi checks; exact steps are in the verification record.

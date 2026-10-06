@@ -16,7 +16,7 @@ function fixture(name = 'Detailed plan') {
 }
 async function open(p: Page) { await p.goto('./'); await b(p, 'Create').click(); if (await b(p, 'Understood').isVisible()) await b(p, 'Understood').click(); await expect(b(p, 'Create Plan')).toBeEnabled() }
 async function preview(p: Page, payload: unknown) { await b(p, 'Import AI Output').click(); await f(p, 'AI output JSON').fill(JSON.stringify(payload)); await b(p, 'Validate and preview').click(); await expect(f(p, 'Plan name')).toBeVisible() }
-async function seed(p: Page) { await open(p); await preview(p, fixture()); await expect(f(p, 'Instructions')).toHaveValue(instructions); await f(p, 'Plan note (optional)').fill('Plan note\nSeparate text'); await b(p, 'Save plan').click(); await expect(card(p)).toBeVisible() }
+async function seed(p: Page) { await open(p); await preview(p, fixture()); await expect(f(p, 'Instructions')).toHaveValue(instructions); await f(p, 'Note (optional):').fill('Plan note\nSeparate text'); await b(p, 'Save plan').click(); await expect(card(p)).toBeVisible() }
 async function records(p: Page, store = 'plans') {
   return p.evaluate(async (store) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => { const r = indexedDB.open('boros'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error) })
@@ -92,7 +92,7 @@ test('AI v3 without instructions and older payloads stay editable without invent
   await open(page)
   for (const version of [1, 2, 3]) {
     const payload: any = { schemaVersion: version, kind: 'plan', plan: { name: `Version ${version}`, trainingDaysPerWeek: 1, days: [{ name: 'Day', exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }], instructions: 'Exercise only' }] }], ...(version > 1 ? { durationWeeks: 2 } : {}) } }
-    await preview(page, payload); await expect(f(page, 'Instructions')).toHaveValue(''); await expect(f(page, 'Plan note (optional)')).toHaveValue(''); await f(page, 'Duration (weeks)').fill('2')
+    await preview(page, payload); await expect(f(page, 'Instructions')).toHaveValue(''); await expect(f(page, 'Note (optional):')).toHaveValue(''); await f(page, 'Duration (weeks)').fill('2')
     if (version === 3) await f(page, 'Instructions').fill('Preview instructions')
     await b(page, 'Save plan').click(); await expect(card(page, `Version ${version}`)).toBeVisible()
   }

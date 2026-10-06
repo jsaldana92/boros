@@ -50,7 +50,7 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   const beforeReload = await readTimer()
   await page.reload(); await resume(page); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0'); await expect(input(page, 'Press set 1 Actual RIR (optional)')).toHaveValue('0')
   expect(await readTimer()).toEqual(beforeReload)
-  await expect(page.getByRole('timer')).toHaveText(/^(?:2:00|1:[0-5]\d)$/)
+  await expect(page.getByRole('timer')).toHaveText(/^(?:02:00|01:[0-5]\d)$/)
   const remaining = await page.getByRole('timer').evaluate((element, endAt) => {
     const [minutes, seconds] = element.textContent!.split(':').map(Number)
     return { displayed: minutes * 60 + seconds, expected: Math.max(0, Math.ceil((Date.parse(endAt) - Date.now()) / 1000)) }
@@ -58,7 +58,7 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   expect(Math.abs(remaining.displayed - remaining.expected)).toBeLessThanOrEqual(1)
   await page.clock.fastForward(130000); await expect(page.getByRole('timer')).toHaveText('Rest finished')
   await button(page, 'Reset').click(); await expect(page.getByRole('timer')).toContainText('2:00'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
-  await input(page, 'Rest Row after set 1 seconds').fill('30'); await button(page, 'REST Row after set 1').click(); await expect(page.getByRole('timer')).toContainText('0:30'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
+  await button(page, 'REST Row after set 1').click(); await expect(page.getByRole('timer')).toHaveText('00:00'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
   await fillSet(page, 'Press', 2, '20'); await fillSet(page, 'Row', 1, '30'); await fillSet(page, 'Row', 2, '40')
   await page.setViewportSize({ width: 320, height: 720 }); await input(page, 'Row set 2 Actual RIR (optional)').focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -99,7 +99,7 @@ test('failed autosave and completion preserve input; pending Save commits once; 
     IDBObjectStore.prototype.put = function (...args) { if (this.name === 'drafts') throw new DOMException('Simulated draft quota', 'QuotaExceededError'); return original.apply(this, args) }
   })
   await fillSet(page); await expect(page.getByText('Draft not saved. Your input is kept.')).toBeVisible(); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
-  await button(page, 'Settings').click(); await button(page, 'Stay').click(); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
+  await button(page, 'Settings').click(); await expect(page.getByRole('alert').first()).toContainText('Simulated draft quota'); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
   await page.evaluate(() => (window as unknown as { restoreWrite: () => void }).restoreWrite()); await button(page, 'Retry draft save').click(); await saved(page)
   await button(page, 'Session Note').click(); await input(page, 'Note').fill('Unapplied')
   const unload = page.waitForEvent('dialog'); await page.evaluate(() => { setTimeout(() => window.location.reload(), 0) }); const warning = await unload; expect(warning.type()).toBe('beforeunload'); await warning.dismiss()

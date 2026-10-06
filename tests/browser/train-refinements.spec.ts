@@ -16,7 +16,7 @@ async function fixture(page: Page, theme = 'Dark') {
   await expect(b(page, 'Settings')).toBeVisible(); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
   await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Create').click(); await b(page, 'Import AI Output').click()
   await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 2, kind: 'plan', plan: { name: 'Refined plan', durationWeeks: 4, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map((name) => ({ name, exercises: [{ name: 'Press', instructions: 'Snapshot instructions', youtubeUrl: 'https://youtu.be/abcdefghijk', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 1, max: 2 } }, { reps: { min: 8, max: 8 } }], restBetweenSetsSeconds: 10 }] })) } }))
-  await b(page, 'Validate and preview').click(); await f(page, 'Plan note (optional)').fill('Hide this subtitle in Train'); await page.locator('.plan-day').first().getByRole('button', {name: /^Actions for /}).first().click(); await b(page, 'Edit').click(); await f(page, 'Notes (optional)').fill('Template note'); await page.locator('.exercise-editor button[type=submit]').click(); await b(page, 'Save plan').click(); await expect(plan(page)).toBeVisible()
+  await b(page, 'Validate and preview').click(); await f(page, 'Note (optional):').fill('Hide this subtitle in Train'); await page.locator('.plan-day').first().getByRole('button', {name: /^Actions for /}).first().click(); await b(page, 'Edit').click(); await f(page, 'Notes (optional)').fill('Template note'); await page.locator('.exercise-editor button[type=submit]').click(); await b(page, 'Save plan').click(); await expect(plan(page)).toBeVisible()
   await b(page, 'Train').click(); await b(page, 'Add Plan').click(); await page.getByRole('dialog', { name: 'Add Plan' }).getByRole('article').getByRole('button').click(); await plan(page).click(); await expect(day(page)).toContainText('Pending')
 }
 async function start(page: Page) { await day(page).click(); await b(page, 'Start').click(); await expect(page.getByRole('region', { name: 'Training session', exact: true })).toBeVisible() }
@@ -36,9 +36,9 @@ for (const theme of ['Dark', 'Light']) test(`recovery cards, exact labels, inter
     await page.screenshot({ path: info.outputPath(`recovery-${theme}-${width}.png`), fullPage: true })
   }
   await recovery.getByRole('button').click(); await expect(f(page, 'Press set 1 Weight (kg)')).toHaveValue('0'); expect((await rows(page, 'drafts'))[0].startedAt).toBe(originalStart)
-  await b(page, 'Cancel').click(); const confirmation = page.getByRole('dialog', { name: 'Leaving this session?' }); await expect(confirmation).toContainText('Leaving without saving will delete the results and notes entered in this session.')
-  await b(page, 'Stay').click(); await expect(f(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
-  await b(page, 'Settings').click(); await expect(confirmation).toBeVisible(); await b(page, 'Stay').click(); await expect(page.getByRole('region', { name: 'Training session', exact: true })).toBeVisible()
+  await b(page, 'Cancel').click(); const confirmation = page.getByRole('dialog', { name: 'Leaving Upper' }); await expect(confirmation).toContainText('Leaving now will clear all your progress and you will have to restart.')
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(f(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
+  await b(page, 'Settings').click(); await expect(confirmation).toHaveCount(0); await b(page, 'Train').click(); await expect(page.getByRole('region', { name: 'Training session', exact: true })).toBeVisible()
   await b(page, 'Progress').click(); await b(page, 'Leave').click(); await expect(page.getByRole('heading', { name: 'Progress', exact: true })).toBeVisible(); expect(await rows(page, 'drafts')).toHaveLength(0)
   await b(page, 'Train').click(); await expect(recovery).toHaveCount(0); await page.reload(); await expect(recovery).toHaveCount(0)
 })
@@ -83,7 +83,7 @@ test('snapshot information, previous placeholders and occurrence Reset agree wit
   await b(page, 'Previous week').click(); await day(page).click(); await b(page, 'Reset').click(); const reset = page.getByRole('dialog', { name: 'Reset this training day?' }); await expect(reset).toContainText('Saved results for this occurrence will be deleted'); await reset.getByRole('button', { name: 'Cancel', exact: true }).click(); await b(page, 'Close').click(); expect(await rows(page, 'sessions')).toHaveLength(1)
   await day(page).click(); await b(page, 'Reset').click(); await reset.getByRole('button', { name: 'Reset', exact: true }).click(); await expect(day(page)).toContainText('Pending'); expect(await rows(page, 'sessions')).toHaveLength(0)
   await b(page, 'Calendar').click(); await expect(page.getByRole('region', { name: 'Unassigned weekly training' })).toHaveCount(0)
-  await b(page, 'Progress').click(); await expect(page.getByText('No previous plans.', { exact: true })).toBeVisible()
+  await b(page, 'Progress').click(); await expect(page.getByRole('article', { name: 'Run Refined plan', exact: true })).toBeVisible()
   await page.screenshot({ path: info.outputPath('reset-progress.png'), fullPage: true })
 })
 

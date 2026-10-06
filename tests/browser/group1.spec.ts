@@ -99,10 +99,10 @@ test('owner branding, avatar-only Settings and both brand-image clicks preserve 
   for (const image of ['Ouroboros: a snake eating its tail', 'Boros']) {
     await button(page, 'Create').click(); await button(page, 'Create exercise').click()
     await page.getByLabel('Exercise name', { exact: true }).fill('Recoverable input')
-    page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('img', { name: image, exact: true }).click()
+    await page.getByRole('img', { name: image, exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(page.getByLabel('Exercise name', { exact: true })).toHaveValue('Recoverable input')
     expect(await page.evaluate(() => sessionStorage.getItem('boros.navigation.screen'))).toBe('create')
-    page.once('dialog', dialog => dialog.accept()); await button(page, 'Boros home').focus(); await page.keyboard.press('Enter')
+    await button(page, 'Boros home').focus(); await page.keyboard.press('Enter'); await page.getByRole('dialog').getByRole('button', { name: 'Leave', exact: true }).click()
     await expect(page).toHaveTitle('Train | Boros'); await expect(page.getByRole('main')).toBeFocused(); await expect(page).toHaveURL(address)
   }
 })

@@ -63,13 +63,13 @@ test('invalid input and canceled previews write nothing; dirty navigation/unload
   await expect(page.getByLabel('AI output JSON', { exact: true })).toHaveValue(text)
   for (const plan of [true, false]) {
     await preview(page, plan ? planFixture() : workoutFixture())
-    page.once('dialog', (dialog) => dialog.dismiss()); await button(page, 'Settings').click()
+    await button(page, 'Settings').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(page.getByText('Draft.', { exact: false })).toBeVisible()
   if (await page.getByLabel('Duration (weeks)', { exact: true }).isVisible()) await page.getByLabel('Duration (weeks)', { exact: true }).fill('2')
     await cancelPreview(page, plan)
     expect(await counts(page)).toEqual(before)
   }
-  page.once('dialog', (dialog) => dialog.dismiss()); await button(page, 'Train').click()
+  await button(page, 'Train').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.getByLabel('AI output JSON', { exact: true })).toHaveValue(JSON.stringify(workoutFixture()))
   const unload = page.waitForEvent('dialog')
   await page.evaluate(() => { setTimeout(() => window.location.reload(), 0) })

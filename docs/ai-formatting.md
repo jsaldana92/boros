@@ -1,25 +1,46 @@
 # AI formatting and Create refinements
 
-The application generates the authoritative instructions from
-`src/features/create/interchange.ts` and schema-validated examples in
-`src/schemas/interchange.ts`. The public contract is **AI v3**, with strict
-legacy v1/v2 compatibility. Database v5 is unchanged. Backups now use schema 7
-with strict schemas 1–6 reading.
+The application generates authoritative instructions from
+`src/features/create/interchange.ts` and schema-checked examples in
+`src/schemas/interchange.ts`. The current public contract is **AI v4**, with
+strict v1/v2/v3 readers. Database v5 remains unchanged; backups use their
+separate v10 format with strict v1-v9 compatibility.
 
-AI v3 adds optional `plan.instructions`: plain text, at most 20,000 characters;
-null is invalid. Omission stays absent, and blank is allowed. It is separate
-from exercise instructions, plan notes and session notes. Prompts forbid
-inventing it or combining/copying exercise instructions or notes. The editable
-plan preview labels this field **Instructions**. Saved plans, duplicates,
-new frozen training snapshots and JSON/CSV backups preserve it. Editing the
-plan does not rewrite historical snapshots. Notes remain outside this strict
-public format and may be added separately in the preview.
+Every v4 envelope has exactly `schemaVersion: 4`, `kind: "plan" | "workout"`,
+and the matching `plan` or `workout` payload. No internal IDs are accepted.
 
-Version 1 and 2 payloads retain their original allowed fields and do not accept
-plan instructions; use v3 when supplying that field. Older plans with no field
-continue to load without manufactured text. Version 1 still requires duration
-entry in the preview. The public workout shape is unchanged apart from the
-v3 envelope. Examples and both generated prompts use the current version.
+For a plan, `name` and a finite positive safe-integer `durationWeeks` are required.
+Optional `instructions` and `notes` are separate plain-text strings, each at most
+20,000 characters; null is invalid. The required `mode` chooses exactly one shape:
+
+- `"repeating"`: `trainingDaysPerWeek` (1-7) and ordered `days` of exactly that length.
+- `"unique"`: `uniqueWeekCount` (at least 2) and ordered `weeks` of exactly that
+  length. Each week has its own `trainingDaysPerWeek` (1-7) and matching `days`.
+  `uniqueWeekCount` must divide `durationWeeks`; global `days` or a global day
+  count are forbidden. A one-week plan therefore uses repeating mode.
+
+Days retain their ordered exercise snapshots and declared supersets. Exercise
+prescriptions support heterogeneous ordered `sets`, positive rep ranges,
+optional RIR including zero, group membership, optional integer rest seconds
+including zero, instructions, optional notes, tags, and validated HTTPS YouTube
+URLs. All optional v1-v3 defaults remain: missing RIR/rest/tutorial becomes null
+in the public parsed object and stays absent internally, never zero. Exercise
+notes are an optional v4 string, at most 20,000 characters. Unknown fields at any
+level, reversed ranges, missing definitions and mismatched counts fail with field
+paths. No partial import or inferred cycle is saved.
+
+The editable preview generates local week/day/exercise/set UUIDs. It uses the
+same plan builder and custom navigation warning; cancel writes nothing. Final
+save remains one profile-owned transaction for plans, templates and tags. The
+ordered unique weeks repeat through actual program weeks, without duplicating
+the definition records. Existing library defaults are not overwritten.
+
+Historical contracts stay frozen: v1 plans have no duration and require it in the
+preview; v2 adds finite duration and groups; v3 adds optional plan instructions.
+Those versions keep their original fields and reject v4 mode/weeks/notes fields.
+Standalone `workout` behavior is unchanged, with optional notes added only in v4.
+New generated examples and prompts use v4, retain the complete-object rule, and
+never infer duration or missing targets from names.
 
 Both Plan and Exercise prompts use this initial-response instruction:
 

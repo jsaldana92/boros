@@ -43,11 +43,32 @@ export const v2InterchangeSchema = z.discriminatedUnion('kind', [
   z.object({ schemaVersion: z.literal(2), kind: z.literal('workout'), workout: interchangeExerciseSchema }).strict(),
   z.object({ schemaVersion: z.literal(2), kind: z.literal('plan'), plan: groupedPlan.superRefine(validateDayCount) }).strict(),
 ])
-export const currentInterchangeSchema = z.discriminatedUnion('kind', [
+export const v3InterchangeSchema = z.discriminatedUnion('kind', [
   z.object({ schemaVersion: z.literal(3), kind: z.literal('workout'), workout: interchangeExerciseSchema }).strict(),
   z.object({ schemaVersion: z.literal(3), kind: z.literal('plan'), plan: groupedPlan.extend({ instructions: planInstructionsSchema }).superRefine(validateDayCount) }).strict(),
 ])
-export const interchangeSchema = z.union([currentInterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
+const v4Exercise = interchangeExerciseSchema.extend({ notes: z.string().max(20000).optional() })
+const v4Day = groupedDay.innerType().extend({ exercises: z.array(v4Exercise.extend({ superset: positiveInteger.nullable().default(null) })).min(1).max(100) }).superRefine((day, context) => {
+  const checked = groupedDay.safeParse({ ...day, exercises: day.exercises.map(({ notes: _notes, ...exercise }) => exercise) })
+  if (!checked.success) checked.error.issues.forEach((issue) => context.addIssue(issue))
+})
+const v4Week = z.object({ trainingDaysPerWeek: z.number().int().min(1).max(7), days: z.array(v4Day).min(1).max(7) }).strict().superRefine(validateDayCount)
+const v4PlanBase = { name: daySchema.shape.name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), durationWeeks: positiveInteger }
+export const cycleInterchangePlan = z.discriminatedUnion('mode', [
+  z.object({ ...v4PlanBase, mode: z.literal('repeating'), trainingDaysPerWeek: z.number().int().min(1).max(7), days: z.array(v4Day).min(1).max(7) }).strict(),
+  z.object({ ...v4PlanBase, mode: z.literal('unique'), uniqueWeekCount: positiveInteger.min(2), weeks: z.array(v4Week).min(2) }).strict(),
+]).superRefine((plan, context) => {
+  if (plan.mode === 'repeating') validateDayCount(plan, context)
+  else {
+    if (plan.weeks.length !== plan.uniqueWeekCount) context.addIssue({ code: 'custom', path: ['weeks'], message: 'Week count must equal uniqueWeekCount.' })
+    if (plan.durationWeeks % plan.uniqueWeekCount !== 0) context.addIssue({ code: 'custom', path: ['uniqueWeekCount'], message: 'Unique week count must divide durationWeeks evenly.' })
+  }
+})
+export const currentInterchangeSchema = z.discriminatedUnion('kind', [
+  z.object({ schemaVersion: z.literal(4), kind: z.literal('workout'), workout: v4Exercise }).strict(),
+  z.object({ schemaVersion: z.literal(4), kind: z.literal('plan'), plan: cycleInterchangePlan }).strict(),
+])
+export const interchangeSchema = z.union([currentInterchangeSchema, v3InterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
 export type Interchange = z.infer<typeof interchangeSchema>
 export type InterchangeExercise = z.infer<typeof interchangeExerciseSchema>
 export type ImportKind = Interchange['kind']
@@ -55,5 +76,5 @@ export type ImportKind = Interchange['kind']
 // Both visible instructions and tests consume these schema-checked examples.
 export function interchangeExample(kind: ImportKind): Interchange {
   const exercise = { name: 'Example exercise', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 }, rir: null }], restBetweenSetsSeconds: 0, restAfterExerciseSeconds: null, instructions: 'Illustrative instructions only.', youtubeUrl: null, tags: ['Example tag'] }
-  return interchangeSchema.parse(kind === 'workout' ? { schemaVersion: 3, kind, workout: exercise } : { schemaVersion: 3, kind, plan: { name: 'Example plan', instructions: 'Illustrative plan instructions only.', durationWeeks: 2, trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [{ ...exercise, superset: null }, { ...exercise, superset: 1 }, { ...exercise, name: 'Second example', superset: 1 }], supersets: [{ number: 1, restBetweenRoundsSeconds: 0, restAfterGroupSeconds: null }] }] } })
+  return interchangeSchema.parse(kind === 'workout' ? { schemaVersion: 4, kind, workout: exercise } : { schemaVersion: 4, kind, plan: { mode: 'repeating', name: 'Example plan', instructions: 'Illustrative plan instructions only.', durationWeeks: 2, trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [{ ...exercise, superset: null }, { ...exercise, superset: 1 }, { ...exercise, name: 'Second example', superset: 1 }], supersets: [{ number: 1, restBetweenRoundsSeconds: 0, restAfterGroupSeconds: null }] }] } })
 }

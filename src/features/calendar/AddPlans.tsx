@@ -17,8 +17,8 @@ import { useListSpace } from './use-list-space'
 const message = (error: unknown) => error instanceof Error ? error.message : 'Could not save. Your selections are kept.'
 function ConfigurePlan({ plan, pending, startWeek, zone, onCancel, onSave }: { plan: Plan; pending?: StagedPlan; startWeek: string; zone: string; onCancel: () => void; onSave: (stage: StagedPlan) => void }) {
   const [choices, setChoices] = useState(() => weekdayChoices(pending?.input.mapping)), [error, setError] = useState('')
-  return <ActionDialog title={plan.name} onClose={onCancel} actions={<><button onClick={onCancel}>Cancel</button><button className="primary" onClick={() => { try { const mapping = selectedMapping(plan.days, choices); scheduleEnd(startWeek, plan.durationWeeks); onSave({ id: pending?.id ?? createId(), input: { planId: plan.id, planRevision: plan.revision, startWeek, timeZone: zone, mapping } }) } catch (e) { setError(message(e)) } }}>Save</button></>}>
-    <p className="muted">{planSubtitle(plan)}</p><p>Starts {displayRunDate(startWeek)}</p><WeekdayFields days={plan.days} choices={choices} onChange={setChoices} />{error && <p role="alert">{error}</p>}
+  return <ActionDialog title={plan.name} onClose={onCancel} actions={<><button onClick={onCancel}>Cancel</button><button className="primary" onClick={() => { try { const mapping = selectedMapping(plan.days, choices, plan.weeks); scheduleEnd(startWeek, plan.durationWeeks); onSave({ id: pending?.id ?? createId(), input: { planId: plan.id, planRevision: plan.revision, startWeek, timeZone: zone, mapping } }) } catch (e) { setError(message(e)) } }}>Save</button></>}>
+    <p className="muted">{planSubtitle(plan)}</p><p>Starts {displayRunDate(startWeek)}</p><WeekdayFields weeks={plan.weeks} days={plan.days} choices={choices} onChange={setChoices} />{error && <p role="alert">{error}</p>}
   </ActionDialog>
 }
 export function AddPlans({ profileId, plans, activePlanIds, startWeek, zone, onCancel, onSaved }: { profileId: string; plans: Plan[]; activePlanIds: Set<string>; startWeek: string; zone: string; onCancel: () => void; onSaved: () => void }) {

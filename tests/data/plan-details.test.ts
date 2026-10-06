@@ -109,7 +109,7 @@ test('AI v3 plan instructions reach editable drafts and saved imports; v1/v2 rem
   assert.equal(saved.instructions, text); assert.equal(saved.notes, 'Preview note')
   assert.equal(saved.days[0].exercises[0].prescription.instructions, 'Exercise only')
   assert.match(formattingInstructions('plan'), /exactly one ```json code block/)
-  assert.match(formattingInstructions('plan'), /optional "instructions": string/)
+  assert.match(formattingInstructions('plan'), /optional "instructions" and "notes" strings/)
   for (const instructions of [null, 'x'.repeat(20001)]) assert.equal(parseInterchange(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { ...base, durationWeeks: 2, instructions } })).value, undefined)
 })
 
@@ -122,7 +122,7 @@ test('backup v7 JSON/CSV and all restore choices preserve distinct plan instruct
   await sessions.complete(id, draft!.id, draft!.revision, results, false)
   await plans.save(id, { ...planToInput(plan), instructions: 'Current plan instructions' }, plan)
   const snapshot = await captureProfile(id, db), archive = await generateBackup(snapshot, 'test'), backup = await readBackup(archive.bytes)
-  assert.equal(backup.data.backupSchemaVersion, 8); assert.equal(backup.data.plans[0].instructions, 'Current plan instructions')
+  assert.equal(backup.data.backupSchemaVersion, 10); assert.equal(backup.data.plans[0].instructions, 'Current plan instructions')
   for (const record of [...backup.data.drafts, ...backup.data.sessions, ...backup.data.schedules[0].revisions, ...backup.data.schedules[0].outcomes!]) assert.equal(record.planInstructions, text)
   const tables = csvTables(backup.data)
   for (const name of ['plans', 'schedule_revisions', 'occurrence_outcomes', 'drafts', 'sessions']) {

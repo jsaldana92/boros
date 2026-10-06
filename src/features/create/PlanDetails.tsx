@@ -1,7 +1,7 @@
 import { planSubtitle } from './plan-subtitle'
 import { useState } from 'react'
 import { ActionDialog } from '../../components/ui/ConfirmDialog'
-import { trainingBlocks, type Plan, type PlanExercise } from '../../schemas/plan'
+import { planWeeks, trainingBlocks, type Plan, type PlanExercise } from '../../schemas/plan'
 import { DetailsActions, DetailsActionsButton } from './DetailsActions'
 import { prescriptionSummary } from './prescription-summary'
 
@@ -25,12 +25,12 @@ export function PlanDetails({ plan, busy, error, onClose, onEdit, onDuplicate, o
     <ActionDialog title={plan.name} className="plan-details" onClose={onClose}
       headerActions={<DetailsActionsButton label="Plan actions" expanded={actions} onClick={() => setActions(true)} />}>
       <div className="plan-details-meta"><p>{planSubtitle(plan)}</p></div>
-      {plan.days.map((day) => <section className="plan-details-day" key={day.id} aria-label={day.name}>
+      {planWeeks(plan).map((week, index) => <div key={week.id ?? index}>{plan.weeks && <><hr /><h3 className="unique-week-heading">Week {index + 1}</h3></>}{week.days.map((day) => <section className="plan-details-day" key={day.id} aria-label={day.name}>
         <hr /><h3>{day.name}</h3>
         {trainingBlocks(day).map((block) => block.group
           ? <section className="plan-details-superset" key={block.id} aria-label={`Superset ${block.group.number}`}><h4>Superset {block.group.number}</h4><div className="plan-superset-members">{block.members.map((exercise) => <ExerciseSummary key={exercise.id} exercise={exercise} grouped />)}</div></section>
           : <ExerciseSummary key={block.id} exercise={block.members[0]} />)}
-      </section>)}
+      </section>)}</div>)}
       {(instructions || note) && <hr />}
       {instructions && <section aria-label="Instructions"><h3>Instructions</h3><p className="plain-text">{plan.instructions}</p></section>}
       {note && <section aria-label="Note"><h3>Note</h3><p className="plain-text">{plan.notes}</p></section>}

@@ -42,7 +42,7 @@ export function WorkoutProgress({ mainContent, mainOnly = false }: { mainContent
     {result?.error && <p role="alert">Could not load workout progress. {result.error} <button onClick={() => retry(attempt + 1)}>Retry workout progress</button></p>}
     {data && <>
       <div hidden={!main || mainOnly}>
-        <section className="progress-section" aria-labelledby="plan-progress-heading"><h2 id="plan-progress-heading" tabIndex={-1}>Plans</h2><PlanRuns profileId={profileId} runs={data.runs} sessions={data.sessions} instant={instant} previous focusTargetId="plan-progress-heading" onOpen={(run) => navigate({ planId: run.id })} />
+        <section className="progress-section" aria-labelledby="plan-progress-heading"><h2 id="plan-progress-heading" tabIndex={-1}>Plans</h2><PlanRuns profileId={profileId} runs={data.runs} sessions={data.sessions} instant={instant} previous includeCurrent focusTargetId="plan-progress-heading" onOpen={(run) => navigate({ planId: run.id })} />
           {data.plans.some((p) => p.legacy) && <details className="progress-history"><summary>Legacy plan history</summary>{data.plans.filter((p) => p.legacy).map((p) => <button key={p.id} onClick={() => navigate({ planId: p.id })}>{p.name}</button>)}</details>}
         </section>
         <section className="progress-section" aria-labelledby="exercise-progress-heading"><h2 id="exercise-progress-heading">Exercises</h2><ItemBrowser items={data.items} tags={data.tags} onSelect={(itemKey) => navigate({ itemKey })} overall /></section>

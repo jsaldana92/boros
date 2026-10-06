@@ -14,10 +14,12 @@ export function previousResults(draft: SessionDraft, sessions: CompletedSession[
       const prior = session.day.exercises.filter((item) => item.id === exercise.id)
       if (prior.length !== 1) continue
       const candidate = prior[0]
-      // Sets have no stable IDs. Any target/count edit makes correspondence
-      // ambiguous; do not infer it from names or a new array position.
-      if (candidate.prescription.name !== exercise.prescription.name || candidate.templateId !== exercise.templateId || JSON.stringify(candidate.source) !== JSON.stringify(exercise.source) || JSON.stringify(candidate.prescription.sets) !== JSON.stringify(exercise.prescription.sets)) continue
-      const set = session.exercises.find((item) => item.id === exercise.id)?.sets[index]
+      // New cycle sets match by stable identity. Legacy snapshots retain the
+      // conservative exact-prescription fallback; names never establish a link.
+      const at = exercise.setIds && candidate.setIds ? candidate.setIds.indexOf(exercise.setIds[index]) : index
+      if (at < 0) continue
+      if (candidate.prescription.name !== exercise.prescription.name || candidate.templateId !== exercise.templateId || JSON.stringify(candidate.source) !== JSON.stringify(exercise.source) || (exercise.setIds && candidate.setIds ? JSON.stringify(candidate.prescription.sets[at]) !== JSON.stringify(exercise.prescription.sets[index]) : JSON.stringify(candidate.prescription.sets) !== JSON.stringify(exercise.prescription.sets))) continue
+      const set = session.exercises.find((item) => item.id === exercise.id)?.sets[at]
       if (set && !set.skipped) return { load: displayNumber(fromKg(set.weightKg, unit)), reps: String(set.reps), ...(set.rir === undefined ? {} : { rir: String(set.rir) }) }
     }
     return undefined

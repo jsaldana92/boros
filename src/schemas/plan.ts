@@ -10,7 +10,7 @@ export const sourceSchema = z.discriminatedUnion('kind', [
 ])
 export const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 export const groupSchema = z.object({ id: z.string().uuid(), number: positiveInteger, restBetweenRoundsSeconds: exerciseInputSchema.shape.restBetweenSeconds, restAfterGroupSeconds: exerciseInputSchema.shape.restAfterSeconds }).strict()
-export const occurrenceSchema = z.object({ id: z.string().uuid(), prescription: exerciseInputSchema, source: sourceSchema.optional(), templateId: z.string().uuid().optional(), groupId: z.string().uuid().optional() })
+export const occurrenceSchema = z.object({ id: z.string().uuid(), prescription: exerciseInputSchema, source: sourceSchema.optional(), setIds: z.array(z.string().uuid()).min(1).max(100).optional(), templateId: z.string().uuid().optional(), groupId: z.string().uuid().optional() })
 // Optional fields intentionally remain absent in legacy records; no rewrite/default duration.
 export const daySchema = z.object({ id: z.string().uuid(), name, groups: z.array(groupSchema).max(50).optional(), exercises: z.array(occurrenceSchema).min(1, 'Add at least one exercise to this day.').max(100, 'Use at most 100 exercises per day.') })
 export function validateGroups(day: z.infer<typeof daySchema>, context: z.RefinementCtx, prefix: (string | number)[] = []) {
@@ -27,18 +27,47 @@ export function validateGroups(day: z.infer<typeof daySchema>, context: z.Refine
 }
 export const planInstructionsSchema = z.string().max(20000).optional()
 export const planInstructionsSnapshot = (instructions?: string) => instructions === undefined ? {} : { planInstructions: instructions }
-export const planInputSchema = z.object({ name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), durationWeeks: positiveInteger.optional(), days: z.array(daySchema).min(1, 'Add at least one training day.').max(7, 'Use at most 7 training days.') }).superRefine((plan, context) => {
+export const weekSchema = z.object({ id: z.string().uuid(), dayIds: z.array(z.string().uuid()).min(1).max(7) }).strict()
+export type UniqueWeek = z.infer<typeof weekSchema>
+export interface WeeklyStructure { days: TrainingDay[]; weeks?: UniqueWeek[] }
+export function uniqueWeekCounts(duration: number): number[] {
+  if (!Number.isSafeInteger(duration) || duration < 2) return []
+  const values = new Set([duration])
+  for (let n = 2; n <= Math.sqrt(duration); n++) if (duration % n === 0) { values.add(n); values.add(duration / n) }
+  return [...values].sort((a, b) => a - b)
+}
+// Flattened snapshots retain existing day/source references. Definitions own an
+// ordered partition of those days; no duplicated Week 1/global day-count value.
+export function planWeeks(source: WeeklyStructure) {
+  return source.weeks ? source.weeks.map((week) => ({ id: week.id, days: week.dayIds.map((id) => source.days.find((day) => day.id === id)!) })) : [{ id: undefined, days: source.days }]
+}
+export function resolveWeek(source: WeeklyStructure, programWeek: number) {
+  if (!Number.isSafeInteger(programWeek) || programWeek < 1) throw new Error('Choose a positive program week.')
+  const definitions = planWeeks(source)
+  return definitions[(programWeek - 1) % definitions.length]
+}
+export const planInputSchema = z.object({ name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), durationWeeks: positiveInteger.optional(), weeks: z.array(weekSchema).min(2).optional(), days: z.array(daySchema).min(1, 'Add at least one training day.') }).superRefine((plan, context) => {
+  const issue = (path: (string | number)[], message: string) => context.addIssue({ code: 'custom', path, message })
+  if (plan.weeks) {
+    if (!plan.durationWeeks || plan.durationWeeks % plan.weeks.length !== 0) issue(['weeks'], 'Choose a unique-week count that divides the duration evenly.')
+    if (plan.weeks.map((week) => week.dayIds).flat().join() !== plan.days.map((day) => day.id).join()) issue(['weeks'], 'Every training day must belong to exactly one ordered week.')
+  } else if (plan.days.length > 7) issue(['days'], 'Use at most 7 training days.')
   const ids = new Set<string>()
+  const add = (id: string, path: (string | number)[]) => { if (ids.has(id)) issue(path, 'Each week, day, group, exercise and set needs a unique ID.'); ids.add(id) }
+  plan.weeks?.forEach((week, index) => add(week.id, ['weeks', index, 'id']))
   plan.days.forEach((day, index) => {
-    validateGroups(day, context, ['days', index])
-    for (const [id, path] of [[day.id, ['days', index, 'id']], ...(day.groups ?? []).map((group, i) => [group.id, ['days', index, 'groups', i, 'id']]), ...day.exercises.map((exercise, i) => [exercise.id, ['days', index, 'exercises', i, 'id']])] as [string, (string | number)[]][]) {
-      if (ids.has(id)) context.addIssue({ code: 'custom', path, message: 'Each day and exercise occurrence needs a unique ID.' })
-      ids.add(id)
-    }
+    validateGroups(day, context, ['days', index]); add(day.id, ['days', index, 'id'])
+    day.groups?.forEach((group, i) => add(group.id, ['days', index, 'groups', i, 'id']))
+    day.exercises.forEach((exercise, i) => {
+      add(exercise.id, ['days', index, 'exercises', i, 'id'])
+      if (exercise.setIds && exercise.setIds.length !== exercise.prescription.sets.length) issue(['days', index, 'exercises', i, 'setIds'], 'Set identities must match the prescription.')
+      exercise.setIds?.forEach((id, n) => add(id, ['days', index, 'exercises', i, 'setIds', n]))
+      if (plan.weeks && !exercise.setIds) issue(['days', index, 'exercises', i, 'setIds'], 'Each set requires a stable identity.')
+    })
   })
 })
 export type PlanInput = z.infer<typeof planInputSchema>
-export type TrainingDay = PlanInput['days'][number]
+export type TrainingDay = z.infer<typeof daySchema>
 export type PlanExercise = TrainingDay['exercises'][number]
 export type ExerciseSource = z.infer<typeof sourceSchema>
 export interface Plan extends PlanInput {
@@ -47,7 +76,7 @@ export interface Plan extends PlanInput {
 }
 export const newDay = (number: number): TrainingDay => ({ id: createId(), name: `Day ${number}`, exercises: [] })
 export const copyExercise = (prescription: ExerciseInput, source?: ExerciseSource): PlanExercise => ({ id: createId(), prescription: structuredClone(prescription), ...(source ? { source: structuredClone(source) } : {}) })
-export const planToInput = (plan: Plan): PlanInput => ({ name: plan.name, ...(plan.instructions === undefined ? {} : { instructions: plan.instructions }), ...(plan.notes === undefined ? {} : { notes: plan.notes }), ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks }), days: structuredClone(plan.days) })
+export const planToInput = (plan: Plan): PlanInput => ({ name: plan.name, ...(plan.instructions === undefined ? {} : { instructions: plan.instructions }), ...(plan.notes === undefined ? {} : { notes: plan.notes }), ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks }), ...(plan.weeks ? { weeks: structuredClone(plan.weeks) } : {}), days: structuredClone(plan.days) })
 export type Superset = z.infer<typeof groupSchema>
 export function trainingBlocks(day: TrainingDay) {
   const seen = new Set<string>()
@@ -91,5 +120,14 @@ export function moveOccurrence(day: TrainingDay, id: string, offset: number): Tr
 }
 export function duplicateDay(day: TrainingDay): TrainingDay {
   const ids = new Map((day.groups ?? []).map((group) => [group.id, createId()]))
-  return { ...structuredClone(day), id: createId(), groups: day.groups?.map((group) => ({ ...group, id: ids.get(group.id)! })), exercises: day.exercises.map((exercise) => ({ ...copyExercise(exercise.prescription, exercise.source), ...(exercise.templateId ? { templateId: exercise.templateId } : {}), ...(exercise.groupId ? { groupId: ids.get(exercise.groupId)! } : {}) })) }
+  return { ...structuredClone(day), id: createId(), groups: day.groups?.map((group) => ({ ...group, id: ids.get(group.id)! })), exercises: day.exercises.map((exercise) => ({ ...copyExercise(exercise.prescription, exercise.source), ...(exercise.setIds ? { setIds: exercise.setIds.map(() => createId()) } : {}), ...(exercise.templateId ? { templateId: exercise.templateId } : {}), ...(exercise.groupId ? { groupId: ids.get(exercise.groupId)! } : {}) })) }
 }
+
+export function identifySets(days: TrainingDay[]): TrainingDay[] {
+  return days.map((day) => ({ ...day, exercises: day.exercises.map((exercise) => ({ ...exercise, setIds: exercise.prescription.sets.map((_, index) => exercise.setIds?.[index] ?? createId()) })) }))
+}
+export function duplicateStructure(source: WeeklyStructure): WeeklyStructure {
+  const days = source.days.map(duplicateDay), ids = new Map(source.days.map((day, index) => [day.id, days[index].id]))
+  return { days, ...(source.weeks ? { weeks: source.weeks.map((week) => ({ id: createId(), dayIds: week.dayIds.map((id) => ids.get(id)!) })) } : {}) }
+}
+export const weekSnapshot = (source: WeeklyStructure) => source.weeks ? { weeks: structuredClone(source.weeks) } : {}

@@ -1,5 +1,6 @@
 import { addDays, localToday, monday, validDate, validZone, viewRange, weekday } from './calendar-dates.ts'
-import { occurrences, revisionAt, type Schedule, type OccurrenceOutcome } from '../schemas/schedule.ts'
+import { occurrences, revisionAt, programWeek, type Schedule, type OccurrenceOutcome } from '../schemas/schedule.ts'
+import { resolveWeek } from '../schemas/plan.ts'
 import type { CompletedSession } from '../schemas/session.ts'
 
 // Shared with Progress: a partial log retains its results but is not a fully
@@ -27,6 +28,15 @@ export function prescribedDays(run: Schedule): number | undefined {
     const revision = revisionAt(run, start), duration = run.durationChanges?.findLast((c) => c.effectiveFrom <= start) ?? run
     const end = [boundaries[index + 1] ? addDays(boundaries[index + 1], -1) : final.endDate, duration.endDate ?? '9999-12-31'].sort()[0]
     if (!revision || start > end) continue
+    if (revision.weeks) {
+      for (let week = monday(start); week <= end; week = addDays(week, 7)) {
+        if (run.excludedWeeks?.includes(week)) continue
+        const days = resolveWeek(revision, programWeek(run, week)).days
+        total += revision.mapping.filter((entry) => days.some((day) => day.id === entry.dayId) && addDays(week, entry.weekday) >= start && addDays(week, entry.weekday) <= end).length
+        if (civilDays(week, end) < 7) break
+      }
+      continue
+    }
     // A repair marker freezes the old prescription; editing the template alone
     // must not turn its suspended future workload into zero planned days.
     for (const assignment of revision.mapping) {
