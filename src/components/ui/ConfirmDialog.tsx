@@ -14,8 +14,8 @@ function lockScroll() {
   }
 }
 
-export function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCancel, cancelLabel = 'Cancel', destructive = false, busy = false }: { title: string; children: ReactNode; confirmLabel: string; onConfirm: () => void; onCancel: () => void; cancelLabel?: string; destructive?: boolean; busy?: boolean }) {
-  return <ActionDialog title={title} onClose={() => { if (!busy) onCancel() }} actions={<><button type="button" disabled={busy} onClick={onCancel}>{cancelLabel}</button><button type="button" disabled={busy} className={destructive ? 'destructive' : 'primary'} onClick={onConfirm}>{confirmLabel}</button></>}>{children}</ActionDialog>
+export function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCancel, cancelLabel = 'Cancel', destructive = false, busy = false, confirmDisabled = false }: { title: string; children: ReactNode; confirmLabel: string; onConfirm: () => void; onCancel: () => void; cancelLabel?: string; destructive?: boolean; busy?: boolean; confirmDisabled?: boolean }) {
+  return <ActionDialog title={title} onClose={() => { if (!busy) onCancel() }} actions={<><button type="button" disabled={busy} onClick={onCancel}>{cancelLabel}</button><button type="button" disabled={busy || confirmDisabled} className={destructive ? 'destructive' : 'primary'} onClick={onConfirm}>{confirmLabel}</button></>}>{children}</ActionDialog>
 }
 
 export function ActionDialog({ title, children, onClose, actions, headerActions, className, hideTitle = false }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode; headerActions?: ReactNode; className?: string; hideTitle?: boolean }) {

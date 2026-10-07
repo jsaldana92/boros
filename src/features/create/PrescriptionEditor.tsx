@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { blankSet, parseForm, toForm, type SetFields } from './form'
 
-export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save exercise', initialDirty = false, onDirty, onSubmit, onClose, onMerge, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void; onMerge?: (input: ExerciseInput) => void }) {
+export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save', initialDirty = false, onDirty, onSubmit, onClose, onMerge, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void; onMerge?: (input: ExerciseInput) => void }) {
   const [form, setForm] = useState(() => toForm(initial))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
@@ -16,7 +16,7 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
   const submitting = useRef(false)
   const [tag, setTag] = useState('')
   const [localTags, setLocalTags] = useState(initial?.tagNames ?? [])
-  const [tagsExpanded, setTagsExpanded] = useState(true)
+  const [tagsExpanded, setTagsExpanded] = useState(() => tags.some(tag => !tag.archivedAt))
   const tagsId = useId()
   const availableTags = [...new Map([...tags.filter((item) => !item.archivedAt).map((item) => item.name), ...localTags].map((name) => [nameKey(name), name])).entries()].map(([id, name]) => ({ id, name }))
   const [baseline] = useState(() => JSON.stringify(toForm(initial)))
@@ -63,7 +63,7 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
         <p className="muted">Enter a minimum only for a fixed target. Add a maximum for a range. RIR is optional; 0 is valid.</p>
 
         {form.sets.map((set, index) => <fieldset className="set-fields" key={index}><legend>Set {index + 1}</legend><div className="prescription-grid">
-          {([['repMin', 'Reps minimum'], ['repMax', 'Reps maximum (optional)'], ['rirMin', 'RIR minimum (optional)'], ['rirMax', 'RIR maximum (optional)']] as const).map(([field, label]) => <Field key={field} label={`Set ${index + 1} ${label}`} inputMode="numeric" required={field === 'repMin'} value={set[field]} error={errors[`sets.${index}.${field}`]} onChange={(e) => setValue(index, field, e.target.value)} />)}
+          {([['repMin', 'Reps minimum'], ['repMax', 'Reps maximum'], ['rirMin', 'RIR minimum'], ['rirMax', 'RIR maximum']] as const).map(([field, label]) => <Field key={field} label={label} aria-label={`Set ${index + 1} ${label}`} inputMode="numeric" required={field === 'repMin'} value={set[field]} error={errors[`sets.${index}.${field}`]} onChange={(e) => setValue(index, field, e.target.value)} />)}
         </div>{index === 0 && <button className="apply-all" type="button" onClick={() => {
           const apply = () => { setForm((current) => ({ ...current, sets: current.sets.map(() => ({ ...current.sets[0] })) })) }
           if (form.sets.slice(1).some((set) => Object.values(set).some((value) => value.trim()) && JSON.stringify(set) !== JSON.stringify(form.sets[0]))) setConfirm({ title: 'Replace set targets?', message: 'This replaces all other set targets with the reps and RIR from set 1.', action: apply })

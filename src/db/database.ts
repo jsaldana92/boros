@@ -1,3 +1,4 @@
+import type { DeletedSource } from '../schemas/deleted-source.ts'
 import type { Workout } from '../schemas/workout.ts'
 import Dexie, { type Table } from 'dexie'
 import type { Measurement, PhotoAsset, Profile, WorkspaceSettings } from '../schemas/profile.ts'
@@ -7,6 +8,7 @@ import type { CompletedSession, RestTimer, SessionDraft } from '../schemas/sessi
 import type { Schedule } from '../schemas/schedule.ts'
 
 export class BorosDatabase extends Dexie {
+  deletedSources!: Table<DeletedSource, [string, string, string]>
   profiles!: Table<Profile, string>
   settings!: Table<WorkspaceSettings, string>
   photos!: Table<PhotoAsset, [string, string]>
@@ -51,6 +53,8 @@ export class BorosDatabase extends Dexie {
     })
     // Additive v6: never extract plan copies or rewrite existing records.
     this.version(6).stores({ workouts: '[profileId+id], profileId, &[profileId+activeNameKey]' })
+    // Additive only: retain deleted library identities without resurrecting templates.
+    this.version(7).stores({ deletedSources: '[profileId+kind+id], profileId' })
   }
 }
 

@@ -1,3 +1,5 @@
+import { exerciseToInput } from './exercises.ts'
+import { copyExercise } from '../schemas/plan.ts'
 import { workoutService } from './workouts.ts'
 import { copyWorkout } from '../schemas/workout.ts'
 import { duplicateDay } from '../schemas/plan.ts'
@@ -16,7 +18,7 @@ import { occurrences, occurrenceKey, dateSchema, programWeek } from '../schemas/
 import { assessSession, blankSession, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
 
 export function sessionService(database: BorosDatabase) {
-  const tables = [database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises, database.tags, database.workouts]
+  const tables = [database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises, database.tags, database.workouts, database.deletedSources]
   const owner = async (profileId: string) => { const profile = await database.profiles.get(profileId); if (!profile) throw new Error('This profile is unavailable. Nothing was saved.'); return profile }
   const draft = async (profileId: string, id: string) => { const value = await database.drafts.get([profileId, id]); if (!value) throw new Error('This draft is unavailable in this profile.'); return value }
   const editable = async (value: SessionDraft, revision: number) => {
@@ -95,6 +97,39 @@ export function sessionService(database: BorosDatabase) {
         await database.drafts.put(result); return result
       })
     },
+    async replaceExercise(profileId: string, id: string, revision: number, occurrenceId: string, exerciseId: string, exerciseRevision: number) {
+      return database.transaction('rw', tables, async () => {
+        const profile = await owner(profileId), value = await draft(profileId, id); await editable(value, revision)
+        const source = await database.exercises.get([profileId, exerciseId])
+        if (!source || source.archivedAt || source.mergedIntoId || source.revision !== exerciseRevision) throw new Error('This exercise changed. Reopen the picker before swapping. Your input is kept.')
+        const index = value.day.exercises.findIndex((e) => e.id === occurrenceId)
+        if (index < 0) throw new Error('This occurrence is unavailable. Reload the saved draft.')
+        const next = structuredClone(value), old = next.day.exercises[index]
+        const replacement = copyExercise(exerciseToInput(source, await database.tags.where('profileId').equals(profileId).toArray()), { kind: 'exercise', id: source.id })
+        // Keep the plan occurrence association; replace its movement/set identities.
+        replacement.id = old.id; if (old.groupId) replacement.groupId = old.groupId
+        next.day.exercises[index] = replacement
+        next.structure ??= initialStructure(value.day)
+        next.structure.amended = true
+        next.structure.exercises[index] = initialStructure({ ...next.day, exercises: [replacement] }).exercises[0]
+        // Preserve other members' stable set IDs/rounds, including appended rounds.
+        if (old.groupId) {
+          const others = next.day.exercises.filter(e => e.groupId === old.groupId && e.id !== old.id)
+          const used = new Set(others.flatMap(e => next.structure!.exercises.find(x => x.id === e.id)!.sets.map(s => s.round)))
+          const max = Math.max(0, ...used), gaps = Array.from({ length: max }, (_, r) => r + 1).filter(r => !used.has(r))
+          const rounds = [...gaps.slice(0, replacement.prescription.sets.length)]
+          for (let r = 1; rounds.length < replacement.prescription.sets.length; r++) if (!rounds.includes(r)) rounds.push(r)
+          rounds.sort((a,b) => a-b); next.structure.exercises[index].sets.forEach((set, i) => { set.round = rounds[i] })
+        }
+        next.input.exercises[index] = blankSession({ ...next.day, exercises: [replacement] }, profile.weightUnit).exercises[0]
+        next.revision++; next.updatedAt = new Date().toISOString()
+        validateDraftInput(next.input, next.day)
+        await database.drafts.put(next)
+        const timer = await database.restTimers.get('active')
+        if (timer?.profileId === profileId && timer.draftId === id && (!timer.exerciseId && !timer.groupId || timer.exerciseId === old.id || !!old.groupId && timer.groupId === old.groupId)) await stopOwned(profileId, id)
+        return next
+      })
+    },
     async discard(profileId: string, id: string, revision: number) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
@@ -144,7 +179,7 @@ export function sessionService(database: BorosDatabase) {
           }
           savedDay = { ...savedDay, name }
         }
-        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, ...(source ? { source, timeZone: value.timeZone } : { sourcePlanId: value.sourcePlanId, planName: value.planName }), sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), ...planInstructionsSnapshot(value.planInstructions), day: savedDay, ...(value.structure ? { structure: structuredClone(value.structure) } : {}), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
+        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, ...(value.prunedAt ? { prunedAt: value.prunedAt } : {}), ...(source ? { source, timeZone: value.timeZone } : { sourcePlanId: value.sourcePlanId, planName: value.planName }), sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), ...planInstructionsSnapshot(value.planInstructions), day: savedDay, ...(value.structure ? { structure: structuredClone(value.structure) } : {}), notes: input.notes, exercises: assessed.exercises, partial: assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
         await database.sessions.add(result)
         await database.drafts.put({ ...value, ...(source ? { source } : {}), day: savedDay, input, finalizedAt: completedAt, activeSourceKey: undefined, updatedAt: loggedAt, revision: value.revision + 1 })
         await stopOwned(profileId, id); return result
@@ -160,7 +195,7 @@ export function sessionService(database: BorosDatabase) {
         const seconds = (afterExercise ? exercise.prescription.restAfterSeconds : exercise.prescription.restBetweenSeconds) ?? manualSeconds
         const timing = seconds === undefined ? { mode: 'countup' as const, startedAt: new Date().toISOString() } : { mode: 'countdown' as const, durationSeconds: seconds, endAt: timerEnd(seconds) }
         if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
-        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `${exercise.prescription.name}: ${afterExercise ? 'between exercises' : `after set ${setIndex + 1}`}`, ...timing }
+        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, exerciseId, label: exercise.prescription.name, position: afterExercise ? 'Post-Exercise' : `Set ${setIndex + 1}`, ...timing }
         await database.restTimers.put(timer); return timer
       })
     },
@@ -169,11 +204,13 @@ export function sessionService(database: BorosDatabase) {
         await owner(profileId); const value = await draft(profileId, draftId); await editable(value, revision)
         const blocks = trainingBlocks(value.day), index = blocks.findIndex((block) => block.group?.id === groupId), block = blocks[index]
         if (!block?.group || !Number.isInteger(round) || round < 0 || round >= sessionRounds(block.members, value.structure).length) throw new Error('This superset rest position is unavailable.')
-        const after = round === sessionRounds(block.members, value.structure).length - 1
+        const rounds = sessionRounds(block.members, value.structure), first = rounds[round][0]
+        const roundNumber = value.structure?.exercises.find(e => e.id === first.member.id)?.sets[first.index].round ?? round + 1
+        const after = round === rounds.length - 1
         const seconds = (after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds) ?? manualSeconds
         const timing = seconds === undefined ? { mode: 'countup' as const, startedAt: new Date().toISOString() } : { mode: 'countdown' as const, durationSeconds: seconds, endAt: timerEnd(seconds) }
         if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
-        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, label: `Superset ${block.group.number}: ${after ? 'after group' : `after round ${round + 1}`}`, ...timing }
+        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, groupId, label: `Superset ${block.group.number}`, position: after ? 'Post-Exercise' : `Set ${roundNumber}`, ...timing }
         await database.restTimers.put(timer); return timer
       })
     },

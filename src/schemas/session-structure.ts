@@ -18,7 +18,7 @@ export function sessionRounds(members: PlanExercise[], structure?: SessionStruct
   return Array.from({ length: Math.max(...rounds.flat()) }, (_, r) => members.flatMap((member, m) => {
     const index = rounds[m].indexOf(r + 1)
     return index < 0 ? [] : [{ member, index }]
-  }))
+  })).filter(round => round.length)
 }
 export function validateStructure(day: TrainingDay, structure?: SessionStructure) {
   if (!structure) return
@@ -29,7 +29,8 @@ export function validateStructure(day: TrainingDay, structure?: SessionStructure
     if (e.id !== day.exercises[i].id || e.sets.length !== day.exercises[i].prescription.sets.length) throw new Error('Session structure does not match its sets.')
     e.sets.forEach((s, index) => { if (ids.has(s.id) || (index > 0 && s.round <= e.sets[index - 1].round)) throw new Error('Session set identities and rounds must be unique and ordered.'); ids.add(s.id) })
   })
-  for (const block of trainingBlocks(day)) if (sessionRounds(block.members, structure).some((round) => !round.length)) throw new Error('Session rounds must not contain empty rounds.')
+  // Removing/replacing a member can leave unused execution rounds. Rendering
+  // omits those rounds while surviving set IDs and round coordinates stay fixed.
 }
 export function validateAmendment(old: SessionSnapshot, next: SessionSnapshot) {
   if (next.day.exercises.length) planInputSchema.parse({ name: 'Session', days: [next.day] }); validateStructure(next.day, next.structure)
@@ -48,7 +49,7 @@ export function appendSessionSets(snapshot: SessionSnapshot, input: SessionInput
   const day = structuredClone(snapshot.day), structure = structuredClone(snapshot.structure ?? initialStructure(day)), next = structuredClone(input)
   const block = trainingBlocks(day).find((b) => b.id === blockId)
   if (!block || block.members.some((m) => m.prescription.sets.length >= 100)) throw new Error('Use at most 100 sets per exercise.')
-  const round = sessionRounds(block.members, structure).length + 1
+  const round = Math.max(...block.members.flatMap(m => structure.exercises.find(e => e.id === m.id)!.sets.map(s => s.round))) + 1
   if (round > 100) throw new Error('Use at most 100 rounds per superset.')
   for (const member of block.members) {
     member.prescription.sets.push(structuredClone(member.prescription.sets.at(-1)!))

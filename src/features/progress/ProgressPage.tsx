@@ -1,3 +1,4 @@
+import { ChartDateFilter } from './ChartDateFilter'
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
@@ -8,7 +9,6 @@ import { WeightChart, type GraphPosition } from './WeightChart'
 import { MeasurementEditor } from './MeasurementEditor'
 import { SavedPhoto } from './ProgressPhoto'
 import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { Field } from '../../components/ui/Field'
 import { WorkoutProgress } from './WorkoutProgress'
 
 export function ProgressPage() {
@@ -41,13 +41,9 @@ function BodyWeight({ filter, setFilter, position, onLog }: { filter: Measuremen
     <button onClick={() => setFilterOpen(true)} aria-label={filter.start || filter.end ? 'Filter, active' : 'Filter'}>Filter</button>
     {!result && <p role="status">Loading measurements…</p>}{result?.error && <p role="alert">Could not load measurements. {result.error} <button onClick={() => retry(attempt + 1)}>Retry progress</button></p>}
     {result?.entries && <WeightChart key={`${filter.start}/${filter.end}`} entries={filterMeasurements(result.entries, filter)} unit={unit} position={position} filtered={!!(filter.start || filter.end)} onSelect={(id) => { setSelection(id); setError('') }} />}
-    {filterOpen && <WeightFilter current={filter} onClose={() => setFilterOpen(false)} onApply={(next) => { position.write(undefined); setFilter(next); setFilterOpen(false) }} />}
+    {filterOpen && <ChartDateFilter current={filter} onClose={() => setFilterOpen(false)} onApply={(next) => { position.write(undefined); setFilter(next); setFilterOpen(false) }} />}
     {selected && <ActionDialog title="Weight details" hideTitle onClose={() => setSelection(undefined)} actions={<><button onClick={() => setSelection(undefined)}>Close</button><button onClick={() => setEdit(selected)}>Edit</button><button onClick={() => { setRemove(selected); setError('') }}>Delete</button></>}><p className="weight-detail-value">{displayNumber(fromKg(selected.weightKg, unit))} {unit}</p><p>{measurementDateLabel(selected)}</p>{selected.photoId && <SavedPhoto profileId={profileId} entryId={selected.id} />}</ActionDialog>}
     {edit && <MeasurementEditor profileId={profileId} preferredUnit={unit} initial={edit} onClose={() => setEdit(undefined)} onSaved={() => setEdit(undefined)} />}
     {remove && <ConfirmDialog title="Delete Weight?" confirmLabel="Delete" destructive busy={busy} onCancel={() => { setRemove(undefined); setError('') }} onConfirm={() => void deleteEntry()}><p>Once deleted you cannot recover this stored weight.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
   </section>
-}
-function WeightFilter({ current, onClose, onApply }: { current: MeasurementFilter; onClose: () => void; onApply: (value: MeasurementFilter) => void }) {
-  const [value, setValue] = useState(current), [error, setError] = useState('')
-  return <ActionDialog title="Filter" onClose={onClose} actions={<><button onClick={onClose}>Cancel</button><button onClick={() => onApply({ start: '', end: '' })}>Clear</button><button className="primary" onClick={() => { try { filterMeasurements([], value); onApply(value) } catch (e) { setError((e as Error).message) } }}>Apply</button></>}><Field label="Start date" type="date" value={value.start} onChange={(e) => setValue({ ...value, start: e.target.value })} /><Field label="End date" type="date" value={value.end} onChange={(e) => setValue({ ...value, end: e.target.value })} />{error && <p role="alert">{error}</p>}</ActionDialog>
 }

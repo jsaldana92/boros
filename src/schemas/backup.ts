@@ -1,3 +1,4 @@
+import { deletedSourceSchema, type DeletedSource } from './deleted-source.ts'
 import { exerciseResolver } from '../lib/exercise-identity.ts'
 import { templateReference } from '../lib/template-ownership.ts'
 import { workoutInputSchema, type Workout } from './workout.ts'
@@ -13,11 +14,11 @@ import { assessSession, sessionInputSchema, validateDraftInput, type CompletedSe
 import { monday, validZone } from '../lib/calendar-dates.ts'
 import { validateTimeContext } from '../lib/measurement-dates.ts'
 
-export const BACKUP_VERSION = 12
+export const BACKUP_VERSION = 13
 const LEGACY_SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Wait for Draft saved locally in every training tab before exporting.'
 export const SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Apply notes and wait until Saving disappears without an error in every training tab before exporting.'
 export interface ProfileSnapshot {
-  databaseVersion: number; capturedAt: string; profile: Profile; tags: Tag[]; exercises: Exercise[]; plans: Plan[]; workouts: Workout[]
+  deletedSources: DeletedSource[]; databaseVersion: number; capturedAt: string; profile: Profile; tags: Tag[]; exercises: Exercise[]; plans: Plan[]; workouts: Workout[]
   schedules: Schedule[]; drafts: SessionDraft[]; sessions: CompletedSession[]; measurements: Measurement[]; photos: PhotoAsset[]
 }
 const id = z.string().uuid(), time = z.string().datetime(), revision = z.number().int().positive()
@@ -32,7 +33,7 @@ const number = z.number().finite().nonnegative(), integer = number.int().max(Num
 const recorded = z.discriminatedUnion('skipped', [z.object({ skipped: z.literal(true) }).strict(), z.object({ skipped: z.literal(false), weightKg: number, load: number, unit: weightUnitSchema, reps: integer, rir: integer.optional() }).strict()])
 export const assetSchema = z.object({ ...owned, createdAt: time, role: z.enum(['avatar', 'progress']), width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), bytes: z.number().int().positive().max(5 * 1024 * 1024), path: z.string().regex(/^photos\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/i) }).strict()
 export type BackupAsset = z.infer<typeof assetSchema>
-export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12; assets: BackupAsset[] }
+export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13; assets: BackupAsset[] }
 // Validation never replaces the original records with Zod's parsed/transformed output.
 // The JSON payload retains saved text, optional-field presence, array order and snapshots.
 export const v4BackupDataSchema = z.object({
@@ -133,13 +134,19 @@ export const v11BackupDataSchema = v10BackupDataSchema.extend({
   drafts: z.array(v10BackupDataSchema.shape.drafts.element.extend({ ...sessionSource, day: workoutDay.extend({ exercises: workoutDay.shape.exercises.min(0) }), input: sessionInputSchema })),
   sessions: z.array(v10BackupDataSchema.shape.sessions.element.extend(sessionSource)),
 })
-export const backupDataSchema = v11BackupDataSchema.extend({
-  backupSchemaVersion: z.literal(BACKUP_VERSION),
+export const v12BackupDataSchema = v11BackupDataSchema.extend({
+  backupSchemaVersion: z.literal(12),
   exercises: z.array(v11BackupDataSchema.shape.exercises.element.extend({ mergedIntoId: id.optional(), mergedAt: time.optional(), mergeOperationId: id.optional() })),
+})
+const prunedDay = workoutDay.extend({ exercises: workoutDay.shape.exercises.min(0) })
+export const backupDataSchema = v12BackupDataSchema.extend({
+  backupSchemaVersion: z.literal(BACKUP_VERSION), deletedSources: z.array(deletedSourceSchema),
+  drafts: z.array(v12BackupDataSchema.shape.drafts.element.extend({ prunedAt: time.optional(), day: prunedDay })),
+  sessions: z.array(v12BackupDataSchema.shape.sessions.element.extend({ prunedAt: time.optional(), day: prunedDay })),
 })
 export const inventorySchema = z.object({ path: z.string(), bytes: z.number().int().nonnegative(), sha256: z.string().regex(/^[0-9a-f]{64}$/), mediaType: z.string() }).strict()
 export const manifestSchema = z.object({
-  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12)]), databaseSchemaVersion: z.union([z.literal(5), z.literal(6)]),
+  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13)]), databaseSchemaVersion: z.union([z.literal(5), z.literal(6), z.literal(7)]),
   app: z.object({ name: z.literal('boros'), version: z.string().min(1) }).strict(), exportedAt: time, snapshotAt: time,
   profile: z.object({ id, name: z.string(), kind: z.enum(['guest', 'named']) }).strict(), snapshotPolicy: z.union([z.literal(LEGACY_SNAPSHOT_POLICY), z.literal(SNAPSHOT_POLICY)]),
   counts: z.record(z.number().int().nonnegative()), csvRows: z.record(z.number().int().nonnegative()),
@@ -149,7 +156,7 @@ export const manifestSchema = z.object({
 }).strict()
 export type BackupManifest = z.infer<typeof manifestSchema>
 export function recordCounts(data: BackupData) {
-  return { ...(data.backupSchemaVersion >= 11 ? { workouts: data.workouts.length } : {}), profiles: 1, tags: data.tags.length, exercises: data.exercises.length, plans: data.plans.length, schedules: data.schedules.length, drafts: data.drafts.length, sessions: data.sessions.length, measurements: data.measurements.length, assets: data.assets.length, ...(data.backupSchemaVersion >= 5 ? { outcomes: data.schedules.reduce((n, run) => n + (run.outcomes?.length ?? 0), 0), excludedWeeks: data.schedules.reduce((n, run) => n + (run.excludedWeeks?.length ?? 0), 0) } : {}) }
+  return { ...(data.backupSchemaVersion >= 13 ? { deletedSources: data.deletedSources.length } : {}), ...(data.backupSchemaVersion >= 11 ? { workouts: data.workouts.length } : {}), profiles: 1, tags: data.tags.length, exercises: data.exercises.length, plans: data.plans.length, schedules: data.schedules.length, drafts: data.drafts.length, sessions: data.sessions.length, measurements: data.measurements.length, assets: data.assets.length, ...(data.backupSchemaVersion >= 5 ? { outcomes: data.schedules.reduce((n, run) => n + (run.outcomes?.length ?? 0), 0), excludedWeeks: data.schedules.reduce((n, run) => n + (run.excludedWeeks?.length ?? 0), 0) } : {}) }
 }
 function equalRecord(a: unknown, b: unknown): boolean {
   if (a === b) return true
@@ -161,7 +168,7 @@ function equalRecord(a: unknown, b: unknown): boolean {
 }
 export function validateBackupData(data: BackupData) {
   const fail = (message: string): never => { throw new Error(`Backup cannot be completed: ${message}. Reopen the affected record and repair it before retrying; source data was not changed.`) }
-  const validation = (data.backupSchemaVersion === 1 ? legacyBackupDataSchema : data.backupSchemaVersion === 2 ? v2BackupDataSchema : data.backupSchemaVersion === 3 ? v3BackupDataSchema : data.backupSchemaVersion === 4 ? v4BackupDataSchema : data.backupSchemaVersion === 5 ? v5BackupDataSchema : data.backupSchemaVersion === 6 ? v6BackupDataSchema : data.backupSchemaVersion === 7 ? v7BackupDataSchema : data.backupSchemaVersion === 8 ? v8BackupDataSchema : data.backupSchemaVersion === 9 ? v9BackupDataSchema : data.backupSchemaVersion === 10 ? v10BackupDataSchema : data.backupSchemaVersion === 11 ? v11BackupDataSchema : backupDataSchema).safeParse(data)
+  const validation = (data.backupSchemaVersion === 1 ? legacyBackupDataSchema : data.backupSchemaVersion === 2 ? v2BackupDataSchema : data.backupSchemaVersion === 3 ? v3BackupDataSchema : data.backupSchemaVersion === 4 ? v4BackupDataSchema : data.backupSchemaVersion === 5 ? v5BackupDataSchema : data.backupSchemaVersion === 6 ? v6BackupDataSchema : data.backupSchemaVersion === 7 ? v7BackupDataSchema : data.backupSchemaVersion === 8 ? v8BackupDataSchema : data.backupSchemaVersion === 9 ? v9BackupDataSchema : data.backupSchemaVersion === 10 ? v10BackupDataSchema : data.backupSchemaVersion === 11 ? v11BackupDataSchema : data.backupSchemaVersion === 12 ? v12BackupDataSchema : backupDataSchema).safeParse(data)
   if (!validation.success) { const issue = validation.error.issues[0]; fail(`invalid saved ${issue.path.join('.')}: ${issue.message}`) }
   const index = <T extends { id: string; profileId: string }>(records: T[], label: string) => {
     const map = new Map<string, T>()
@@ -171,7 +178,16 @@ export function validateBackupData(data: BackupData) {
   const tags = index(data.tags, 'tag'), plans = index(data.plans, 'plan'), schedules = index(data.schedules, 'schedule'), drafts = index(data.drafts, 'draft'), sessions = index(data.sessions, 'session'), assets = index(data.assets, 'photo')
   const workouts = index(data.workouts ?? [], 'workout')
   const templates = index(data.exercises, 'exercise'); index(data.measurements, 'measurement')
-  const resolve = exerciseResolver(data.profile.id, data.exercises)
+  const deleted = data.deletedSources ?? [], deletedKeys = new Set<string>()
+  for (const item of deleted) {
+    const key = `${item.kind}:${item.id}`
+    if (item.profileId !== data.profile.id || deletedKeys.has(key) || (item.kind === 'exercise' ? templates : item.kind === 'workout' ? workouts : plans).has(item.id) || item.kind !== 'exercise' && item.mergedIntoId) fail('invalid deleted source identity')
+    deletedKeys.add(key)
+  }
+  const resolve = exerciseResolver(data.profile.id, [...data.exercises, ...deleted.filter(t => t.kind === 'exercise')])
+  for (const item of deleted.filter(t => t.kind === 'exercise')) resolve(item.id)
+  const hasExercise = (id: string) => templates.has(id) || deletedKeys.has(`exercise:${id}`)
+  const hasWorkout = (id: string) => workouts.has(id) || deletedKeys.has(`workout:${id}`)
   for (const exercise of data.exercises) {
     if (exercise.mergedIntoId) {
       if (!exercise.mergedAt || !exercise.mergeOperationId || exercise.activeNameKey !== undefined) fail('invalid retired exercise metadata')
@@ -180,9 +196,9 @@ export function validateBackupData(data: BackupData) {
   }
   for (const selected of data.profile.selectedPlanIds ?? []) if (!plans.has(selected)) fail(`selected plan ${selected} is missing`)
   for (const exercise of data.exercises) for (const tag of exercise.tagIds) if (!tags.has(tag)) fail(`exercise ${exercise.id} requires missing tag ${tag}`)
-  for (const workout of workouts.values()) { workoutInputSchema.parse(workout); for (const exercise of workout.exercises) if (templateReference(exercise) && !templates.has(templateReference(exercise)!)) fail('workout requires a missing exercise template') }
-  for (const plan of data.plans) { planInputSchema.parse(plan); for (const day of plan.days) for (const item of day.exercises) if (item.templateId && !templates.has(item.templateId)) fail(`plan ${plan.id} requires missing template ${item.templateId}`) }
-  for (const day of [...data.plans.flatMap(p => p.days), ...data.schedules.flatMap(s => [...s.revisions.flatMap(r => r.days), ...(s.outcomes ?? []).map(o => o.day)]), ...data.drafts.map(d => d.day), ...data.sessions.map(s => s.day)]) if (day.sourceWorkoutId && !workouts.has(day.sourceWorkoutId)) fail('snapshot requires a missing workout template')
+  for (const workout of workouts.values()) { workoutInputSchema.parse(workout); for (const exercise of workout.exercises) if (templateReference(exercise) && !hasExercise(templateReference(exercise)!)) fail('workout requires a missing exercise template') }
+  for (const plan of data.plans) { planInputSchema.parse(plan); for (const day of plan.days) for (const item of day.exercises) if (item.templateId && !hasExercise(item.templateId)) fail(`plan ${plan.id} requires missing template ${item.templateId}`) }
+  for (const day of [...data.plans.flatMap(p => p.days), ...data.schedules.flatMap(s => [...s.revisions.flatMap(r => r.days), ...(s.outcomes ?? []).map(o => o.day)]), ...data.drafts.map(d => d.day), ...data.sessions.map(s => s.day)]) if (day.sourceWorkoutId && !hasWorkout(day.sourceWorkoutId)) fail('snapshot requires a missing workout template')
   for (const schedule of data.schedules) {
     if (schedule.closedAt && !schedule.stoppedFrom) fail('closed run requires a schedule cutoff')
     if (schedule.kind === 'unscheduled' && schedule.identity !== 'program-week') fail('weekly program is missing its stable identity mode')
@@ -216,13 +232,14 @@ export function validateBackupData(data: BackupData) {
   }
   for (const item of [...data.drafts, ...data.sessions]) {
     validateStructure(item.day, item.structure)
+    if (item.prunedAt && (!item.source || item.sourcePlanId)) fail('only standalone records may be pruned')
     if (item.source) {
       if (item.sourcePlanId || item.planName !== undefined || item.planInstructions !== undefined || item.occurrence || item.occurrenceKey || !item.timeZone || ('activeSourceKey' in item && item.activeSourceKey)) fail('standalone session contains plan metadata or lacks its time zone')
       if (item.source.workoutId && !workouts.has(item.source.workoutId)) fail('standalone session requires its workout template')
     } else if (!item.sourcePlanId || !plans.has(item.sourcePlanId)) fail(`session/draft ${item.id} requires missing plan ${item.sourcePlanId}`)
     if (item.sourceDayId !== item.day.id) fail(`session/draft ${item.id} has mismatched day identity`)
     if (item.day.exercises.length) planInputSchema.parse({ name: item.planName ?? item.day.name, days: [item.day] })
-    else if (item.source?.kind !== 'custom' || !('input' in item) || item.finalizedAt) fail('only an unfinished custom workout can be empty')
+    else if (!(item.prunedAt && ('input' in item ? item.input.notes : item.notes).trim()) && (item.source?.kind !== 'custom' || !('input' in item) || item.finalizedAt)) fail('only an unfinished custom workout can be empty')
     if (!!item.occurrence !== !!item.occurrenceKey) fail(`session/draft ${item.id} has incomplete occurrence metadata`)
     if (item.occurrence) {
       const ref = item.occurrence, schedule = schedules.get(ref.scheduleId), revision = schedule?.revisions.find((r) => r.id === ref.scheduleRevisionId)
@@ -233,10 +250,10 @@ export function validateBackupData(data: BackupData) {
   for (const draft of data.drafts) { validateDraftInput(draft.input, draft.day); if (draft.finalizedAt && !sessions.has(draft.id)) fail(`finalized draft ${draft.id} requires a completed session`) }
   for (const session of data.sessions) {
     const draft = drafts.get(session.draftId)
-    if (!draft || draft.id !== session.id || draft.finalizedAt !== session.completedAt || draft.sourcePlanId !== session.sourcePlanId || !equalRecord(draft.source, session.source) || draft.timeZone !== session.timeZone || draft.occurrenceKey !== session.occurrenceKey || draft.planInstructions !== session.planInstructions || !equalRecord(draft.day, session.day) || !equalRecord(draft.structure, session.structure)) fail(`session ${session.id} has an inconsistent finalized draft`)
+    if (!draft || draft.id !== session.id || draft.finalizedAt !== session.completedAt || draft.prunedAt !== session.prunedAt || draft.sourcePlanId !== session.sourcePlanId || !equalRecord(draft.source, session.source) || draft.timeZone !== session.timeZone || draft.occurrenceKey !== session.occurrenceKey || draft.planInstructions !== session.planInstructions || !equalRecord(draft.day, session.day) || !equalRecord(draft.structure, session.structure)) fail(`session ${session.id} has an inconsistent finalized draft`)
     if (session.exercises.length !== session.day.exercises.length || session.exercises.some((e, i) => e.id !== session.day.exercises[i].id || e.sets.length !== session.day.exercises[i].prescription.sets.length)) fail(`session ${session.id} results do not match its snapshot`)
     const assessed = assessSession(draft!.input)
-    if (Object.keys(assessed.errors).length || !assessed.recorded || session.partial !== (assessed.skipped > 0) || session.notes !== draft!.input.notes || !equalRecord(assessed.exercises, session.exercises) || session.completedAt < session.startedAt) fail(`session ${session.id} results disagree with its finalized draft`)
+    if (Object.keys(assessed.errors).length || (!assessed.recorded && !session.prunedAt) || session.partial !== (assessed.skipped > 0) || session.notes !== draft!.input.notes || !equalRecord(assessed.exercises, session.exercises) || session.completedAt < session.startedAt) fail(`session ${session.id} results disagree with its finalized draft`)
   }
   for (const record of [data.profile, ...data.measurements]) if (record.photoId && !assets.has(record.photoId)) fail(`record ${record.id} requires missing photo ${record.photoId}`)
   for (const item of data.measurements) validateTimeContext(item)

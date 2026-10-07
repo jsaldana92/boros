@@ -1,3 +1,4 @@
+import { DeleteLibraryDialog } from './DeleteLibraryDialog'
 import { PlanBrowseControls } from './PlanBrowseControls'
 import { PlanCard } from './PlanCard'
 import { BoundedGrid } from '../../components/ui/BoundedGrid'
@@ -19,6 +20,7 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
   }, [profileId, attempt])
   const [editor, setEditor] = useState<{ key: string; original?: Plan; draft?: PlanInput } | undefined>()
   const [selected, setSelected] = useState<Plan>()
+  const [deleting, setDeleting] = useState<Plan>()
   const [archiveTarget, setArchiveTarget] = useState<Plan>()
   const [archived, setArchived] = useState(false)
   const [search, setSearch] = useState('')
@@ -56,9 +58,11 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
     </div>
     {editor && result?.error && <p role="alert">Exercise sources could not be loaded. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry sources</button></p>}
     {selected && <PlanDetails plan={selected} busy={busy} error={error} onClose={() => { setSelected(undefined); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : heading.current)?.focus()) }}
+      onDelete={() => setDeleting(selected)}
       onEdit={() => open(planToInput(selected), selected)}
       onDuplicate={async () => { setBusy(true); setError(''); try { open(await plans.duplicateDraft(profileId, selected.id)) } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }}
       onArchive={() => selected.archivedAt ? void toggleArchive(selected) : (setSelected(undefined), setArchiveTarget(selected))} />}
+    {deleting && <DeleteLibraryDialog profileId={profileId} kind="plan" record={deleting} onClose={() => setDeleting(undefined)} onDeleted={() => { setDeleting(undefined); setSelected(undefined); setStatus('Plan deleted.'); requestAnimationFrame(() => heading.current?.focus()) }} />}
     {archiveTarget && <ConfirmDialog title="Archive plan?" confirmLabel="Archive" busy={busy} onCancel={() => { setSelected(archiveTarget); setArchiveTarget(undefined); setError('') }} onConfirm={() => { void toggleArchive(archiveTarget) }}><p>{archiveTarget.name} will leave the active plan list. Its saved record and independent copies are kept.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
   </section>
 }

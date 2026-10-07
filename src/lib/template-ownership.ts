@@ -1,3 +1,4 @@
+import type { DeletedSource } from '../schemas/deleted-source.ts'
 import { createId } from './browser-crypto.ts'
 import { exerciseInputSchema, type Exercise, type Tag } from '../schemas/exercise.ts'
 import { type Plan, type PlanExercise } from '../schemas/plan.ts'
@@ -8,7 +9,7 @@ export const templateReference = (item: PlanExercise) => item.templateId ?? (ite
 // A pure compatibility transformation. Call inside an owner-checked transaction,
 // or on a validated restore preview, never from a render/live query. Historical
 // provenance is deliberately independent from the new defaults reference.
-export function materializeTemplates(profileId: string, records: { plans: Plan[]; exercises: Exercise[]; tags: Tag[] }, at: string, importing = false) {
+export function materializeTemplates(profileId: string, records: { plans: Plan[]; exercises: Exercise[]; tags: Tag[]; deletedSources?: DeletedSource[] }, at: string, importing = false) {
   const exercises = structuredClone(records.exercises), tags = structuredClone(records.tags), plans = structuredClone(records.plans)
   const addedExercises: Exercise[] = [], addedTags: Tag[] = [], changedPlans: Plan[] = []
   if ([...plans, ...exercises, ...tags].some((item) => item.profileId !== profileId)) throw new Error('Template repair cannot cross profile ownership.')
@@ -24,7 +25,7 @@ export function materializeTemplates(profileId: string, records: { plans: Plan[]
     let changed = false
     for (const day of plan.days) for (const item of day.exercises) {
       const ref = templateReference(item)
-      if (ref && byId.has(ref)) continue // explicit valid identity wins over a renamed snapshot
+      if (ref && (byId.has(ref) || records.deletedSources?.some(t => t.profileId === profileId && t.kind === 'exercise' && t.id === ref))) continue // explicit valid identity wins over a renamed snapshot
       const input = exerciseInputSchema.parse(item.prescription), key = nameKey(input.name)
       let template = active.get(key) ?? (plan.archivedAt ? createdArchived.get(key) : undefined)
       if (ref && template && template.id !== ref) throw new Error(`Ambiguous template reference for "${input.name}": missing ID ${ref} conflicts with an existing library name. Nothing was repaired. Restore under a separate profile or resolve the source records first.`)

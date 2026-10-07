@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
-Updated: 2026-10-06
-Status: Exercise merge and input/editor fixes complete in available local verification environments. Physical keyboard/viewport acceptance, earlier release gates and the production persistence investigation remain open.
-Current scope: stable mobile result entry, compact Skip control, nested editor position/focus restoration, durable exercise identity merges, Overall history and backup v12 compatibility. Database remains boros v6 and AI remains v5. No commit, push, deploy, hosting or dependency changes.
+Updated: 2026-10-07
+Status: Train, library lifecycle and Progress refinements complete in available local verification environments. Physical-device acceptance, earlier release gates and the production persistence investigation remain open.
+Current scope: occurrence Preview, session replacement, future plan prescriptions, timer feedback/layout, Create controls, scoped library deletion, additive archives, shared exercise graphs and backup compatibility. Stable boros database upgraded additively to v7; backup v13; AI v5 unchanged. No commit, push, deploy, hosting or dependency changes.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -86,7 +86,7 @@ These defaults make implementation concrete. They are design choices, not additi
 - Copy an exercise prescription into a plan entry when adding it. Keep an optional source exercise ID, but editing the library exercise must not silently change existing plans.
 - Store a complete prescription snapshot in a started session and its completed log. Later plan edits or archiving must not rewrite historical exercise names, targets, tags, units, or instructions.
 - Autosave training drafts locally. `Save` explicitly creates a completed session; `Clear` confirms before deleting only that draft's entered results/notes and resetting it to its prescription.
-- Plan/library removal should archive records needed by history or schedules. Explicit profile clearing and confirmed import replacement have separate deletion semantics.
+- Archive retains records. Confirmed library Delete now follows stable ownership: exercise/workout deletion preserves copied prescriptions and plan-owned history; plan deletion removes all its owned runs/results and active selection atomically. Minimum deleted-source metadata preserves references without retaining deleted performance. Profile clearing and confirmed import replacement keep separate reviewed semantics.
 
 ### Calendar and dates
 
@@ -808,6 +808,13 @@ These do not block Phase 0 unless the owner changes the scope.
 
 | Date       | Decision                                                                        | Reason                                                                  |
 | ---------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 2026-10-07 | Append compatible plan-content revisions from the current run-local week; retain old segments and protected occurrences | Eligible current/future starts and previews use edited prescriptions; missed weeks, started drafts and recorded outcomes/history keep their context |
+| 2026-10-07 | Session replacement commits one occurrence snapshot with stable position/group and blank results | Preserve other members, repeated copies and unequal-round identities; stop invalidated timers |
+| 2026-10-07 | Add boros v7 deletedSources and backup v13; scope Delete by canonical source/owner IDs | Preserve usable copies/history and prevent template repair from recreating deleted sources; no record reset or hidden performance copies |
+| 2026-10-07 | Conservative delete preview fingerprint rechecked within one write transaction | Activation, merge, revisions or saved results changed after opening require a fresh confirmation; failures roll back all affected stores |
+| 2026-10-07 | Edited A is Merge source, picked B destination; Switch reverses both | Explicitly supersedes the prior default-direction instruction |
+| 2026-10-07 | Keep audio preparation muted at zero volume; atomically claim countdown completion | Prevent startup/reset chimes and stale/double callbacks while retaining three completion plays and supported recovery |
+| 2026-10-07 | Share chart axis/scroll/date-filter behavior between weight and exercise graphs | Preserve exercise scope and result details without exposing measurement actions |
 | 2026-10-05 | Browser-local allowlisted Calendar view; write only on deliberate change | Restore Day/Week/Month without resetting dates, recording editor contents or touching records |
 | 2026-10-05 | Allocate effective normalized Guest names and select in one profiles/settings transaction | Prevent cross-tab duplicate names, orphan creation and false success; unnamed legacy Guest reserves its displayed name |
 | 2026-10-05 | Device timezone for new actions; preserve old optional preference/context, including absence | Remove hidden default behavior without shifting schedules/history or changing v5/v8 contracts |
@@ -962,10 +969,10 @@ These do not block Phase 0 unless the owner changes the scope.
 
 ## 9. Current checkpoint
 
-- Exercise merge/input/editor update: **Complete in available local verification environments**. Phase 10 remains **Verification pending**, Phase 11 **In progress**; historical verification and prior handoffs stay recorded.
-- Stable **boros v6** with optional retained-source merge fields, no database migration. **AI v5** unchanged. **Backup v12** validates strict original v1-v11 files before promotion.
-- Data **230/230**; build/typecheck/lint/diff pass. Affected Edge static matrix **240/240**, added picker checks **4/4**, Firefox **38/38** plus picker **2/2**. Same-origin/context cached-release/two-rebuild update matrix **6/6**. Final source-label/input/editor/merge/Progress checks pass **40/40 Edge + 20/20 Firefox**. Exact commands, timing and limitations: [merge verification](docs/exercise-merge-verification.md).
-- Next: perform the three disposable-profile owner checks in the verification record. Physical phone keyboard/viewport, Safari, assistive technology, background timers, quota/save sheets and live Ko-fi remain unverified. The earlier production disappearance report remains unresolved.
+- Train/library lifecycle/Progress update: **Complete in available local verification environments**. Phase 10 remains **Verification pending**, Phase 11 **In progress**; earlier handoffs remain historical.
+- Stable **boros v7**, additive deleted-source metadata only; **backup v13** validates original v1-v12 archives before promotion; **AI v5** unchanged. No deployment/configuration changes or owner data access.
+- Build/typecheck/lint/diff pass; **243/243 data**, **644/644 full Edge static matrix**, final affected checks covered by **75 passes + corrected 12/12 plan/round rerun**, **68 applicable Firefox passes + 38/38 final follow-up**, and **6/6 final same-origin/context release/two-rebuild**. Four older CDP-only Firefox attempts failed before reaching the app; they passed in Edge. Exact commands/results: [current verification](docs/train-library-lifecycle-verification.md).
+- Next: perform the disposable-profile owner checks in that record. Physical software keyboard, Safari/assistive technology, background timer/audio/vibration, quota/save sheets and live Ko-fi remain unverified. The earlier production disappearance report is still unresolved.
 
 ## 10. Handoff entry template
 
@@ -1852,3 +1859,22 @@ Fresh verification against the final build (isolated contexts/test databases):
 - [ ] Physical phone software-keyboard/viewport behavior; Safari/iOS Blob restore; real assistive technology; background audio/vibration/timers; native file sheets/quota/eviction/spreadsheet apps and live Ko-fi. Emulation passes do not establish physical acceptance or diagnose the earlier production data-loss report.
 - Preservation: started clean at `59a9aeec88c83e65d1da3ca9f38c1849c625eceb`; no owner data accessed/cleared, dependency installation, commit, push, deploy or hosting change. Prior records/handoffs remain historical.
 - Next: disposable-phone result entry/Skip; Workout 4 Apply/Cancel and unique-week/Workout/AI return; merge two exercises with recorded results, test Switch/Cancel, then check Calendar/Overall/plan views and restore a backup under a new name. See the verification record for exact steps.
+
+
+### Handoff - Train, library lifecycle and Progress refinements (2026-10-07)
+
+- Status: **Complete in available local verification environments**. Phase 10 remains Verification pending and Phase 11 In progress. Earlier handoffs, including the now-superseded merge direction and schema versions, remain historical.
+- [x] Train read-only occurrence Preview below Start/Resume uses Create summary and applicable/protected snapshots, writes no draft and restores nested focus. Instructions:/Note: headings hide when empty.
+- [x] Centered Rest Timer, name/group and Set/Post-Exercise context, clockwise shared ring, compact sticky mm:ss, Stop/Reset/Close and honest count-up behavior. Unlock preparation stays muted at volume zero; only a claimed due token can play completion three times. Stale callbacks/duplicate observers/acknowledged recovery cannot replay it.
+- [x] Active Information / Note / Replace menu; workout-name note title and Save; session-only single Swap with editable preset tags, entered-data confirmation, stable position/group, blank replacement actuals, other members/results preserved, invalidated timer stop, recovery and failed-write protection.
+- [x] Ordinary plan-content edits reach eligible unstarted current/future occurrences. Old revision boundaries, missed weeks, started drafts, saved sessions and explicit outcomes remain protected. Library defaults/copies remain independent; structural/duration changes keep existing review rules. Concurrent starts use a coherent snapshot.
+- [x] Train headings/subtitles/Add Plan/divider; Create Import/Save and short numeric labels; tag default based on available collection; builder heading menu/movement spacing. Preview menus include scoped Delete and exercise-only Merge. Archive uses the target token. Show archived adds to active results; retired aliases remain hidden. Merge defaults edited A into picked B with functional Switch and a restrained arrow.
+- [x] Atomic deletion by stable profile/source identities: exercise prunes canonical standalone results only, workout removes owned standalone/custom pairs, plan removes all owned runs/results/selection and timers with the exact active warning. Copies and plan history survive exercise/workout deletion. Cancel/stale-scope/failure cannot partially delete. Minimal identities prevent automatic recreation without retaining hidden performance records.
+- [x] Stable boros database **v7**, additive deletedSources only; **backup v13**, **33 CSV tables**, strict original v1-v12 support, required checksums/photos, valid deleted-source snapshots, restore conflict handling and Clear Data. **AI v5** and deployment/manifest configuration unchanged.
+- [x] Exercise/plan graphs share fixed Y-axis, horizontal plot/date labels, point controls, date filter and initial positioning with Body weight. Closing details preserves state. Exercise points retain their scope and never offer measurement actions. Plan metrics are followed by one Exercises divider/heading.
+- [x] Final build/typecheck/lint/diff passed; **243/243 data**, **644/644 full Edge static matrix**. Final plan edits/sparse-round/replacement/group follow-up: **75 passes**, one overly broad test selector corrected, then all **12/12 plan/round cases** passed; all 76 affected cases are covered. Firefox: **68 applicable passes**, four Chromium-only CDP failures documented, then **38/38 final affected checks**. Final same-origin/context releases/two rebuilds: **6/6**. Exact commands, intermediate failures and manual limits: [verification](docs/train-library-lifecycle-verification.md).
+- Discard Progress/Reset audit: for incomplete occurrences their visible effect was equivalent (remove only that recoverable occurrence and return Pending). Reset also maintains run revision/outcome bookkeeping. Kept only the existing confirmed Reset; no separate recovery outcome was removed.
+- Vibration: unmocked secure-context Edge 154 exposes a function; Firefox 155 exposes no API. Existing optional 100 ms call remains a safe no-op when unavailable. No physical vibration or background audio guarantee is claimed; source-level audio preparation was corrected without claiming an owner-device acoustic reproduction.
+- [ ] Physical phone keyboard/viewport, Safari/iOS Blob storage/restore, real screen-reader operation, physical vibration/background audio, quota/native download sheets and live Ko-fi. Prior production disappearance remains unresolved; controlled upgrade tests do not establish its cause.
+- Preservation: initial HEAD `dcaaab3`, clean workspace. No owner records accessed/cleared, dependency/config changes, commit, push, deploy or hosting changes.
+- Next: perform the five disposable-profile owner checks in the verification record (plan edits, replacement, scoped deletion/restore, timers, graphs). No release action is authorized by this handoff.

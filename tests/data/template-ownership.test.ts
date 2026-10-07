@@ -126,7 +126,7 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
   const snapshot = await captureProfile(id, db), generated = await generateBackup(snapshot, 'ownership-test')
   for (const version of [1, 2, 3, 4, 5, 6] as const) {
     const zip = await JSZip.loadAsync(generated.bytes), data = JSON.parse(await zip.file('data.json')!.async('string'))
-    data.backupSchemaVersion = version; delete data.workouts
+    data.backupSchemaVersion = version; delete data.workouts; delete data.deletedSources
     if (version < 3) { delete data.profile.timeZone; delete data.profile.selectedPlanIds }
     if (version === 1) delete data.plans[0].durationWeeks
     validateBackupData(data)
@@ -143,7 +143,7 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
     assert.equal(templateReference(restored.plans[0].days[0].exercises[0]), original.days[0].exercises[0].id)
     assert.equal(restored.plans[0].createdAt, original.createdAt); assert.equal(restored.plans[0].updatedAt, original.updatedAt)
     const round = await readBackup((await generateBackup(restored, 'test')).bytes)
-    assert.equal(round.manifest.backupSchemaVersion, 12); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
+    assert.equal(round.manifest.backupSchemaVersion, 13); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
     // Merge the original old backup again into its matching original profile.
     let target = id
     for (let repeat = 0; repeat < 2; repeat++) { const merge = await service.preview(backup, 'import'); target = await service.commit(merge, true); assert.equal((await captureProfile(target, db)).exercises.length, 2) }

@@ -13,12 +13,12 @@ import { materializeTemplates } from '../lib/template-ownership.ts'
 export function importSession(profileId: string, database: BorosDatabase = db) {
   const creationId = createId()
   return {
-    saveLibraryWorkout: (input: WorkoutInput) => database.transaction('rw', database.profiles, database.workouts, database.exercises, database.tags, async () => {
+    saveLibraryWorkout: (input: WorkoutInput) => database.transaction('rw', database.profiles, database.deletedSources, database.workouts, database.exercises, database.tags, async () => {
       const committed = await database.workouts.get([profileId, creationId])
       return committed ?? workoutService(database).save(profileId, { ...input, id: creationId }, undefined, true)
     }),
     saveWorkout: (input: ExerciseInput) => exerciseService(database).save(profileId, input, undefined, creationId),
-    savePlan: (input: PlanInput) => database.transaction('rw', database.profiles, database.exercises, database.tags, database.plans, database.schedules, async () => {
+    savePlan: (input: PlanInput) => database.transaction('rw', [database.profiles, database.deletedSources, database.exercises, database.tags, database.plans, database.schedules], async () => {
       if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.')
       const committed = await database.plans.get([profileId, creationId])
       if (committed) return committed

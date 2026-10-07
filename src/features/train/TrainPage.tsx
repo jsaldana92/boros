@@ -11,7 +11,7 @@ import { TimerFeedback } from './timer-feedback'
 import { restLabel } from '../../lib/rest-duration'
 import { SessionReview } from './SessionReview'
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { Info, NotebookPen } from 'lucide-react'
+import { Menu, NotebookPen } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
 import { PlanSelection } from './PlanSelection'
@@ -24,7 +24,7 @@ import { activePlanRuns } from '../../db/active-plans'
 import { useScreenNavigation } from '../../app/navigation-context'
 import { sessions } from '../../db/sessions'
 import { assessSession, hasSessionInput, hasDraftProgress, displayedLoad, numericResult, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
-import type { WeightUnit } from '../../schemas/profile'
+import { nameKey, type WeightUnit } from '../../schemas/profile'
 import type { ExerciseInput } from '../../schemas/exercise'
 import { trainingBlocks, type PlanExercise } from '../../schemas/plan'
 import { DraftController } from './draft-controller'
@@ -73,13 +73,12 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
         {!result && <p role="status">Loading workouts...</p>}
         {data && <>
           {plan ? <WeeklyPlan key={programContext?.runId ?? plan.id} plan={plan} runId={programContext?.planId === plan.id ? programContext.runId : ''} initialWeek={programContext?.planId === plan.id ? programContext.week : undefined} runs={data.schedules.filter((run) => run.planId === plan.id)} onOpened={open} onBack={() => { setPlan(''); focus() }} onLeft={() => { setPlan(''); setProgramContext(undefined); focus() }} /> : <>
-            <h2>Active Plans</h2><p>Complete an on going plan</p>
-            {!selected.length && <p className="train-empty">No active plan(s) selected.</p>}
+            <div className="train-section-heading"><h2>Active Plans</h2><p>{selected.length ? 'Complete an on going plan' : 'No active plan(s) selected.'}</p></div>
             <div className="train-plan-cards">{selected.flatMap((item) => {
               const runs = activeRuns.filter((run) => run.planId === item.id)
               return runs.map((run) => { const summary = programSummary(run, localToday(run.timeZone, instant)); return <PlanCard key={run.id} plan={summary} subtitle={<><span className="current-program-week">{currentProgramLabel(run, data.sessions, instant)}</span><span className="muted">{planSubtitle(summary)}</span></>} onClick={() => { setProgramContext({ planId: item.id, runId: run.id }); setPlan(item.id); focus() }} /> })
             })}</div><button className="catalog-card add-plan-card" onClick={() => setSelecting(true)}>Add Plan</button>
-            <h2>Workout</h2><p>Start a workout</p><div className="train-workout-actions"><button disabled={starting} onClick={() => setWorkoutPicker(true)}>Existing Workout</button><button disabled={starting} onClick={() => void startWorkout()}>Custom Workout</button></div>
+            <hr /><div className="train-section-heading"><h2>Workout</h2><p>Start a workout</p></div><div className="train-workout-actions"><button disabled={starting} onClick={() => setWorkoutPicker(true)}>Existing Workout</button><button disabled={starting} onClick={() => void startWorkout()}>Custom Workout</button></div>
           </>}
           {data.drafts.some((draft) => hasDraftProgress(draft)) && <section aria-label="Unfinished sessions"><h2>Unfinished sessions</h2><div className="unfinished-cards">{data.drafts.filter((draft) => hasDraftProgress(draft)).map((draft) => <button className="catalog-card unfinished-card" key={draft.id} aria-label={'Resume ' + (draft.planName ?? draft.day.name) + ' / ' + draft.day.name + ' / ' + localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))} onClick={() => { setPlan(draft.sourcePlanId ?? ''); open({ draft }) }}><span>{draft.planName ?? (draft.source?.kind === 'custom' ? 'Custom Workout' : 'Standalone Workout')} &middot; {localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))}</span><small>{draft.day.name}</small></button>)}</div></section>}
           {selecting && <PlanSelection plans={data.plans} activeIds={activeIds} onClose={() => { setSelecting(false) }} />}
@@ -92,7 +91,7 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
 function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial: SessionDraft; unit: WeightUnit; timer?: RestTimer; onClose: () => void; onCompleted: (session: CompletedSession) => void }) {
   const { setDirty, sound, registerLeaveGuard, snapshot } = useWorkspace()
   const { rememberTraining } = useScreenNavigation()
-  const [picking, setPicking] = useState(false)
+  const [picking, setPicking] = useState(false), [menu, setMenu] = useState<string>(), [replacing, setReplacing] = useState<string>(), [replacement, setReplacement] = useState<{ id: string; revision: number }>(), [confirmSwap, setConfirmSwap] = useState(false)
   const [savingCustom, setSavingCustom] = useState<{ partial: boolean }>(), [addToLibrary, setAddToLibrary] = useState(false), [workoutName, setWorkoutName] = useState('')
   const choices = useLiveQuery(async () => { try { return { data: await plans.library(initial.profileId) } } catch (error) { return { error: (error as Error).message } } }, [initial.profileId])
   const [controller] = useState(() => new DraftController(initial)), [, render] = useState(0)
@@ -147,7 +146,17 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
   const memberLabel = (exercise: PlanExercise) => day.exercises.filter((item) => item.prescription.name === exercise.prescription.name).length > 1 ? `${exercise.prescription.name} occurrence ${day.exercises.findIndex((item) => item.id === exercise.id) + 1}` : exercise.prescription.name
   const memberHeading = (exercise: PlanExercise) => {
     const e = day.exercises.findIndex((item) => item.id === exercise.id), label = memberLabel(exercise)
-    return <div className="training-heading" key={exercise.id}><h3>{label}</h3><button aria-label={`Note for ${label}`} onClick={() => setNote({ index: e, value: controller.input.exercises[e].notes })}><NotebookPen aria-hidden="true" size={20} /></button><button aria-label={`Information for ${label}`} onClick={() => setInfo(exercise.prescription)}><Info aria-hidden="true" size={20} /></button></div>
+    return <div className="training-heading" key={exercise.id}><h3>{label}</h3><button aria-label={`Actions for ${label}`} onClick={() => setMenu(day.exercises[e].id)}><Menu aria-hidden="true" size={20} /></button></div>
+  }
+  const swap = () => act(async () => {
+    if (!replacing || !replacement) return
+    await controller.replaceExercise(replacing, replacement.id, replacement.revision)
+    feedback.cancel(); setReplacing(undefined); setReplacement(undefined); setConfirmSwap(false)
+  })
+  const requestSwap = () => {
+    const input = controller.input.exercises.find(e => e.id === replacing)
+    if (input && (input.notes || input.sets.some(s => s.load !== '' || s.reps !== '' || s.rir !== '' || s.skipped))) setConfirmSwap(true)
+    else void swap()
   }
   const setFields = (exercise: PlanExercise, s: number) => {
     const e = day.exercises.findIndex((item) => item.id === exercise.id), prescribed = exercise.prescription.sets[s]
@@ -173,11 +182,12 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     <fieldset disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt}><legend className="sr-only">Session results</legend>
       {trainingBlocks(day).map((block) => {
         const rounds = sessionRounds(block.members, structure), member = block.members[0]
-        const rest = (index: number, after: boolean) => <RestControl label={block.group ? `Superset ${block.group.number} ${after ? 'after group' : `after round ${index + 1}`}` : `${memberLabel(member)} ${after ? 'between exercises' : `after set ${index + 1}`}`} seconds={block.group ? after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds : after ? member.prescription.restAfterSeconds : member.prescription.restBetweenSeconds} onStart={() => { feedback.unlock(sound); return timerAction(() => block.group ? controller.startGroupTimer(block.id, index) : controller.startTimer(block.id, index)) }} />
+        const roundNumber = (r: number) => structure?.exercises.find(e => e.id === rounds[r][0].member.id)?.sets[rounds[r][0].index].round ?? r + 1
+        const rest = (index: number, after: boolean) => <RestControl label={block.group ? `Superset ${block.group.number} ${after ? 'after group' : `after round ${roundNumber(index)}`}` : `${memberLabel(member)} ${after ? 'between exercises' : `after set ${index + 1}`}`} seconds={block.group ? after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds : after ? member.prescription.restAfterSeconds : member.prescription.restBetweenSeconds} onStart={() => { feedback.unlock(sound && (block.group ? after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds : after ? member.prescription.restAfterSeconds : member.prescription.restBetweenSeconds) !== undefined); return timerAction(() => block.group ? controller.startGroupTimer(block.id, index) : controller.startTimer(block.id, index)) }} />
         return <section className={`training-exercise${block.group ? ' training-superset' : ''}`} key={block.id} aria-label={block.group ? `Superset ${block.group.number}` : memberLabel(member)}>
           {block.group && <><h3>Superset {block.group.number}</h3><p>{block.members.map((m) => `${memberLabel(m)}: ${m.prescription.sets.length} sets`).join(' \u00b7 ')}</p></>}
           {block.members.map(memberHeading)}
-          {block.group ? rounds.map((round, r) => <section className="superset-round" key={r} aria-label={`Superset ${block.group!.number} set ${r + 1}`}><h4>Set {r + 1}</h4>{round.map(({ member, index }) => setFields(member, index))}{r < rounds.length - 1 && rest(r, false)}</section>) : member.prescription.sets.map((_, s, sets) => <Fragment key={structure?.exercises.find((e) => e.id === member.id)?.sets[s].id ?? s}>{setFields(member, s)}{s < sets.length - 1 && rest(s, false)}</Fragment>)}
+          {block.group ? rounds.map((round, r) => <section className="superset-round" key={r} aria-label={`Superset ${block.group!.number} set ${roundNumber(r)}`}><h4>Set {roundNumber(r)}</h4>{round.map(({ member, index }) => setFields(member, index))}{r < rounds.length - 1 && rest(r, false)}</section>) : member.prescription.sets.map((_, s, sets) => <Fragment key={structure?.exercises.find((e) => e.id === member.id)?.sets[s].id ?? s}>{setFields(member, s)}{s < sets.length - 1 && rest(s, false)}</Fragment>)}
           <div className="session-add"><button aria-label={`Add Set to ${block.group ? `Superset ${block.group.number}` : memberLabel(member)}`} disabled={rounds.length >= 100} onClick={() => { try { controller.addSets(block.id, unit) } catch (e) { setError((e as Error).message) } }}>Add Set</button></div>
           <div className="post-exercise-rest">{rest(rounds.length - 1, true)}</div>
         </section>
@@ -186,8 +196,13 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     </fieldset>
     {error && error !== controller.error && <p role="alert">{error}</p>}
     <div className="session-actions"><button className="primary" disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={save}>{controller.busy ? 'Working...' : 'Save'}</button><div className="session-secondary"><button disabled={leaving || controller.busy || timerBusy} onClick={() => void requestSessionLeave().then((allowed) => { if (allowed) onClose() })}>Cancel</button><button disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={() => hasSessionInput(controller.input) ? setConfirm('clear') : void act(() => controller.clear())}>Clear</button></div></div>
-    {note && <NoteDialog value={note.value} title={note.index === undefined ? 'Session note' : `Note: ${day.exercises[note.index].prescription.name}`} onDirty={setNoteDirty} onClose={() => { setNote(undefined); setNoteDirty(false) }} onApply={(value) => { const input = structuredClone(controller.input); if (note.index === undefined) input.notes = value; else input.exercises[note.index].notes = value; controller.change(input); setNote(undefined); setNoteDirty(false) }} />}
+    {note && <NoteDialog value={note.value} title={day.name} onDirty={setNoteDirty} onClose={() => { setNote(undefined); setNoteDirty(false) }} onApply={(value) => { const input = structuredClone(controller.input); if (note.index === undefined) input.notes = value; else input.exercises[note.index].notes = value; controller.change(input); setNote(undefined); setNoteDirty(false) }} />}
     {picking && <ActionDialog title="Add Exercise" onClose={() => setPicking(false)}>{choices?.error ? <p role="alert">{choices.error}</p> : choices?.data ? <ExercisePicker path={['Train', 'Exercise']} choices={choices.data.choices} remaining={100 - day.exercises.length} onClose={() => setPicking(false)} onChoose={(items) => { try { controller.addExercises(items, unit); setPicking(false) } catch (e) { setError((e as Error).message); setPicking(false) } }} /> : <p role="status">Loading exercises...</p>}</ActionDialog>}
+    {menu && <ActionDialog title="Exercise actions" onClose={() => setMenu(undefined)}><div className="exercise-action-list"><button onClick={() => { setInfo(day.exercises.find(e => e.id === menu)!.prescription); setMenu(undefined) }}>Information</button><button onClick={() => { const index = day.exercises.findIndex(e => e.id === menu); setNote({ index, value: controller.input.exercises[index].notes }); setMenu(undefined) }}>Note</button><button onClick={() => { setReplacing(menu); setReplacement(undefined); setError(''); setMenu(undefined) }}>Replace</button></div></ActionDialog>}
+    {replacing && <ActionDialog title="Replace Exercise" onClose={() => { if (!controller.busy) setReplacing(undefined) }} actions={<><button disabled={controller.busy} onClick={() => setReplacing(undefined)}>Cancel</button><button className="primary" disabled={!replacement || controller.busy} onClick={requestSwap}>Swap</button></>}>
+      {choices?.data ? <ExercisePicker choices={choices.data.choices} remaining={1} onChoose={() => {}} onClose={() => setReplacing(undefined)} initialTags={day.exercises.find(e => e.id === replacing)?.prescription.tagNames.map(nameKey)} single={{ selected: replacement ? `exercise:${replacement.id}` : undefined, onSelect: id => { const choice = choices.data!.choices.find(c => c.id === id)!, record = choices.data!.exercises.find(e => e.id === (choice.source.kind === 'exercise' ? choice.source.id : ''))!; setReplacement({ id: record.id, revision: record.revision }) } }} /> : <p role="status">{choices?.error ?? 'Loading exercises...'}</p>}{error && <p role="alert">{error}</p>}
+    </ActionDialog>}
+    {confirmSwap && <ConfirmDialog title="Replace Exercise?" confirmLabel="Swap" busy={controller.busy} onCancel={() => setConfirmSwap(false)} onConfirm={() => void swap()}><p>This will clear the results and notes entered for this exercise.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
     {info && <ExerciseInformation exercise={info} onClose={() => setInfo(undefined)} />}
     {savingCustom && <ActionDialog title="Saving Completed Workout" onClose={() => { if (!controller.busy) setSavingCustom(undefined) }} actions={<><button disabled={controller.busy} onClick={() => setSavingCustom(undefined)}>Cancel</button><button className="primary" disabled={controller.busy} onClick={() => void finish(savingCustom.partial, addToLibrary ? { name: workoutName } : undefined)}>Save</button></>}><p>Do you wish to add this workout to your workout library?</p><div className="segmented" aria-label="Add to workout library"><button aria-pressed={addToLibrary} onClick={() => setAddToLibrary(true)}>Yes</button><button aria-pressed={!addToLibrary} onClick={() => setAddToLibrary(false)}>No</button></div>{addToLibrary && <Field label="Workout name:" maxLength={120} value={workoutName} onChange={(event) => setWorkoutName(event.target.value)} />}{error && <p role="alert">{error}</p>}</ActionDialog>}
     {confirm && <ConfirmDialog title={confirm === 'clear' ? 'Clear entered results?' : confirm === 'leave' ? `Leaving ${day.name}` : confirm === 'partial' ? 'Save partial session?' : 'Reload saved draft?'} confirmLabel={confirm === 'clear' ? 'Clear' : confirm === 'leave' ? 'Leave' : confirm === 'partial' ? 'Save partial session' : 'Reload draft'} busy={leaving || controller.busy} destructive={confirm === 'clear' || confirm === 'leave'} cancelLabel="Cancel" onCancel={() => { if (confirm === 'leave') { leaveReply.current?.(false); leaveReply.current = undefined } setConfirm(undefined) }} onConfirm={() => {
@@ -202,8 +217,8 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
 function NoteDialog({ value, title, onDirty, onApply, onClose }: { value: string; title: string; onDirty: (value: boolean) => void; onApply: (value: string) => void; onClose: () => void }) {
   const [text, setText] = useState(value)
   const close = () => { if (text === value || window.confirm('Discard unapplied note changes?')) onClose() }
-  return <ConfirmDialog title={title} confirmLabel="Apply note" onCancel={close} onConfirm={() => onApply(text)}><TextareaField label="Note" maxLength={20000} value={text} onChange={(event) => { setText(event.target.value); onDirty(event.target.value !== value) }} /></ConfirmDialog>
+  return <ConfirmDialog title={title} confirmLabel="Save" onCancel={close} onConfirm={() => onApply(text)}><TextareaField label="Note" maxLength={20000} value={text} onChange={(event) => { setText(event.target.value); onDirty(event.target.value !== value) }} /></ConfirmDialog>
 }
 function RestControl({ label, seconds, onStart }: { label: string; seconds?: number; onStart: () => Promise<void> }) {
-  return <div className="rest-control"><button disabled={seconds === 0} aria-label={`REST ${label}`} onClick={() => void onStart()}>REST &middot; {seconds === undefined ? 'count up' : seconds === 0 ? '0 seconds \u2014 no timed rest' : restLabel(seconds)}</button></div>
+  return <div className="rest-control"><button disabled={seconds === 0} aria-label={`REST ${label}`} onClick={() => void onStart()}>{seconds === undefined ? 'Rest' : `Rest \u00b7 ${seconds === 0 ? '0 seconds \u2014 no timed rest' : restLabel(seconds)}`}</button></div>
 }

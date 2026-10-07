@@ -10,7 +10,7 @@ async function rows(page: Page, store: string) {
 }
 async function setup(page: Page, names = ['Alpha', 'Beta']) {
   await page.clock.setFixedTime(new Date('2026-10-08T12:00:00Z')); await page.goto('./'); await expect(b(page, 'Calendar')).toBeVisible(); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
-  for (const name of names) { await b(page, 'Create').click(); await b(page, 'Imported').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name, durationWeeks: 3, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map((name) => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(page.getByRole('article', { name: `Plan ${name}` })).toBeVisible() }
+  for (const name of names) { await b(page, 'Create').click(); await b(page, 'Import').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name, durationWeeks: 3, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map((name) => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(page.getByRole('article', { name: `Plan ${name}` })).toBeVisible() }
   await b(page, 'Calendar').click(); await f(page, 'Calendar date').fill('2026-10-05')
 }
 

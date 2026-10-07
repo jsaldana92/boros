@@ -12,6 +12,7 @@ export type SessionInput = z.infer<typeof sessionInputSchema>
 export type StandaloneSource = { kind: 'workout'; workoutId: string } | { kind: 'custom'; workoutId?: string }
 export interface SessionDraft {
   source?: StandaloneSource; timeZone?: string
+  prunedAt?: string
   structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; profileId: string; revision: number; sourcePlanId?: string; sourceDayId: string; activeSourceKey?: string
@@ -20,13 +21,14 @@ export interface SessionDraft {
 export type RecordedSet = { skipped: true } | { skipped: false; weightKg: number; load: number; unit: WeightUnit; reps: number; rir?: number }
 export interface CompletedSession {
   source?: StandaloneSource; timeZone?: string
+  prunedAt?: string
   structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; draftId: string; profileId: string; revision: number; sourcePlanId?: string; sourceDayId: string
   planName?: string; planInstructions?: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
   partial: boolean; startedAt: string; completedAt: string; loggedAt: string
 }
-export type RestTimer = { id: 'active'; token: string; profileId: string; draftId: string; label: string; alertedAt?: string } & ({ mode?: 'countdown'; durationSeconds: number; endAt: string } | { mode: 'countup'; startedAt: string })
+export type RestTimer = { id: 'active'; token: string; profileId: string; draftId: string; label: string; position?: string; exerciseId?: string; groupId?: string; alertedAt?: string } & ({ mode?: 'countdown'; durationSeconds: number; endAt: string } | { mode: 'countup'; startedAt: string })
 export const blankSession = (day: TrainingDay, unit: WeightUnit): SessionInput => ({ notes: '', exercises: day.exercises.map((exercise) => ({ id: exercise.id, notes: '', sets: exercise.prescription.sets.map(() => ({ load: '', reps: '', rir: '', unit, skipped: false })) })) })
 // Deliberate zero and explicit skips count; timer state and visual hints never do.
 export const hasSessionInput = (input: SessionInput) => !!input.notes || input.exercises.some((exercise) => !!exercise.notes || exercise.sets.some((set) => set.load !== '' || set.reps !== '' || set.rir !== '' || set.skipped))

@@ -1,3 +1,5 @@
+import { ChartDateFilter } from './ChartDateFilter'
+import { localToday } from '../../lib/calendar-dates'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { progress } from '../../db/progress'
@@ -50,7 +52,7 @@ export function WorkoutProgress({ mainContent, mainOnly = false }: { mainContent
       {plan && <section hidden={!!item} className="progress-section progress-drilldown" aria-label="Plan analytics">
         <h2 id={!item ? 'analytics-heading' : undefined} tabIndex={-1}>{plan.name}</h2>
         <div className="analytics-metrics"><Metric label="Times Completed" value={plan.timesCompleted} /><Metric label="Exercises Completed" value={plan.exercisesCompleted} /><Metric label="Workouts Completed" value={plan.daysCompleted} /><Metric label="Workouts Skipped" value={plan.daysSkipped} /></div>
-        <ItemBrowser key={plan.id} items={plan.items} tags={planTags} onSelect={(itemKey) => navigate({ planId: plan.id, itemKey })} />
+        <hr /><h3>Exercises</h3><ItemBrowser key={plan.id} items={plan.items} tags={planTags} onSelect={(itemKey) => navigate({ planId: plan.id, itemKey })} />
         <div className="actions"><button onClick={() => navigate({}, true)}>Back</button></div>
       </section>}
       {item && <section className="progress-section progress-drilldown" aria-label="Exercise analytics"><h2 id="analytics-heading" tabIndex={-1}>{item.name}</h2><p>{plan ? `${plan.name} · ${item.context}` : 'Overall'}</p>
@@ -72,13 +74,17 @@ function Metric({ label, value, onClick }: { label: string; value: ReactNode; on
 }
 function ExerciseStatistics({ performances, counts, unit, zone, overall, name }: { performances: Performance[]; counts: { completed: number; skipped: number }; unit: WeightUnit; zone: string; overall: boolean; name: string }) {
   const stats = performanceStats(performances), [selection, setSelection] = useState<string>(), [detail, setDetail] = useState<{ id: string; reps: boolean; label: string }>()
+  const [filter, setFilter] = useState({ start: '', end: '' }), [filterOpen, setFilterOpen] = useState(false)
+  const visible = stats.sets.filter(s => { const day = localToday(s.performance.session.occurrence?.timeZone ?? s.performance.session.timeZone ?? zone, new Date(s.performance.session.completedAt)); return (!filter.start || day >= filter.start) && (!filter.end || day <= filter.end) })
   const selected = stats.sets.find((s) => s.id === selection) ?? stats.sets.at(-1), extreme = stats.sets.find((s) => s.id === detail?.id)
   const sourceLabel = (performance: Performance) => [performance.session.planName, performance.session.day.name].filter(Boolean).join(' \u00b7 ')
   const weight = (kg: number) => `${displayNumber(fromKg(kg, unit))} ${unit}`
-  const date = (set: NonNullable<typeof extreme>) => new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: set.performance.session.occurrence?.timeZone ?? zone }).format(new Date(set.performance.session.completedAt))
+  const date = (set: NonNullable<typeof extreme>) => new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: set.performance.session.occurrence?.timeZone ?? set.performance.session.timeZone ?? zone }).format(new Date(set.performance.session.completedAt))
   const metrics = [['Weight Max', stats.maximum, false], ['Weight Min', stats.minimum, false], ['Reps Max', stats.repsMaximum, true], ['Reps Min', stats.repsMinimum, true]] as const
   return <div className="exercise-statistics"><div className="analytics-metrics"><Metric label="Times Completed" value={counts.completed} /><Metric label="Times Skipped" value={counts.skipped} />{metrics.map(([label, set, reps]) => <Metric key={label} label={label} value={set ? reps ? set.result.reps : weight(set.result.weightKg) : '—'} onClick={set ? () => setDetail({ id: set.id, reps, label }) : undefined} />)}</div>
-    {(['Weight', 'Reps'] as const).map((kind) => <PointChart key={kind} title={`${name} recorded ${kind.toLowerCase()}`} unit={kind === 'Weight' ? unit : 'reps'} selectorLabel={`Select ${kind.toLowerCase()} set for ${name}`} selectedId={selected?.id} onSelect={setSelection} points={stats.sets.map((s) => ({ id: s.id, time: Date.parse(s.performance.session.completedAt), value: kind === 'Weight' ? fromKg(s.result.weightKg, unit) : s.result.reps, date: date(s), label: `${weight(s.result.weightKg)} × ${s.result.reps} reps · ${date(s)} · ${sourceLabel(s.performance)} · Set ${s.index + 1}` }))} />)}
+    <button aria-label={filter.start || filter.end ? 'Filter, active' : 'Filter'} onClick={() => setFilterOpen(true)}>Filter</button>
+    {filterOpen && <ChartDateFilter current={filter} onClose={() => setFilterOpen(false)} onApply={value => { setFilter(value); setFilterOpen(false) }} />}
+    {(['Weight', 'Reps'] as const).map((kind) => <PointChart key={`${kind}:${filter.start}/${filter.end}`} filtered={!!(filter.start || filter.end)} title={`${name} recorded ${kind.toLowerCase()}`} unit={kind === 'Weight' ? unit : 'reps'} selectorLabel={`Select ${kind.toLowerCase()} set for ${name}`} selectedId={selected?.id} onSelect={id => { setSelection(id); setDetail({ id, reps: kind === 'Reps', label: 'Exercise result' }) }} points={visible.map((s) => ({ id: s.id, time: Date.parse(s.performance.session.completedAt), value: kind === 'Weight' ? fromKg(s.result.weightKg, unit) : s.result.reps, date: date(s), label: `${weight(s.result.weightKg)} × ${s.result.reps} reps · ${date(s)} · ${sourceLabel(s.performance)} · Set ${s.index + 1}` }))} />)}
     {extreme && detail && <ActionDialog title={detail.label} hideTitle onClose={() => setDetail(undefined)} actions={<button onClick={() => setDetail(undefined)}>Close</button>}><p className="weight-detail-value">{detail.reps ? `${extreme.result.reps} reps` : weight(extreme.result.weightKg)}</p><p>{detail.reps ? weight(extreme.result.weightKg) : `${extreme.result.reps} reps`}</p><p>{date(extreme)}</p>{overall && <p>{sourceLabel(extreme.performance)}</p>}</ActionDialog>}
   </div>
 }

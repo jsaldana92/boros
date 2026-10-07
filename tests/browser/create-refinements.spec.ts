@@ -48,7 +48,7 @@ test('existing plans repair into standalone templates; library notes save direct
   await b(page, 'Cancel').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(f(page, 'Notes (optional)')).toHaveValue('Saved directly on the template')
   await b(page, 'Calendar').click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
-  await b(page, 'Save exercise').click()
+  await b(page, 'Save').click()
   expect(await records(page)).toEqual([repaired])
   await cardAction(page, planCard(page), 'Duplicate'); await b(page, 'Save plan').click()
   const second = (await records(page)).find((p) => p.name === 'Existing AI (copy)')
@@ -80,17 +80,17 @@ test('existing plans repair into standalone templates; library notes save direct
 test('shared rest editor preserves blank and zero, displays 75/180 exactly, and rejects invalid seconds without losing input', async ({ page }) => {
   await open(page); await b(page, 'Create exercise').click(); await f(page, 'Exercise name').fill('Rest example'); await f(page, 'Set 1 Reps minimum').fill('8')
   await f(page, 'Rest between sets (optional) minutes').fill('1'); await f(page, 'Rest between sets (optional) seconds').fill('15')
-  await f(page, 'Rest after exercise (optional) minutes').fill('3'); await b(page, 'Save exercise').click()
+  await f(page, 'Rest after exercise (optional) minutes').fill('3'); await b(page, 'Save').click()
   const card = page.getByRole('article', { name: 'Rest example', exact: true })
   await cardAction(page, card, 'Edit')
   await expect(f(page, 'Rest after exercise (optional) seconds')).toHaveValue('0')
   await expect(f(page, 'Rest between sets (optional) minutes')).toHaveValue('1'); await expect(f(page, 'Rest between sets (optional) seconds')).toHaveValue('15')
-  await f(page, 'Rest between sets (optional) seconds').fill('60'); await b(page, 'Save exercise').click()
+  await f(page, 'Rest between sets (optional) seconds').fill('60'); await b(page, 'Save').click()
   await expect(f(page, 'Rest between sets (optional) seconds')).toHaveAttribute('aria-invalid', 'true')
   await expect(f(page, 'Exercise name')).toHaveValue('Rest example')
   expect((await records(page, 'exercises'))[0].restBetweenSeconds).toBe(75)
   await f(page, 'Rest between sets (optional) minutes').fill(''); await f(page, 'Rest between sets (optional) seconds').fill('')
-  await f(page, 'Rest after exercise (optional) minutes').fill(''); await f(page, 'Instructions (optional)').fill('Unrelated change'); await b(page, 'Save exercise').click()
+  await f(page, 'Rest after exercise (optional) minutes').fill(''); await f(page, 'Instructions (optional)').fill('Unrelated change'); await b(page, 'Save').click()
   await page.reload(); await cardAction(page, card, 'Edit')
   await expect(f(page, 'Rest between sets (optional) minutes')).toHaveValue(''); await expect(f(page, 'Rest between sets (optional) seconds')).toHaveValue('')
   const saved = (await records(page, 'exercises'))[0]; expect(saved.restBetweenSeconds).toBeUndefined(); expect(saved.restAfterSeconds).toBe(0)
@@ -98,7 +98,7 @@ test('shared rest editor preserves blank and zero, displays 75/180 exactly, and 
 
 test('both themes: compact scrollable cards, keyboard dialogs, footer placement, move focus and grouping deletion preserve prescriptions', async ({ page }, info) => {
   const original = await seed(page), catalog = page.getByRole('region', { name: 'Exercise catalog' })
-  await b(page, 'Create exercise').click(); await f(page, 'Exercise name').fill('Extra'); await f(page, 'Set 1 Reps minimum').fill('1'); await b(page, 'Save exercise').click()
+  await b(page, 'Create exercise').click(); await f(page, 'Exercise name').fill('Extra'); await f(page, 'Set 1 Reps minimum').fill('1'); await b(page, 'Save').click()
   for (const theme of ['Dark', 'Light']) {
     await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Create').click()
     await expect(planCard(page)).toContainText('12 weeks · 2 workouts · 5 rest days')
@@ -146,7 +146,7 @@ test('A20 B8 rounds expose one correct rest each, including final block and time
   await expect(rounds.first()).toContainText('20'); await expect(rounds.first()).toContainText('8')
   await b(page, 'REST Superset 1 after round 1').click(); await expect(page.getByRole('timer')).toContainText('1:15')
   await closeTimer(page); await b(page, 'REST Superset 1 after group').click(); await expect(page.getByRole('timer')).toContainText('3:00')
-  await page.reload(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0); await startWeekly(page, 'Existing AI', 'First'); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('after group')
+  await page.reload(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0); await startWeekly(page, 'Existing AI', 'First'); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('Post-Exercise')
 })
 
 test('picker selection obeys filtered identities, sort order, Select All, single Add, cancel and repeated-click rules', async ({ page }) => {
@@ -207,7 +207,7 @@ test('occurrence popup keyboard order and Cancel preserve dirty input; tag contr
     await options.getByRole('button', { name: 'Tag 24', exact: true }).focus(); await page.keyboard.press('Enter')
     await expect(options.getByRole('button', { name: 'Tag 24', exact: true })).toHaveAttribute('aria-pressed', theme === 'Dark' ? 'true' : 'false'); await expect(options.getByRole('button', { name: 'Tag 24', exact: true })).toBeFocused()
     await page.screenshot({ path: info.outputPath('exercise-spacing-' + theme + '.png'), fullPage: true })
-    await b(page, 'Save exercise').click(); await cardAction(page, planCard(page), 'Edit')
+    await b(page, 'Save').click(); await cardAction(page, planCard(page), 'Edit')
     const occurrence = page.locator('[data-occurrence-id]').first(), menu = occurrence.getByRole('button', { name: /^Actions for / })
     await menu.focus(); await page.keyboard.press('Enter')
     const actions = page.locator('.occurrence-menu button'); expect(await actions.allTextContents()).toEqual(['Edit','Duplicate','Move','Delete'])

@@ -68,6 +68,14 @@ export class DraftController {
     const amended = appendSessionExercises(this.snapshot, this.input, choices, unit)
     this.snapshot = { day: amended.day, structure: amended.structure }; this.change(amended.input)
   }
+  replaceExercise(occurrenceId: string, exerciseId: string, revision: number) {
+    return this.command(async () => {
+      await this.persist()
+      this.record = await this.service.replaceExercise(this.record.profileId, this.record.id, this.record.revision, occurrenceId, exerciseId, revision)
+      this.snapshot = { day: structuredClone(this.record.day), structure: structuredClone(this.record.structure) }
+      this.input = structuredClone(this.record.input); this.sequence++; this.persisted = this.sequence; this.status = 'saved'; return this.record
+    })
+  }
   clear() {
     return this.command(async () => {
       await this.persist()

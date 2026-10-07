@@ -1,3 +1,4 @@
+import { DeleteLibraryDialog } from './DeleteLibraryDialog'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { workouts } from '../../db/workouts'
@@ -16,6 +17,7 @@ export function WorkoutLibrary({ profileId, startNew, hidden, onEditing }: { pro
   const [attempt, retry] = useState(0), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const result = useLiveQuery(async () => { try { return { records: await workouts.library(profileId) } } catch (e) { return { error: (e as Error).message } } }, [profileId, attempt])
   const [search, setSearch] = useState(''), [sort, setSort] = useState<LibrarySort>('az'), [archived, setArchived] = useState(false)
+  const [deleting, setDeleting] = useState<Workout>()
   const [selected, setSelected] = useState<Workout>(), [actions, setActions] = useState(false), [archive, setArchive] = useState<Workout>()
   const [editor, setEditor] = useState<{ key: string; initial?: WorkoutInput; original?: Workout }>()
   const trigger = useRef<HTMLElement | null>(null), opened = useRef(0)
@@ -32,7 +34,8 @@ export function WorkoutLibrary({ profileId, startNew, hidden, onEditing }: { pro
       {result?.records && !filterWorkouts(result.records, search, sort, archived).length && <p>{search ? 'No workouts match this search.' : archived ? 'No archived workouts.' : 'No workouts yet.'}</p>}
     </>}
     {selected && <ActionDialog title={selected.name} onClose={() => setSelected(undefined)} headerActions={<DetailsActionsButton label="Workout actions" expanded={actions} onClick={() => setActions(true)} />}><WorkoutSummary day={selected} /></ActionDialog>}
-    {selected && actions && <DetailsActions title="Workout actions" busy={busy} archived={!!selected.archivedAt} error={error} onClose={() => setActions(false)} onEdit={() => open(workoutToInput(selected), selected)} onDuplicate={() => void act(async () => open(await workouts.duplicateDraft(profileId, selected.id)))} onArchive={() => selected.archivedAt ? void toggle(selected) : (setArchive(selected), setActions(false))} />}
+    {selected && actions && <DetailsActions onDelete={() => setDeleting(selected)} title="Workout actions" busy={busy} archived={!!selected.archivedAt} error={error} onClose={() => setActions(false)} onEdit={() => open(workoutToInput(selected), selected)} onDuplicate={() => void act(async () => open(await workouts.duplicateDraft(profileId, selected.id)))} onArchive={() => selected.archivedAt ? void toggle(selected) : (setArchive(selected), setActions(false))} />}
+    {deleting && <DeleteLibraryDialog profileId={profileId} kind="workout" record={deleting} onClose={() => setDeleting(undefined)} onDeleted={() => { setDeleting(undefined); setSelected(undefined); setActions(false); requestAnimationFrame(() => document.getElementById('create-workout')?.focus()) }} />}
     {archive && <ConfirmDialog title="Archive workout?" confirmLabel="Archive" busy={busy} onCancel={() => setArchive(undefined)} onConfirm={() => void toggle(archive)}><p>{archive.name} will leave the active library. Its record and saved copies are kept.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
   </section>
 }

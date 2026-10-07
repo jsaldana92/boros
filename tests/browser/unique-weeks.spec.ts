@@ -11,12 +11,12 @@ const card=(p:Page)=>p.getByRole('article',{name:'Plan Cycle',exact:true})
 async function rows(page:Page,store:string){return page.evaluate(async store=>{const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('boros');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});try{return await new Promise<any[]>((resolve,reject)=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}finally{db.close()}},store)}
 async function open(p:Page){await p.clock.setFixedTime(new Date('2026-10-05T15:00:00Z'));await p.goto('./');await expect(b(p,'Create')).toBeVisible();if(await b(p,'Understood').isVisible())await b(p,'Understood').click();await b(p,'Create').click()}
 const payload=()=>({schemaVersion:4,kind:'plan',plan:{mode:'unique',name:'Cycle',durationWeeks:4,uniqueWeekCount:2,instructions:'Instructions',notes:'Note',weeks:[4,3].map((count,w)=>({trainingDaysPerWeek:count,days:Array.from({length:count},(_,d)=>({name:`W${w+1}D${d+1}`,exercises:[{name:'Squat',sets:[{reps:{min:5+w,max:5+w},rir:{min:0,max:0}}],restBetweenSetsSeconds:0}]}))}))}})
-async function preview(p:Page){await b(p,'Imported').click();await f(p,'AI output JSON').fill(JSON.stringify(payload()));await b(p,'Validate and preview').click();await expect(f(p,'Plan name')).toHaveValue('Cycle')}
+async function preview(p:Page){await b(p,'Import').click();await f(p,'AI output JSON').fill(JSON.stringify(payload()));await b(p,'Validate and preview').click();await expect(f(p,'Plan name')).toHaveValue('Cycle')}
 async function seed(p:Page){await open(p);await preview(p);await b(p,'Save plan').click();await expect(card(p)).toBeVisible()}
 
 test('builder divisors, separate weeks, destructive reductions, invalid duration recovery and nested draft navigation',async({page},info)=>{
   await open(page);const native:string[]=[];page.on('dialog',async d=>{native.push(d.type());await d.dismiss()})
-  await b(page,'Create exercise').click();await f(page,'Exercise name').fill('Squat');await f(page,'Set 1 Reps minimum').fill('5');await b(page,'Save exercise').click()
+  await b(page,'Create exercise').click();await f(page,'Exercise name').fill('Squat');await f(page,'Set 1 Reps minimum').fill('5');await b(page,'Save').click()
   await b(page,'Create Plan').click();await f(page,'Plan name').fill('Cycle');await f(page,'Duration (weeks)').fill('12');await b(page,'Add exercise').click();await b(page,'Add Squat').click()
   const oldId=await page.locator('[data-day-id]').first().getAttribute('data-day-id')
   await page.getByRole('switch',{name:'Unique training weeks?'}).click();await expect(f(page,'Workouts per week')).toHaveCount(0);await expect(f(page,'Number of Unique weeks').locator('option:not(:disabled)')).toHaveText(['2','3','4','6','12']);await f(page,'Number of Unique weeks').selectOption('2')
@@ -62,7 +62,7 @@ test('AI cancellation and custom Create guards keep preference, focus and genuin
 })
 
 test('manual unique plan saves independent prescriptions; duplicate and confirmed Off retain Week 1 identities',async({page})=>{
-  await open(page);await b(page,'Create exercise').click();await f(page,'Exercise name').fill('Squat');await f(page,'Set 1 Reps minimum').fill('5');await b(page,'Save exercise').click()
+  await open(page);await b(page,'Create exercise').click();await f(page,'Exercise name').fill('Squat');await f(page,'Set 1 Reps minimum').fill('5');await b(page,'Save').click()
   await b(page,'Create Plan').click();await f(page,'Plan name').fill('Cycle');await f(page,'Duration (weeks)').fill('4');await b(page,'Add exercise').click();await b(page,'Add Squat').click();await page.getByRole('switch').click();await f(page,'Number of Unique weeks').selectOption('2')
   await week(page,2).getByRole('button',{name:'Add exercise',exact:true}).click();await b(page,'Add Squat').click();await occurrenceAction(page,week(page,2),'Edit');await f(page,'Set 1 Reps minimum').fill('8');await page.locator('.exercise-editor button[type="submit"]').click();await b(page,'Save plan').click();await expect(card(page)).toBeVisible()
   const original=(await rows(page,'plans'))[0];expect(original.days[0].exercises[0].prescription.sets[0].reps.min).toBe(5);expect(original.days[1].exercises[0].prescription.sets[0].reps.min).toBe(8)

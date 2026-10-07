@@ -14,7 +14,7 @@ async function start(p: Page) {
   await expect(p.getByRole('button', { name: /^Saved sessions/ })).toHaveCount(0)
 }
 async function importPlan(p: Page, name: string) {
-  await button(p, 'Create').click(); await button(p, 'Imported').click()
+  await button(p, 'Create').click(); await button(p, 'Import').click()
   await field(p, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 2, kind: 'plan', plan: { name, durationWeeks: 1, trainingDaysPerWeek: 1, days: [{ name: 'Workout', exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 8 } }, { reps: { min: 5, max: 8 } }] }] }] } }))
   await button(p, 'Validate and preview').click(); await button(p, 'Save plan').click(); await expect(p.getByRole('article', { name: `Plan ${name}`, exact: true })).toBeVisible()
 }

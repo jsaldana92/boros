@@ -10,7 +10,7 @@ import { canonicalSnapshot, validateRestoreRecords } from './restore-records.ts'
 import type { ValidatedBackup } from './restore-format.ts'
 
 export type RestoreChoice = 'new' | 'replace' | 'device' | 'import' | 'clear'
-export const ownedStores = ['tags', 'exercises', 'workouts', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'photos'] as const
+export const ownedStores = ['deletedSources', 'tags', 'exercises', 'workouts', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'photos'] as const
 export type OwnedStore = typeof ownedStores[number]
 export interface PlanCounts { added: number; conflicts: number; replaced: number; removed: number; skipped: number }
 export interface RestorePlan {
@@ -61,10 +61,19 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     ? { id: newId, name: source.name, nameKey: source.nameKey, kind: source.kind, weightUnit: source.weightUnit, heightUnit: source.heightUnit, ...(source.timeZone ? { timeZone: source.timeZone } : {}), revision: 1, createdAt: at, updatedAt: at }
     : { ...structuredClone(source), id: newId, ...(choice === 'new' ? { name: displayName.trim(), nameKey: nameKey(displayName), kind: input!.profile.kind === 'guest' && displayName === 'Guest' ? 'guest' as const : 'named' as const } : {}) }
   if (!profile.nameKey || profile.name.length > 80) throw new Error('Enter an unused profile name of 1–80 characters.')
-  const result: ProfileSnapshot = { databaseVersion: 6, capturedAt: at, profile, tags: [], exercises: [], workouts: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
+  const result: ProfileSnapshot = { databaseVersion: 7, deletedSources: [], capturedAt: at, profile, tags: [], exercises: [], workouts: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
   const plan: RestorePlan = { id: newId, choice, targetId: local?.profile.id, targetName: local?.profile.name, targetFingerprint: local && snapshotFingerprint(local), targetPhotoFingerprint: local && await photoFingerprint(local.photos), result, counts, warnings, conflicts }
-  if (choice === 'clear') { for (const key of ownedStores) counts[key].removed = local![key].length; return plan }
+  if (choice === 'clear') { for (const key of ownedStores) counts[key].removed = (local![key] ?? []).length; return plan }
   const file = input!, device = current
+  const tombstones = [...(merging ? device!.deletedSources ?? [] : []), ...(file.deletedSources ?? [])]
+  result.deletedSources = [...new Map(tombstones.map(t => [`${t.kind}:${t.id}`, t])).values()]
+  counts.deletedSources.added = result.deletedSources.length - (merging ? (device!.deletedSources?.length ?? 0) : 0)
+  // A merge cannot silently revive a deleted identity or delete retained device
+  // results from an imported tombstone. Resolve that explicit conflict by New or Replace.
+  for (const t of result.deletedSources) {
+    const key = t.kind === 'exercise' ? 'exercises' : t.kind === 'workout' ? 'workouts' : 'plans'
+    if ([...file[key], ...(merging ? device![key] : [])].some(r => r.id === t.id)) throw new Error('This backup and device disagree about a deleted library item. Restore under a new profile name or use reviewed Replace; merge cannot revive or delete it implicitly.')
+  }
   const localPlans = merging ? device!.plans : [], localExercises = merging ? device!.exercises : [], localTags = merging ? device!.tags : []
   const localWorkouts = merging ? device!.workouts : [], workoutMatches = matches(file.workouts, localWorkouts, 'workout')
   const workoutIds = new Map(file.workouts.map(w => [w.id, workoutMatches.get(w.id)?.id ?? w.id]))

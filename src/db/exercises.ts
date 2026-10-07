@@ -7,7 +7,7 @@ import { nameKey } from '../schemas/profile.ts'
 import { exerciseResolver } from '../lib/exercise-identity.ts'
 
 export function exerciseService(database: BorosDatabase) {
-  const tables = [database.profiles, database.exercises, database.tags]
+  const tables = [database.profiles, database.exercises, database.tags, database.deletedSources]
   const owner = async (profileId: string) => {
     if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.')
   }
@@ -66,6 +66,7 @@ export function exerciseService(database: BorosDatabase) {
       if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing exercise.') }
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
+        if (creationId && await database.deletedSources.get([profileId, 'exercise', creationId])) throw new Error('This exercise was deleted. Reopen the editor to create a separate copy.')
         if (creationId) { const committed = await database.exercises.get([profileId, creationId]); if (committed) return committed }
         const old = existing ? await get(profileId, existing.id) : undefined
         if (old) checkRevision(old, existing!.revision)

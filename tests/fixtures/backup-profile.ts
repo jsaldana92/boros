@@ -35,7 +35,7 @@ export async function representativeProfile(db: BorosDatabase) {
   await db.restTimers.put({ id: 'active', token: crypto.randomUUID(), profileId: id, draftId: savedDraft.id, label: 'Transient', durationSeconds: 60, endAt: new Date(Date.now() + 60000).toISOString() })
   const changed = planToInput(plan); changed.days[0].exercises[0].prescription.instructions = 'Current plan differs from history'
   const edited = await plans.save(id, changed, plan)
-  const preview = await schedules.preview(id, { scheduleId: schedule.id, revision: schedule.revision, kind: 'remap', effectiveFrom: nextMonday(localToday(schedule.timeZone)), mapping: schedule.revisions[0].mapping })
+  const preview = await schedules.preview(id, { scheduleId: schedule.id, revision: (await schedules.get(id, schedule.id)).revision, kind: 'remap', effectiveFrom: nextMonday(localToday(schedule.timeZone)), mapping: schedule.revisions[0].mapping })
   await schedules.commit(id, preview, true)
   await plans.setArchived(id, edited.id, edited.revision, true)
   await exercises.setArchived(id, exercise.id, exercise.revision, true)

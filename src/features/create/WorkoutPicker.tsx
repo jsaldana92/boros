@@ -9,7 +9,7 @@ import { type LibrarySort } from './library'
 import { filterWorkouts } from './workout-filter'
 
 export function WorkoutCards({ records, onChoose }: { records: Workout[]; onChoose: (value: Workout) => void }) {
-  return <div className="workout-library-grid" role="region" aria-label="Workout catalog">{records.map(value => <article aria-label={`Workout ${value.name}`} key={value.id}><LibraryExerciseCard name={value.name} createdAt={value.createdAt} onClick={() => onChoose(value)} /></article>)}</div>
+  return <div className="workout-library-grid" role="region" aria-label="Workout catalog">{records.map(value => <article aria-label={`Workout ${value.name}`} key={value.id}><LibraryExerciseCard name={value.name} createdAt={value.createdAt} onClick={() => onChoose(value)} />{value.archivedAt && <small>Archived</small>}</article>)}</div>
 }
 
 export function WorkoutPicker({ profileId, onChoose, onClose, onEmpty }: { profileId: string; onChoose: (value: Workout) => void; onClose: () => void; onEmpty?: () => void }) {

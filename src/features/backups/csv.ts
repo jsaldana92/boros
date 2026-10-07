@@ -18,6 +18,7 @@ export function csvTables(data: BackupData) {
   const scope = 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,dayOrder'
   table('profiles', 'id,kind,name,nameKey,age,heightCm,weightUnit,heightUnit,photoId,revision,createdAt,updatedAt' + (data.backupSchemaVersion >= 3 ? ',timeZone' : ''), [data.profile as unknown as Row])
   if (data.backupSchemaVersion >= 3) table('train_selections', 'profileId,planId,selectionOrder', (data.profile.selectedPlanIds ?? []).map((planId, i) => ({ profileId: data.profile.id, planId, selectionOrder: i + 1 })))
+  if (data.backupSchemaVersion >= 13) table('deleted_sources', 'profileId,kind,id,deletedAt,mergedIntoId', data.deletedSources as unknown as Row[])
   table('tags', 'profileId,id,name,nameKey,archivedAt,createdAt,updatedAt', data.tags as unknown as Row[])
   const libraries = table('library_exercises', `profileId,id,name,nameKey,activeNameKey,revision,archivedAt,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl,createdAt,updatedAt${data.backupSchemaVersion >= 12 ? ',mergedIntoId,mergedAt,mergeOperationId' : ''}`)
   const librarySets = table('library_sets', 'profileId,libraryExerciseId,setOrder,repsMin,repsMax,rirMin,rirMax')
@@ -43,9 +44,9 @@ export function csvTables(data: BackupData) {
   const assignments = table('schedule_assignments', 'profileId,scheduleId,scheduleRevisionId,assignmentOrder,dayId,weekday')
   const event = 'occurrenceKey,scheduleId,scheduleRevisionId,scheduledDate,scheduledWeek,timeZone'
   const structureSets = data.backupSchemaVersion >= 9 ? table('session_structure', 'profileId,ownerKind,ownerId,amended,exerciseOccurrenceId,setOrder,setId,round') : []
-  const drafts = table('drafts', `profileId,id,sourcePlanId,sourceDayId,planName,revision,activeSourceKey,startedAt,updatedAt,finalizedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}`)
+  const drafts = table('drafts', `profileId,id,sourcePlanId,sourceDayId,planName,revision,activeSourceKey,startedAt,updatedAt,finalizedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}${data.backupSchemaVersion >= 13 ? ',prunedAt' : ''}`)
   const draftResults = table('draft_results', 'profileId,draftId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,loadText,repsText,rirText,unit,skipped')
-  const sessions = table('sessions', `profileId,id,draftId,sourcePlanId,sourceDayId,planName,revision,partial,startedAt,completedAt,loggedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}`)
+  const sessions = table('sessions', `profileId,id,draftId,sourcePlanId,sourceDayId,planName,revision,partial,startedAt,completedAt,loggedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}${data.backupSchemaVersion >= 13 ? ',prunedAt' : ''}`)
   const sessionResults = table('session_results', 'profileId,sessionId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,skipped,weightKg,load,unit,reps,rir')
   const notes = table('notes', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,exerciseOccurrenceId,noteKind,text')
   table('progress', 'profileId,id,weightKg,measuredAt,measuredLocal,timeZone,offsetMinutes,loggedAt,updatedAt,revision,photoId,lastMutationId', data.measurements as unknown as Row[])

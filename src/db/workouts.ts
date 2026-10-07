@@ -6,7 +6,7 @@ import { exerciseService } from './exercises.ts'
 import { templateReference } from '../lib/template-ownership.ts'
 
 export function workoutService(database: BorosDatabase) {
-  const tables = [database.profiles, database.workouts, database.exercises, database.tags]
+  const tables = [database.profiles, database.workouts, database.exercises, database.tags, database.deletedSources]
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => { const value = await database.workouts.get([profileId, id]); if (!value) throw new Error('This workout is unavailable in this profile.'); return value }
   const checkName = async (profileId: string, name: string, ownId?: string) => { const other = await database.workouts.where('[profileId+activeNameKey]').equals([profileId, nameKey(name)]).first(); if (other && other.id !== ownId) throw new Error('An active workout with this name already exists. Choose a different name.') }
@@ -21,14 +21,15 @@ export function workoutService(database: BorosDatabase) {
         const old = existing ? await get(profileId, existing.id) : undefined
         if (old) checkRevision(old, existing!.revision)
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
+        if (await database.deletedSources.get([profileId, 'workout', input.id])) throw new Error('This workout was deleted. Your input is kept; create a new workout to save a separate copy.')
         if (!old && await database.workouts.get([profileId, input.id])) throw new Error('This workout was already saved. Reopen it before editing.')
         // Imported snapshots resolve explicit exercise ownership transactionally;
         // matching names reuse defaults without overwriting their prescriptions.
         for (const item of input.exercises) {
           const ref = templateReference(item)
           const template = ref ? await database.exercises.get([profileId, ref]) : undefined
-          if (ref && !template) throw new Error('A source exercise is unavailable in this profile.')
-          if (importing && !template) {
+          if (ref && !template && !await database.deletedSources.get([profileId, 'exercise', ref])) throw new Error('A source exercise is unavailable in this profile.')
+          if (importing && !template && !ref) {
             const match = await database.exercises.where('[profileId+activeNameKey]').equals([profileId, nameKey(item.prescription.name)]).first()
             const linked = match ?? await exerciseService(database).save(profileId, item.prescription)
             item.source = { kind: 'exercise', id: linked.id }; item.templateId = linked.id

@@ -16,7 +16,7 @@ async function setup(page: Page, names = ['Display']) {
   if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
   await deviceZone(page, 'UTC')
   for (const name of names) {
-    await b(page, 'Create').click(); await b(page, 'Imported').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name, durationWeeks: 3, trainingDaysPerWeek: 3, days: ['Upper', 'Lower', 'Pull'].map(name => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(planCard(page, name)).toBeVisible()
+    await b(page, 'Create').click(); await b(page, 'Import').click(); await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name, durationWeeks: 3, trainingDaysPerWeek: 3, days: ['Upper', 'Lower', 'Pull'].map(name => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 5, max: 5 } }] }] })) } })); await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(planCard(page, name)).toBeVisible()
   }
 }
 async function select(page: Page, name = 'Display') { await b(page, 'Train').click(); await b(page, 'Add Plan').click(); await page.getByRole('dialog').getByRole('article', { name: `Plan ${name}` }).getByRole('button').click(); await expect(page.getByRole('dialog')).toHaveCount(0) }

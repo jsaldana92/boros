@@ -7,14 +7,14 @@ import { nameKey } from '../schemas/profile.ts'
 import { duplicateStructure, planInputSchema, planToInput, type ExerciseSource, type Plan, type PlanInput } from '../schemas/plan.ts'
 import type { ExerciseInput } from '../schemas/exercise.ts'
 import { appendRevision } from '../schemas/schedule.ts'
-import { localToday, nextMonday } from '../lib/calendar-dates.ts'
+import { localToday, nextMonday, monday } from '../lib/calendar-dates.ts'
 
 export interface PrescriptionChoice {
   id: string; nameKey: string; createdAt: string; tagIds: string[]
   label: string; prescription: ExerciseInput; source: ExerciseSource
 }
 export function planService(database: BorosDatabase) {
-  const tables = [database.profiles, database.plans, database.tags, database.schedules]
+  const tables = [database.profiles, database.plans, database.tags, database.schedules, database.deletedSources]
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => {
     const plan = await database.plans.get([profileId, id])
@@ -49,6 +49,7 @@ export function planService(database: BorosDatabase) {
       if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing plan.') }
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
+        if (creationId && await database.deletedSources.get([profileId, 'plan', creationId])) throw new Error('This plan was deleted. Reopen the editor to create a separate copy.')
         if (creationId) { const committed = await database.plans.get([profileId, creationId]); if (committed) return committed }
         const old = existing ? await get(profileId, existing.id) : undefined
         if ((!old || old.durationWeeks !== undefined) && input.durationWeeks === undefined) throw new Error('Enter a positive whole duration in weeks. Existing finite plans cannot silently become unbounded.')
@@ -65,6 +66,21 @@ export function planService(database: BorosDatabase) {
             const cutoff = nextMonday(localToday(schedule.timeZone)), effectiveFrom = cutoff > schedule.startWeek ? cutoff : schedule.startWeek
             // Preserve past/missed dates, suspend affected future dates until remapped.
             await database.schedules.put({ ...schedule, revision: schedule.revision + 1, updatedAt: now, revisions: appendRevision(schedule, { ...last, id: createId(), effectiveFrom, effectiveUntil: undefined, createdAt: now, needsRepair: true }) })
+          }
+        }
+        if (old && JSON.stringify([old.days, old.name, old.instructions]) !== JSON.stringify([result.days, result.name, result.instructions]) && JSON.stringify(old.weeks) === JSON.stringify(result.weeks) && old.days.length === result.days.length && old.days.every((day) => result.days.some((next) => next.id === day.id))) {
+          const runs = await database.schedules.where('[profileId+planId]').equals([profileId, result.id]).toArray()
+          for (const run of runs.filter((r) => !r.closedAt && !r.stoppedFrom)) {
+            const cutoff = monday(localToday(run.timeZone)), additions: typeof run.revisions = []
+            const revisions = run.revisions.map((segment) => {
+              if (segment.needsRepair || (segment.effectiveUntil && segment.effectiveUntil <= cutoff) || JSON.stringify(segment.weeks) !== JSON.stringify(result.weeks) || segment.days.length !== result.days.length || segment.days.some((day) => !result.days.some((d) => d.id === day.id))) return segment
+              const effectiveFrom = segment.effectiveFrom > cutoff ? segment.effectiveFrom : cutoff
+              additions.push({ ...segment, id: createId(), effectiveFrom, createdAt: now, planRevision: result.revision, planName: result.name, planInstructions: result.instructions, days: structuredClone(result.days) })
+              return { ...segment, effectiveUntil: effectiveFrom }
+            })
+            // Retain every old revision for protected drafts/outcomes and missed weeks.
+            // Keep each future mapping segment's original boundary and assignments.
+            if (additions.length) await database.schedules.put({ ...run, revision: run.revision + 1, updatedAt: now, revisions: [...revisions, ...additions] })
           }
         }
         return result

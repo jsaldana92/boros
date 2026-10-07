@@ -3,7 +3,7 @@ import { nameKey } from '../../schemas/profile.ts'
 
 export function canonicalSnapshot(snapshot: ProfileSnapshot): BackupData {
   const { databaseVersion: _version, capturedAt: _at, photos, ...records } = snapshot
-  return { format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, ...structuredClone(records), workouts: structuredClone(snapshot.workouts ?? []), assets: photos.map(({ blob, ...photo }) => ({ ...photo, bytes: blob.size, mediaType: blob.type as 'image/png' | 'image/jpeg' | 'image/webp', path: `photos/${photo.id}.${blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]}` })) }
+  return { format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, ...structuredClone(records), deletedSources: structuredClone(snapshot.deletedSources ?? []), workouts: structuredClone(snapshot.workouts ?? []), assets: photos.map(({ blob, ...photo }) => ({ ...photo, bytes: blob.size, mediaType: blob.type as 'image/png' | 'image/jpeg' | 'image/webp', path: `photos/${photo.id}.${blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]}` })) }
 }
 
 // Checks required for restoring unique indexes and derived identity fields. The

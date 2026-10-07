@@ -71,7 +71,7 @@ export function profileService(database: BorosDatabase) {
       })
     },
     async select(profileId: string) {
-      await database.transaction('rw', [database.profiles, database.settings, database.plans, database.exercises, database.tags, database.schedules, database.drafts, database.sessions, database.restTimers], async () => {
+      await database.transaction('rw', [database.profiles, database.settings, database.plans, database.exercises, database.tags, database.schedules, database.drafts, database.sessions, database.restTimers, database.deletedSources], async () => {
         await getProfile(profileId)
         await repairProfileTemplates(database, profileId)
         await repairClosedRunDrafts(database, profileId)

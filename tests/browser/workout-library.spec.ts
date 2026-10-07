@@ -7,7 +7,7 @@ const f=(p:Page,name:string)=>p.getByLabel(name,{exact:true})
 const card=(p:Page,name:string)=>p.getByRole('article',{name:`Workout ${name}`,exact:true})
 async function records(p:Page,store:string) {return p.evaluate(async store=>{const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open('boros');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});try{return await new Promise<any[]>((resolve,reject)=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}finally{db.close()}},store)}
 async function open(p:Page) {await p.goto('./');if(await b(p,'Understood').isVisible())await b(p,'Understood').click();await b(p,'Create').click();if(await b(p,'Understood').isVisible())await b(p,'Understood').click();await expect(b(p,'Create exercise')).toBeEnabled()}
-async function exercise(p:Page) {await b(p,'Imported').click();await f(p,'AI output JSON').fill(JSON.stringify({schemaVersion:5,kind:'exercise',exercise:{name:'Press',sets:[{reps:{min:5,max:8},rir:{min:0,max:0}},{reps:{min:8,max:8}}],restBetweenSetsSeconds:0}}));await b(p,'Validate and preview').click();await b(p,'Save exercise').click();await expect(b(p,'Create workout')).toBeVisible()}
+async function exercise(p:Page) {await b(p,'Import').click();await f(p,'AI output JSON').fill(JSON.stringify({schemaVersion:5,kind:'exercise',exercise:{name:'Press',sets:[{reps:{min:5,max:8},rir:{min:0,max:0}},{reps:{min:8,max:8}}],restBetweenSetsSeconds:0}}));await b(p,'Validate and preview').click();await b(p,'Save').click();await expect(b(p,'Create workout')).toBeVisible()}
 async function add(p:Page) {await p.getByRole('button',{name:/^Add exercise$/i}).click();await b(p,'Add Press').click()}
 async function partial(p:Page) {await f(p,'Press occurrence 1 set 1 Weight (kg)').fill('0');await f(p,'Press occurrence 1 set 1 Repetitions').fill('5');await waitForDraft(p)}
 
@@ -31,7 +31,7 @@ test('workout creation, guard, independent plan copies, archive/restore and prof
 test('custom save Cancel/No/Yes, repeated exercises, reload recovery, calendar nested notes preserve focus and address',async({page})=>{
  test.setTimeout(90000);await open(page);await exercise(page);const address=page.url();await b(page,'Train').click();await expect(page.getByRole('heading',{name:'Active Plans',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Saved sessions/})).toHaveCount(0)
  await b(page,'Custom Workout').click();await expect(page.getByRole('heading',{level:1})).toHaveText('Custom Workout');await add(page);await add(page);await partial(page);await page.reload();await page.getByRole('button',{name:/^Resume Workout/}).click();await expect(f(page,'Press occurrence 1 set 1 Weight (kg)')).toHaveValue('0')
- await b(page,'Session Note').click();await f(page,'Note').fill('Historical workout note');await b(page,'Apply note').click();await waitForDraft(page)
+ await b(page,'Session Note').click();await f(page,'Note').fill('Historical workout note');await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click();await waitForDraft(page)
  await b(page,'Settings').click();await b(page,'Train').click();await expect(page.getByRole('heading',{level:1})).toHaveText('Custom Workout');await expect(f(page,'Press occurrence 1 set 1 Weight (kg)')).toHaveValue('0')
  await b(page,'Save').click();await b(page,'Save partial session').click();const popup=page.getByRole('dialog',{name:'Saving Completed Workout'});await expect(popup.getByRole('button',{name:'No',exact:true})).toHaveAttribute('aria-pressed','true');await popup.getByRole('button',{name:'Cancel',exact:true}).click();expect(await records(page,'sessions')).toHaveLength(0)
  await b(page,'Save').click();await b(page,'Save partial session').click();await popup.getByRole('button',{name:'Yes',exact:true}).click();await popup.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('region',{name:'Saved session details'})).toBeVisible()
@@ -43,7 +43,7 @@ test('custom save Cancel/No/Yes, repeated exercises, reload recovery, calendar n
 
 
 test('v5 workout import, unique-week targeting, stale edits and light mobile layout',async({page,context},info)=>{
- test.setTimeout(60000);await open(page);await b(page,'Settings').click();await b(page,'Light').click();await b(page,'Create').click();await b(page,'Imported').click()
+ test.setTimeout(60000);await open(page);await b(page,'Settings').click();await b(page,'Light').click();await b(page,'Create').click();await b(page,'Import').click()
  await f(page,'Formatting instructions for').selectOption('workout');expect(await f(page,'Formatting instructions').inputValue()).toContain('schemaVersion 5')
  await f(page,'AI output JSON').fill(JSON.stringify({schemaVersion:5,kind:'workout',workout:{name:'Circuit',instructions:'Workout instructions',notes:'Template note',supersets:[{number:1,restBetweenRoundsSeconds:0}],exercises:[{name:'A',superset:1,sets:[{reps:{min:5,max:8}},{reps:{min:10,max:10}}]},{name:'A',superset:1,sets:[{reps:{min:12,max:12}}]}]}}));await b(page,'Validate and preview').click();await expect(page.getByRole('heading',{level:1})).toHaveText('Create > Workout');await b(page,'Save workout').click();await expect(card(page,'Circuit')).toBeVisible()
  const source=(await records(page,'workouts'))[0];expect(source.exercises[0].id).not.toBe(source.exercises[1].id);expect(source.exercises[0].templateId).toBe(source.exercises[1].templateId)
@@ -56,6 +56,6 @@ test('v5 workout import, unique-week targeting, stale edits and light mobile lay
  const peer=await context.newPage();await peer.goto('./');await b(peer,'Create').click();await cardAction(peer,card(peer,'Circuit'),'Edit');await f(peer,'Workout name').fill('Peer saved');await b(peer,'Save workout').click();await expect(card(peer,'Peer saved')).toBeVisible();await peer.close()
  await b(page,'Save workout').click();await expect(page.getByRole('alert')).toContainText('another tab');await expect(f(page,'Workout name')).toHaveValue('Local unsaved');await b(page,'Cancel').click();await page.getByRole('dialog').getByRole('button',{name:'Leave',exact:true}).click()
  await expect(card(page,'Peer saved')).toBeVisible();expect((await records(page,'plans'))[0]).toEqual(plan)
- const row=await page.locator('.create-carousel').boundingBox(),imported=await b(page,'Imported').boundingBox();expect(Math.abs(row!.width-imported!.width)).toBeLessThan(1);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+ const row=await page.locator('.create-carousel').boundingBox(),imported=await b(page,'Import').boundingBox();expect(Math.abs(row!.width-imported!.width)).toBeLessThan(1);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
  await page.screenshot({path:info.outputPath('workout-library-light.png'),fullPage:true})
 })

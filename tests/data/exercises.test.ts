@@ -138,7 +138,7 @@ test('search, all sorts and ANY tag filters compose and exclude archives', async
   assert.deepEqual(filterExercises(exercises, '', 'oldest', [], false).map((e) => e.id), ordered.map((e) => e.id))
   assert.deepEqual(filterExercises(exercises, '', 'newest', [], false).map((e) => e.id), ordered.reverse().map((e) => e.id))
   exercises[0].archivedAt = '2026-02-01T00:00:00.000Z'
-  assert.equal(filterExercises(exercises, '', 'az', [], true).length, 1)
+  assert.equal(filterExercises(exercises, '', 'az', [], true).length, 3)
 })
 
 test('v1 to current migration preserves every existing store and profile selection', async (t) => {
@@ -155,7 +155,7 @@ test('v1 to current migration preserves every existing store and profile selecti
   const upgraded = new BorosDatabase(dbName)
   t.after(() => upgraded.delete())
   await upgraded.open()
-  assert.equal(upgraded.verno, 6)
+  assert.equal(upgraded.verno, 7)
   assert.deepEqual(await upgraded.profiles.get(id), profile)
   assert.deepEqual(await upgraded.settings.get('workspace'), settings)
   assert.deepEqual(await upgraded.measurements.get([id, 'weight']), measurement)

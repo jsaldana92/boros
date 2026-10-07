@@ -91,10 +91,10 @@ test('frozen snapshots, stable hints, session-only amendments, duplicate identit
   const first=occurrences(run,run.startWeek,run.startWeek)[0],draft=(await sessions.openOccurrence(id,run.id,first.day.id,first.ref.scheduledDate)).draft!, input=structuredClone(draft.input)
   Object.assign(input.exercises[0].sets[0],{load:'20',reps:'5',rir:'0'});const saved=await sessions.complete(id,draft.id,draft.revision,input,false)
   const editable=planToInput(plan);editable.days[0].exercises[0].prescription.sets[0].reps={min:20,max:20};await plans.save(id,editable,plan)
-  assert.deepEqual((await db.sessions.get([id,saved.id]))!.day,saved.day);assert.deepEqual((await db.schedules.get([id,run.id]))!.revisions,run.revisions)
+  assert.deepEqual((await db.sessions.get([id,saved.id]))!.day,saved.day);assert.deepEqual((await db.schedules.get([id,run.id]))!.revisions[0].days,run.revisions[0].days);assert.equal((await db.schedules.get([id,run.id]))!.revisions.at(-1)!.days[0].exercises[0].prescription.sets[0].reps.min,20)
   t.mock.timers.setTime(Date.parse('2026-10-20T15:00:00Z'))
   const repeat=(await sessions.openOccurrence(id,run.id,first.day.id,'2026-10-19')).draft!
-  assert.equal(previousResults(repeat,[saved],'kg')[first.day.exercises[0].id][0]!.load,'20')
+  assert.equal(previousResults(repeat,[saved],'kg')[first.day.exercises[0].id][0],undefined)
   const unrelated=(await sessions.openOccurrence(id,run.id,plan.weeks![1].dayIds[0],'2026-10-12')).draft!
   assert.equal(previousResults(unrelated,[saved],'kg')[unrelated.day.exercises[0].id][0],undefined)
   const amendment=appendSessionSets(repeat,repeat.input,repeat.day.exercises[0].id,'kg');await sessions.update(id,repeat.id,repeat.revision,amendment.input,amendment)
@@ -130,11 +130,11 @@ test('AI v4 strict cycles, paths, local identities and atomic import with older 
 test('populated v5 storage reopens unchanged; v10 backup and both whole-family merges preserve cycle references, photos and drafts',async t=>{
   const db=new BorosDatabase(`boros-test-cycle-upgrade-${uid()}`);t.after(()=>db.delete());await representativeProfile(db)
   const profiles=profileService(db),id=(await profiles.settings())!.activeProfileId,before=await captureProfile(id,db),legacy=canonicalSnapshot(before)
-  delete (legacy as any).workouts; assert.equal(v9BackupDataSchema.safeParse({...legacy,backupSchemaVersion:9}).success,true)
+  delete (legacy as any).workouts; delete legacy.deletedSources; assert.equal(v9BackupDataSchema.safeParse({...legacy,backupSchemaVersion:9}).success,true)
   db.close();await db.open();const after=await captureProfile(id,db);assert.deepEqual(after.plans,before.plans);assert.deepEqual(after.sessions,before.sessions);assert.deepEqual(after.drafts,before.drafts);assert.deepEqual(await after.photos[0].blob.arrayBuffer(),await before.photos[0].blob.arrayBuffer());assert.equal((await profiles.settings())!.activeProfileId,id)
   const plan=await planService(db).save(id,cycleInput()),[run]=await weeklyService(db).activate(id,plan.id),e=occurrences(run,run.startWeek,addDays(run.startWeek,6))[0];await sessionService(db).openOccurrence(id,run.id,e.day.id,e.ref.scheduledDate)
   const snapshot=await captureProfile(id,db),backup=await generateBackup(snapshot,'cycles'),read=await readBackup(backup.bytes,()=>{},async()=>{})
-  assert.equal(read.data.backupSchemaVersion, 12);assert.equal(csvTables(read.data).length,32);assert.deepEqual(read.data.plans,JSON.parse(JSON.stringify(snapshot.plans)));assert.equal(backup.manifest.csvRows['csv/unique_weeks.csv'],14)
+  assert.equal(read.data.backupSchemaVersion, 13);assert.equal(csvTables(read.data).length,33);assert.deepEqual(read.data.plans,JSON.parse(JSON.stringify(snapshot.plans)));assert.equal(backup.manifest.csvRows['csv/unique_weeks.csv'],14)
   assert.equal(v9BackupDataSchema.safeParse({...read.data,backupSchemaVersion:9}).success,false)
   for(const action of ['new','import','device'] as const) {
     const restored=await buildRestorePlan(read,action==='new'?undefined:snapshot,action,uid(),'Restored',new Date().toISOString());validateBackupData(canonicalSnapshot(restored.result));const cycle=restored.result.plans.find(p=>p.name==='Alternating')!;assert.deepEqual(cycle.weeks,plan.weeks);assert.deepEqual(cycle.days.map(d=>({...d,exercises:d.exercises.map(({templateId:_template,...e})=>e)})),plan.days);assert.ok(cycle.days.every(d=>d.exercises.every(e=>restored.result.exercises.some(x=>x.id===e.templateId))))

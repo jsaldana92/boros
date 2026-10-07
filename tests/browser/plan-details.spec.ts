@@ -15,7 +15,7 @@ function fixture(name = 'Detailed plan') {
   ] } }
 }
 async function open(p: Page) { await p.goto('./'); await b(p, 'Create').click(); if (await b(p, 'Understood').isVisible()) await b(p, 'Understood').click(); await expect(b(p, 'Create Plan')).toBeEnabled() }
-async function preview(p: Page, payload: unknown) { await b(p, 'Imported').click(); await f(p, 'AI output JSON').fill(JSON.stringify(payload)); await b(p, 'Validate and preview').click(); await expect(f(p, 'Plan name')).toBeVisible() }
+async function preview(p: Page, payload: unknown) { await b(p, 'Import').click(); await f(p, 'AI output JSON').fill(JSON.stringify(payload)); await b(p, 'Validate and preview').click(); await expect(f(p, 'Plan name')).toBeVisible() }
 async function seed(p: Page) { await open(p); await preview(p, fixture()); await expect(f(p, 'Instructions')).toHaveValue(instructions); await f(p, 'Note (optional):').fill('Plan note\nSeparate text'); await b(p, 'Save plan').click(); await expect(card(p)).toBeVisible() }
 async function records(p: Page, store = 'plans') {
   return p.evaluate(async (store) => {
@@ -48,7 +48,7 @@ test('plan details show saved order, repeated occurrences, accurate targets and 
     await b(page, 'Train').evaluate((node: HTMLButtonElement) => node.focus()); expect(await details.evaluate((node) => node.contains(document.activeElement))).toBe(true)
     const menuButton = details.getByRole('button', { name: 'Plan actions' }); await menuButton.click()
     const menu = page.getByRole('dialog', { name: 'Plan actions', exact: true })
-    await expect(menu.getByRole('button')).toHaveText(['Edit', 'Duplicate', 'Archive', 'Close'])
+    await expect(menu.getByRole('button')).toHaveText(['Edit', 'Duplicate', 'Archive', 'Delete', 'Close'])
     expect(await details.evaluate((node: HTMLDialogElement) => node.inert)).toBe(true)
     await menu.getByRole('button', { name: 'Close' }).focus(); await page.keyboard.press('Tab'); await expect(menu.getByRole('button', { name: 'Edit', exact: true })).toBeFocused()
     await page.keyboard.press('Escape'); await expect(menu).toHaveCount(0); await expect(menuButton).toBeFocused()
@@ -82,7 +82,7 @@ test('instructions survive manual create, edits, failed/stale saves, reload and 
   await cardAction(page, card(page, 'Manual'), 'Archive'); await page.getByRole('dialog', { name: 'Archive plan?' }).getByRole('button', { name: 'Cancel' }).click()
   await expect(page.getByRole('dialog', { name: 'Manual', exact: true })).toBeVisible(); await page.keyboard.press('Escape'); await expect(card(page, 'Manual').getByRole('button')).toBeFocused()
   await cardAction(page, card(page, 'Manual'), 'Archive'); await page.getByRole('dialog', { name: 'Archive plan?' }).getByRole('button', { name: 'Archive', exact: true }).click()
-  await expect(card(page, 'Manual')).toHaveCount(0); await f(page, 'Show archived plans').check(); await cardAction(page, card(page, 'Manual'), 'Restore'); await expect(card(page, 'Manual')).toHaveCount(0)
+  await expect(card(page, 'Manual')).toHaveCount(0); await f(page, 'Show archived plans').check(); await cardAction(page, card(page, 'Manual'), 'Restore'); await expect(card(page, 'Manual')).toBeVisible(); await expect(card(page, 'Manual')).not.toContainText('Archived')
   await f(page, 'Show archived plans').uncheck(); await expect(card(page, 'Manual')).toBeVisible()
   await b(page, 'Settings').click(); await createNamedProfile(page, 'Other'); await expect(page.locator('input[name=name]')).toHaveValue('Other'); await b(page, 'Create').click()
   await expect(card(page, 'Manual')).toHaveCount(0); expect((await records(page)).find((p) => p.id === source.id).instructions).toBe('Concurrent edit')

@@ -71,5 +71,5 @@ test('export, new/replace/both-merge restoration preserve underlying results, me
     assert.equal(stableJSON(result.measurements.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.measurements.map(({ profileId: _owner, ...entry }) => entry)))
     assert.equal(stableJSON(result.sessions.map(({ profileId: _owner, ...entry }) => entry)), stableJSON(snapshot.sessions.map(({ profileId: _owner, ...entry }) => entry)))
   }
-  assert.equal(db.verno, 6); assert.equal(backup.manifest.backupSchemaVersion, 12)
+  assert.equal(db.verno, 7); assert.equal(backup.manifest.backupSchemaVersion, 13)
 })

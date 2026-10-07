@@ -1,3 +1,4 @@
+import { openExerciseAction } from './train-actions'
 import { confirmDownload } from './settings-actions'
 import { createNamedProfile } from './settings-actions'
 import { addCalendarPlan } from './calendar-actions'
@@ -22,7 +23,7 @@ async function schedule(p: Page, name: string) {
   await button(p, 'Calendar').click(); await button(p, 'Week').click(); await addCalendarPlan(p, '2025-01-06', name)
 }
 async function note(p: Page, name: string, text: string) {
-  await button(p, name).click(); await field(p, 'Note').fill(text); await button(p, 'Apply note').click()
+  if (name.startsWith('Note for ')) await openExerciseAction(p, name.slice(9), 'Note'); else await button(p, name).click(); await field(p, 'Note').fill(text); await p.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click()
 }
 
 for (const withoutNativeUUID of [false, true]) test(`complete manual and AI journey, immutable history, saved draft, photos and semantic restore with network audit${withoutNativeUUID ? ' without native randomUUID' : ''}`, async ({ page, context }, info) => {
@@ -50,15 +51,15 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await field(page, 'Number of sets').fill('3'); await button(page, 'Apply').click()
   for (let i = 1; i <= 3; i++) {
     await field(page, `Set ${i} Reps minimum`).fill(String(i + 4))
-    await field(page, `Set ${i} RIR minimum (optional)`).fill(String(i - 1))
+    await field(page, `Set ${i} RIR minimum`).fill(String(i - 1))
   }
-  await field(page, 'Set 3 Reps maximum (optional)').fill('9')
+  await field(page, 'Set 3 Reps maximum').fill('9')
   await field(page, 'Rest between sets (optional) seconds').fill('30')
   await field(page, 'Rest after exercise (optional) seconds').fill('0')
   await field(page, 'Instructions (optional)').fill('<b>Plain instructions</b>')
   await field(page, 'YouTube tutorial URL (optional)').fill('https://youtu.be/abcdefghijk')
   await field(page, 'New tag').fill('Journey legs'); await button(page, 'Add').click()
-  await button(page, 'Save exercise').click(); await expect(page.getByRole('article', { name: 'Journey squat', exact: true })).toBeVisible()
+  await button(page, 'Save').click(); await expect(page.getByRole('article', { name: 'Journey squat', exact: true })).toBeVisible()
   await button(page, 'Create Plan').click(); await field(page, 'Plan name').fill('Manual four'); await field(page, 'Duration (weeks)').fill('104')
   await field(page, 'Workouts per week').selectOption('4')
   for (let i = 0; i < 4; i++) {
@@ -70,7 +71,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await page.locator('.calendar-event').filter({ hasText: /Manual four.*Day 1/ }).click()
   await note(page, 'Session Note', 'Session <script>inert</script> note')
   await note(page, 'Note for Journey squat', 'Knee felt good')
-  await button(page, 'Information for Journey squat').click()
+  await openExerciseAction(page, 'Journey squat', 'Information')
   await expect(page.getByRole('dialog')).toContainText('<b>Plain instructions</b>')
   await expect(page.locator('iframe')).toHaveAttribute('src', /youtube.com\/embed\/abcdefghijk/)
   expect(requests.every((url) => new URL(url).origin === new URL(address).origin || url.startsWith('https://www.youtube.com/embed/'))).toBe(true)
@@ -88,12 +89,12 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await button(page, 'Next period').click(); await expect(page.locator('.calendar-event.completed')).toHaveCount(0)
   await button(page, 'Create').click()
   await cardAction(page, page.getByRole('article', { name: 'Journey squat', exact: true }), 'Edit')
-  await field(page, 'Set 1 Reps minimum').fill('15'); await button(page, 'Save exercise').click()
+  await field(page, 'Set 1 Reps minimum').fill('15'); await button(page, 'Save').click()
   await cardAction(page, planCard(page, 'Manual four'), 'Edit')
   await occurrenceAction(page, page.locator('.plan-day').first(), 'Edit')
   await field(page, 'Exercise name').fill('Edited plan squat'); await page.locator('.exercise-editor button[type=submit]').click(); await button(page, 'Save plan').click()
   await expect(planCard(page, 'Manual four')).toBeVisible()
-  await button(page, 'Imported').click()
+  await button(page, 'Import').click()
   await field(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 1, kind: 'plan', plan: { name: 'AI plan', trainingDaysPerWeek: 1, days: [{ name: 'AI day', exercises: [{ name: 'AI row', sets: [{ reps: { min: 8, max: 12 } }], tags: ['Back'] }] }] } }))
   await button(page, 'Validate and preview').click()
   await field(page, 'Duration (weeks)').fill('104')

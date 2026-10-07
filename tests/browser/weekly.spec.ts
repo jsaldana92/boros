@@ -16,7 +16,7 @@ async function fixture(p: Page, theme = 'Dark') {
   await p.clock.setFixedTime(new Date('2026-10-05T16:00:00Z')); await p.goto('./')
   if (await b(p, 'Understood').isVisible()) await b(p, 'Understood').click()
   await b(p, 'Settings').click(); await b(p, theme).click(); await deviceZone(p, 'America/New_York')
-  await b(p, 'Create').click(); await b(p, 'Imported').click()
+  await b(p, 'Create').click(); await b(p, 'Import').click()
   await f(p, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 2, kind: 'plan', plan: { name: 'Weekly strength', durationWeeks: 4, trainingDaysPerWeek: 2, days: ['Upper', 'Lower'].map((name) => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }, { reps: { min: 8, max: 8 } }], restBetweenSetsSeconds: 65 }] })) } }))
   await b(p, 'Validate and preview').click(); await f(p, 'Note (optional):').fill('Saved program note\nSecond line'); await b(p, 'Save plan').click()
   await expect(p.getByRole('article', { name: 'Plan Weekly strength', exact: true })).toBeVisible()
@@ -60,10 +60,10 @@ test('draft resolution and expired timer recovery retain interrupted input', asy
   await b(page, 'REST Press after set 1').click(); await expect(page.getByRole('timer')).toContainText('1:05')
   await page.screenshot({ path: info.outputPath('timer-popup.png'), fullPage: true }); await closeTimer(page)
   await page.evaluate(async () => { const request = indexedDB.open('boros'); await new Promise<void>((resolve) => { request.onsuccess = () => { const db = request.result, tx = db.transaction('restTimers', 'readwrite'), store = tx.objectStore('restTimers'), get = store.get('active'); get.onsuccess = () => store.put({ ...get.result, endAt: new Date(Date.now() - 1000).toISOString() }); tx.oncomplete = () => { db.close(); resolve() } } }) })
-  await page.reload(); await page.getByRole('button', { name: /^Resume Weekly strength/ }).click(); await expect(page.getByRole('timer')).toHaveText('Rest finished'); expect((await rows(page, 'restTimers'))[0].alertedAt).toBeUndefined(); await b(page, 'Stop').click()
-  await page.reload(); await page.getByRole('article', { name: 'Plan Weekly strength', exact: true }).getByRole('button').click(); await card(page, 'Upper').click(); await expect(b(page, 'Skip')).toBeDisabled(); await b(page, 'Discard Progress').click()
-  await page.getByRole('dialog', { name: 'Discard Progress?', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click(); expect(await rows(page, 'drafts')).toHaveLength(1)
-  await b(page, 'Discard Progress').click(); await page.getByRole('dialog', { name: 'Discard Progress?', exact: true }).getByRole('button', { name: 'Discard Progress', exact: true }).click(); await card(page, 'Upper').click(); await b(page, 'Skip').click(); expect(await rows(page, 'drafts')).toEqual([])
+  await page.reload(); await page.getByRole('button', { name: /^Resume Weekly strength/ }).click(); await expect(page.getByRole('timer')).toHaveText('Rest finished'); await expect.poll(async () => !!(await rows(page, 'restTimers'))[0].alertedAt).toBe(true); await b(page, 'Stop').click()
+  await page.reload(); await page.getByRole('article', { name: 'Plan Weekly strength', exact: true }).getByRole('button').click(); await card(page, 'Upper').click(); await expect(b(page, 'Skip')).toBeDisabled(); await b(page, 'Reset').click()
+  await page.getByRole('dialog', { name: 'Reset this workout?', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click(); expect(await rows(page, 'drafts')).toHaveLength(1)
+  await b(page, 'Reset').click(); await page.getByRole('dialog', { name: 'Reset this workout?', exact: true }).getByRole('button', { name: 'Reset', exact: true }).click(); await card(page, 'Upper').click(); await b(page, 'Skip').click(); expect(await rows(page, 'drafts')).toEqual([])
 })
 
 test('Sound preference persists; the real local MP3 plays three ended-driven repetitions at root/subpath', async ({ page, request }, info) => {

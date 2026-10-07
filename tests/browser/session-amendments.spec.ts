@@ -7,7 +7,7 @@ test.setTimeout(90000)
 async function rows(p:Page,store:string) { return p.evaluate(async store=>{const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open('boros');r.onsuccess=()=>resolve(r.result)});try{return await new Promise<any[]>(resolve=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result)})}finally{db.close()}},store) }
 async function setup(page:Page,theme='Dark') {
   await page.clock.install({time:new Date('2026-10-05T16:00:00Z')});await page.goto('./');await expect(b(page,'Settings')).toBeVisible();if(await b(page,'Understood').isVisible())await b(page,'Understood').click()
-  await b(page,'Settings').click();await b(page,theme).click();await b(page,'Create').click();await b(page,'Imported').click()
+  await b(page,'Settings').click();await b(page,theme).click();await b(page,'Create').click();await b(page,'Import').click()
   await f(page,'AI output JSON').fill(JSON.stringify({schemaVersion:2,kind:'plan',plan:{name:'Live plan',durationWeeks:4,trainingDaysPerWeek:1,days:[{name:'Upper',supersets:[{number:1}],exercises:[{name:'Solo',sets:[{reps:{min:5,max:8},rir:{min:0,max:0}}],tags:['Solo']},...[3,2,1].map((n,i)=>({name:['A','B','C'][i],superset:1,tags:['Group'],sets:Array.from({length:n},(_,j)=>({reps:{min:j+5,max:j+5},rir:{min:i,max:i}}))}))]}]}}))
   await b(page,'Validate and preview').click();await b(page,'Save plan').click();await expect(page.getByRole('article',{name:'Plan Live plan',exact:true})).toBeVisible();await startWeekly(page,'Live plan','Upper')
 }
@@ -24,7 +24,7 @@ for(const theme of ['Dark','Light'])test(`session additions, explicit rounds, se
   await expect(page.locator('.training-set .check-label')).toHaveText(Array(11).fill('Skip'))
   await b(page,'Add Exercise').click();const picker=page.getByRole('dialog',{name:'Add Exercise',exact:true});await picker.getByLabel('Search exercises to add',{exact:true}).fill('Solo');await b(page,'Add Solo').click();await waitForDraft(page)
   const draft=(await rows(page,'drafts'))[0];expect(draft.day.exercises).toHaveLength(5);expect(draft.day.exercises.at(-1).id).not.toBe(draft.day.exercises[0].id)
-  await b(page,'Session Note').click();await f(page,'Note').fill('Carry through Settings');await b(page,'Apply note').click()
+  await b(page,'Session Note').click();await f(page,'Note').fill('Carry through Settings');await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click()
   await b(page,'REST Solo occurrence 1 after set 1').click();await expect(page.getByRole('timer')).toHaveText('00:00');await page.clock.runFor(2100);await expect(page.getByRole('timer')).toHaveText('00:02');await expect(page.locator('.timer-progress')).toHaveCount(0);await closeTimer(page)
   const timer=(await rows(page,'restTimers'))[0];await b(page,'Settings').click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();await page.getByRole('combobox',{name:'Weight unit',exact:true}).selectOption('lb');await b(page,'Save profile').click();await expect(page.getByText('Profile saved.',{exact:true})).toBeVisible()
   const support=page.getByRole('link',{name:/Support Boros/});await expect(support).toHaveAttribute('href','https://ko-fi.com/jhonatansaldana');await expect(support).toHaveAttribute('target','_blank');await expect(support).toHaveAttribute('rel','noopener noreferrer');await expect(page.getByText('Support link coming soon.')).toHaveCount(0)

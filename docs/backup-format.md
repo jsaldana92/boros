@@ -1,6 +1,53 @@
-# Boros profile backup, schema 12 (schemas 1-11 supported)
+# Boros profile backup, schema 13 (schemas 1-12 supported)
 
-Current exports pair **backup v12 / database v6**. V12 adds optional `mergedIntoId`,
+Current exports pair **backup v13 / database v7**. The stable database name remains
+`boros`. V7 adds only `deletedSources`, keyed by `(profileId, kind, id)`; existing
+stores, records, IDs and photos are not rewritten or reset. AI remains v5.
+
+V13 adds the required `deletedSources` collection and `csv/deleted_sources.csv`
+(**33 CSV tables**). Each entry contains owner, kind (`exercise`, `workout`, or
+`plan`), original ID, deletion time, and an optional exercise `mergedIntoId`.
+These are reference tombstones, not hidden prescriptions or performance records.
+Deleted aliases retain enough redirect metadata for preserved plan snapshots;
+no deleted standalone results are retained in duplicate records. Validation
+rejects foreign ownership, live/tombstone ID collisions, invalid redirects and cycles.
+
+Deleting an exercise removes its canonical merged identity's standalone exercise
+occurrences/results. Other exercises in mixed standalone sessions remain exact.
+Copied library-workout/plan prescriptions and plan-owned results remain intact.
+Deleting a workout removes its explicitly owned standalone/custom session pairs;
+same-name unowned custom work is independent. Deleting a plan removes its template,
+all runs, drafts, sessions, outcomes, mappings and active selection atomically.
+Measurements/photos and other profiles remain independent. Archive still retains data.
+
+A pruned standalone draft/session pair can carry matching optional `prunedAt`.
+Only the deleted exercise's data is removed; surviving explicit skipped outcomes
+or independent workout notes can remain without fabricated actual sets. Empty
+pairs without independent notes are removed. Existing paired snapshot/input/result
+validation still applies. V13 draft/session CSVs include `prunedAt`. A copied
+prescription may reference a deleted exercise/workout tombstone, without requiring
+or recreating the library template. A standalone `source.workoutId` still requires
+a live workout; deleting that workout removes its owned session pairs.
+
+Exports, restore previews/commits, profile remapping and Clear Data include the new
+collection. A merge that would combine a deletion with a live copy of the same
+identity is rejected with an actionable New/Replace choice; merge never silently
+revives deleted records or deletes additional local results. Other reviewed merge
+precedence rules are unchanged. Explicit New/Replace can recover an older backup.
+
+Strict original v1-v10/database v5 and v11-v12/database v6 archives remain readable.
+Original JSON, headers, inventory, asset bytes and SHA-256 checksums validate before
+promotion to v13, which adds an empty tombstone collection. V13 requires database v7;
+older contracts reject its new fields. Session replacement uses the existing full
+snapshot/structure contract. Timer position/ownership metadata is transient and
+remains excluded from backups, like timers themselves.
+
+The following v12 and earlier notes describe the historical contracts. Current
+behavior above takes precedence where deletion changes reference requirements.
+
+## V12 merge identities (historical contract)
+
+V12 exports pair **backup v12 / database v6**. V12 adds optional `mergedIntoId`,
 `mergedAt`, and `mergeOperationId` to retained library exercise records and columns
 of `csv/library_exercises.csv`. All original prescription/text/tag/timestamp fields
 remain on the retired source. There are still 32 CSV tables. No database migration

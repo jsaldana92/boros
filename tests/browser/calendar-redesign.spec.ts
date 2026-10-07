@@ -13,7 +13,7 @@ async function rows(page: Page, store: string) {
 async function setup(page: Page) {
   await page.clock.setFixedTime(new Date('2026-10-05T12:00:00Z'))
   await page.goto('./'); await expect(b(page, 'Calendar')).toBeVisible(); if (await b(page, 'Understood').isVisible()) await b(page, 'Understood').click()
-  await b(page, 'Create').click(); await b(page, 'Imported').click()
+  await b(page, 'Create').click(); await b(page, 'Import').click()
   await f(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 3, kind: 'plan', plan: { name: 'Calendar strength', durationWeeks: 5, trainingDaysPerWeek: 4, days: ['Upper', 'Lower', 'Push', 'Pull'].map((name) => ({ name, exercises: [{ name: 'Press', sets: [{ reps: { min: 5, max: 5 } }] }] })) } }))
   await b(page, 'Validate and preview').click(); await b(page, 'Save plan').click(); await expect(page.getByRole('article', { name: 'Plan Calendar strength', exact: true })).toBeVisible()
   await b(page, 'Calendar').click()

@@ -82,9 +82,9 @@ export async function readBackup(bytes: Uint8Array, progress: (message: string) 
   }
   const json = (path: string) => { const value = payload.get(path); if (!value) fail(`Missing ${path}. Choose a Boros backup ZIP, not an AI import.`); try { return JSON.parse(decoder.decode(value)) } catch { return fail(`Invalid JSON in ${path}.`) } }
   const manifest = json('manifest.json') as BackupManifest, data = json('data.json') as BackupData
-  for (const record of [manifest, data]) if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(record?.backupSchemaVersion) || record?.format !== 'boros-profile-backup') fail('Unsupported backup version or format. Update Boros to a version supporting this file, or choose a schema 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 or 12 Boros export.')
+  for (const record of [manifest, data]) if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(record?.backupSchemaVersion) || record?.format !== 'boros-profile-backup') fail('Unsupported backup version or format. Update Boros to a version supporting this file, or choose a schema 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 or 13 Boros export.')
   if (manifest.backupSchemaVersion !== data.backupSchemaVersion) fail('Manifest and data backup versions disagree.')
-  if (manifest.databaseSchemaVersion !== (data.backupSchemaVersion >= 11 ? 6 : 5)) fail('Unsupported database schema in backup. Update Boros or choose a supported database export.')
+  if (manifest.databaseSchemaVersion !== (data.backupSchemaVersion >= 13 ? 7 : data.backupSchemaVersion >= 11 ? 6 : 5)) fail('Unsupported database schema in backup. Update Boros or choose a supported database export.')
   const validated = manifestSchema.safeParse(manifest)
   if (!validated.success) { const issue = validated.error.issues[0]; fail(`Invalid manifest ${issue.path.join('.')}: ${issue.message}`) }
   const inventory = new Map(manifest.inventory.map((item) => [item.path, item]))
@@ -119,7 +119,7 @@ export async function readBackup(bytes: Uint8Array, progress: (message: string) 
   }
   // Only after original archive integrity, v1 field/reference checks, CSVs and
   // original assets pass. Never add a duration/group or mutate the source ZIP.
-  const compatible = data.backupSchemaVersion !== 12 ? { ...structuredClone(data), workouts: data.workouts ?? [], backupSchemaVersion: 12 as const } : data
+  const compatible = data.backupSchemaVersion !== 13 ? { ...structuredClone(data), workouts: data.workouts ?? [], deletedSources: [], backupSchemaVersion: 13 as const } : data
   validateBackupData(compatible)
   return { data: compatible, manifest, photos }
 }

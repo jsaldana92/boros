@@ -1,3 +1,4 @@
+import type { DeletedSource } from '../schemas/deleted-source.ts'
 import { exerciseResolver } from './exercise-identity.ts'
 import type { Schedule } from '../schemas/schedule.ts'
 import { resolvedDays, runProgress } from './run-progress.ts'
@@ -31,9 +32,9 @@ export const occurrenceItemKey = (dayId: string, exerciseId: string) => JSON.str
 export const legacyPlanKey = (planId: string) => `legacy:${planId}`
 const validActual = (set: RecordedSet): set is ActualSet => !set.skipped && Number.isFinite(set.weightKg) && set.weightKg >= 0 && Number.isSafeInteger(set.reps) && set.reps >= 0
 
-export function deriveProgress(profileId: string, _allPlans: Plan[], allExercises: Exercise[], allSessions: CompletedSession[], schedules: Schedule[] = [], drafts: SessionDraft[] = []): ProgressAnalytics {
+export function deriveProgress(profileId: string, _allPlans: Plan[], allExercises: Exercise[], allSessions: CompletedSession[], schedules: Schedule[] = [], drafts: SessionDraft[] = [], deletedSources: DeletedSource[] = []): ProgressAnalytics {
   const library = allExercises.filter((e) => e.profileId === profileId), runs = schedules.filter((r) => r.profileId === profileId)
-  const resolve = exerciseResolver(profileId, library)
+  const resolve = exerciseResolver(profileId, [...library, ...deletedSources.filter(t => t.kind === 'exercise')])
   const identity = (planId: string | undefined, dayId: string, exercise: PlanExercise) => { const key = exerciseIdentity(planId, dayId, exercise); return key.startsWith('library:') ? `library:${resolve(key.slice(8))}` : key }
   const sessions = allSessions.filter((s) => s.profileId === profileId).sort(sessionOrder), performances: Performance[] = [], outcomes = new Map<string, ExerciseOutcome>()
   const catalogs = new Map<string, Map<string, ProgressItem>>()

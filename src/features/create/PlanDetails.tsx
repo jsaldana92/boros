@@ -15,9 +15,9 @@ function ExerciseSummary({ exercise, grouped = false }: { exercise: PlanExercise
   </div>
 }
 
-export function PlanDetails({ plan, busy, error, onClose, onEdit, onDuplicate, onArchive }: {
+export function PlanDetails({ plan, busy, error, onClose, onEdit, onDuplicate, onArchive, onDelete }: {
   plan: Plan; busy: boolean; error: string; onClose: () => void
-  onEdit: () => void; onDuplicate: () => void; onArchive: () => void
+  onEdit: () => void; onDuplicate: () => void; onArchive: () => void; onDelete: () => void
 }) {
   const [actions, setActions] = useState(false)
   const instructions = !!plan.instructions?.trim(), note = !!plan.notes?.trim()
@@ -32,13 +32,13 @@ export function PlanDetails({ plan, busy, error, onClose, onEdit, onDuplicate, o
           : <ExerciseSummary key={block.id} exercise={block.members[0]} />)}
       </section>)}</div>)}
       {(instructions || note) && <hr />}
-      {instructions && <section aria-label="Instructions"><h3>Instructions</h3><p className="plain-text">{plan.instructions}</p></section>}
-      {note && <section aria-label="Note"><h3>Note</h3><p className="plain-text">{plan.notes}</p></section>}
+      {instructions && <section aria-label="Instructions"><h3>Instructions:</h3><p className="plain-text">{plan.instructions}</p></section>}
+      {note && <section aria-label="Note"><h3>Note:</h3><p className="plain-text">{plan.notes}</p></section>}
     </ActionDialog>
-    {actions && <DetailsActions title="Plan actions" busy={busy} archived={!!plan.archivedAt} error={error} onClose={() => setActions(false)} onEdit={onEdit} onDuplicate={onDuplicate} onArchive={onArchive} />}
+    {actions && <DetailsActions title="Plan actions" busy={busy} archived={!!plan.archivedAt} error={error} onClose={() => setActions(false)} onEdit={onEdit} onDuplicate={onDuplicate} onArchive={onArchive} onDelete={onDelete} />}
   </>
 }
 
 export function WorkoutSummary({ day }: { day: TrainingDay }) {
-  return <>{trainingBlocks(day).map(block => block.group ? <section className="plan-details-superset" key={block.id}><h3>Superset {block.group.number}</h3><div className="plan-superset-members">{block.members.map(exercise => <ExerciseSummary key={exercise.id} exercise={exercise} grouped />)}</div></section> : <ExerciseSummary key={block.id} exercise={block.members[0]} />)}{day.instructions?.trim() && <section><h3>Instructions</h3><p className="plain-text">{day.instructions}</p></section>}{day.notes?.trim() && <section><h3>Note</h3><p className="plain-text">{day.notes}</p></section>}</>
+  return <>{trainingBlocks(day).map(block => block.group ? <section className="plan-details-superset" key={block.id}><h3>Superset {block.group.number}</h3><div className="plan-superset-members">{block.members.map(exercise => <ExerciseSummary key={exercise.id} exercise={exercise} grouped />)}</div></section> : <ExerciseSummary key={block.id} exercise={block.members[0]} />)}{day.instructions?.trim() && <section><h3>Instructions:</h3><p className="plain-text">{day.instructions}</p></section>}{day.notes?.trim() && <section><h3>Note:</h3><p className="plain-text">{day.notes}</p></section>}</>
 }

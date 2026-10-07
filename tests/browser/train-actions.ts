@@ -33,8 +33,15 @@ export async function startWeekly(page: Page, plan: string, day: string) {
   throw new Error('No active pending week for test program')
 }
 export async function closeTimer(page: Page) {
-  const popup = page.getByRole('dialog', { name: 'Rest timer', exact: true })
+  const popup = page.getByRole('dialog', { name: 'Rest Timer', exact: true })
   await expect(popup).toBeVisible()
   await popup.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(popup).toHaveCount(0)
+}
+
+export async function openExerciseAction(page: Page, name: string, action: 'Information' | 'Note' | 'Replace') {
+  const menu = trainButton(page, 'Actions for ' + name)
+  await expect(menu.or(trainButton(page, action + ' for ' + name))).toBeVisible()
+  if (await menu.isVisible()) { await menu.click(); await page.getByRole('dialog', { name: 'Exercise actions', exact: true }).getByRole('button', { name: action, exact: true }).click() }
+  else await trainButton(page, action + ' for ' + name).click()
 }

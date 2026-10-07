@@ -105,16 +105,16 @@ test('remap retains historical/missed dates and started snapshots; changed previ
   await assert.rejects(service.commit(id, preview, true), /schedule changed/)
   const next = await service.preview(id, { ...change, revision: updated.revision })
   await plans.save(id, { ...planToInput(plan), name: 'Changed plan' }, plan)
-  await assert.rejects(service.commit(id, next, true), /after preview/)
-  assert.equal((await db.schedules.get([id, schedule.id]))!.revision, updated.revision)
+  await assert.rejects(service.commit(id, next, true), /schedule changed/)
+  assert.equal((await db.schedules.get([id, schedule.id]))!.revision, updated.revision + 1)
 })
 
-test('structural plan edits require future repair, ordinary edits wait for explicit refresh, stop retains history and future drafts', async (t) => {
+test('structural plan edits require future repair, ordinary edits reach pending content, stop retains history and future drafts', async (t) => {
   const { id, plan, plans, sessions, service, schedule, input } = await setup(t)
   const cutoff = nextMonday(localToday(schedule.timeZone)), future = (await sessions.openOccurrence(id, schedule.id, plan.days[0].id, cutoff)).draft!
   const edited = planToInput(plan); edited.days[0].exercises[0].prescription.name = 'Changed'
   const ordinary = await plans.save(id, edited, plan)
-  assert.equal(occurrences(await service.get(id, schedule.id), cutoff, cutoff)[0].day.exercises[0].prescription.name, 'Squat')
+  assert.equal(occurrences(await service.get(id, schedule.id), cutoff, cutoff)[0].day.exercises[0].prescription.name, 'Changed')
   const reduced = { ...planToInput(ordinary), days: ordinary.days.slice(1) }; await plans.save(id, reduced, ordinary)
   const blocked = await service.get(id, schedule.id)
   assert.equal(occurrences(blocked, cutoff, addDays(cutoff, 6)).length, 0)
@@ -144,7 +144,7 @@ test('v4 migration preserves all ten populated stores including session/draft/ti
   old.version(4).stores({ profiles: 'id, &nameKey', settings: 'id', photos: '[profileId+id], profileId', measurements: '[profileId+id], [profileId+measuredAt], profileId', exercises: '[profileId+id], profileId, &[profileId+activeNameKey]', tags: '[profileId+id], profileId, &[profileId+nameKey]', plans: '[profileId+id], profileId, &[profileId+activeNameKey]', drafts: '[profileId+id], profileId, &[profileId+activeSourceKey]', sessions: '[profileId+id], profileId, &[profileId+draftId]', restTimers: 'id, profileId' })
   const records = new Map<string, unknown[]>()
   for (const table of old.tables) { const values = await db.table(table.name).toArray(); assert.ok(values.length); records.set(table.name, values); await table.bulkAdd(values) }
-  old.close(); const upgraded = new BorosDatabase(name); t.after(() => upgraded.delete()); await upgraded.open(); assert.equal(upgraded.verno, 6)
+  old.close(); const upgraded = new BorosDatabase(name); t.after(() => upgraded.delete()); await upgraded.open(); assert.equal(upgraded.verno, 7)
   for (const [table, values] of records) assert.deepEqual(await upgraded.table(table).toArray(), values)
   assert.equal(await (await upgraded.photos.toArray())[0].blob.text(), 'photo'); assert.equal(await upgraded.schedules.count(), 0)
   await upgraded.schedules.add(schedule); upgraded.close(); await upgraded.open()

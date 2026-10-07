@@ -1,8 +1,8 @@
-import type { Exercise } from '../schemas/exercise.ts'
+export interface ExerciseIdentity { id: string; profileId: string; mergedIntoId?: string }
 
 // Redirects keep immutable occurrences/results readable. Names never establish
 // a merge relationship, and a redirect never crosses the supplied profile.
-export function exerciseResolver(profileId: string, exercises: Exercise[]) {
+export function exerciseResolver(profileId: string, exercises: ExerciseIdentity[]) {
   const records = new Map(exercises.filter(e => e.profileId === profileId).map(e => [e.id, e]))
   return (id: string): string => {
     const seen = new Set<string>()

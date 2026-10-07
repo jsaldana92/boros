@@ -10,7 +10,7 @@ async function setup(page: Page) {
   await page.clock.setFixedTime(new Date('2025-01-06T01:00:00Z'))
   await page.goto('./'); await button(page, 'Create').click()
   const notice = button(page, 'Understood'); if (await notice.isVisible()) await notice.click()
-  await button(page, 'Imported').click(); await page.getByLabel('AI output JSON', { exact: true }).fill(JSON.stringify(fixture))
+  await button(page, 'Import').click(); await page.getByLabel('AI output JSON', { exact: true }).fill(JSON.stringify(fixture))
   await button(page, 'Validate and preview').click(); await page.getByLabel('Duration (weeks)', { exact: true }).fill('104'); await button(page, 'Save plan').click()
   await expect(page.getByRole('article', { name: 'Plan Calendar four', exact: true })).toBeVisible()
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await addCalendarPlan(page, '2024-12-30', 'Calendar four'); await expect(page.locator('.calendar-event')).toHaveCount(4)
@@ -79,7 +79,7 @@ test('stored schedule zone and Today survive a device-zone change at a Sunday/Mo
 })
 
 test('failed schedule save preserves preview and unload guard; retry creates one assignment for another template', async ({ page }) => {
-  await setup(page); await button(page, 'Create').click(); await button(page, 'Imported').click(); await page.getByLabel('AI output JSON', { exact: true }).fill(JSON.stringify({ ...fixture, plan: { ...fixture.plan, name: 'Second plan' } })); await button(page, 'Validate and preview').click(); await page.getByLabel('Duration (weeks)', { exact: true }).fill('104'); await button(page, 'Save plan').click(); await button(page, 'Calendar').click(); await button(page, 'Week').click(); await page.getByLabel('Calendar date', { exact: true }).fill('2024-12-30'); await button(page, 'Add Plan').click(); await stagePlan(page, 'Second plan')
+  await setup(page); await button(page, 'Create').click(); await button(page, 'Import').click(); await page.getByLabel('AI output JSON', { exact: true }).fill(JSON.stringify({ ...fixture, plan: { ...fixture.plan, name: 'Second plan' } })); await button(page, 'Validate and preview').click(); await page.getByLabel('Duration (weeks)', { exact: true }).fill('104'); await button(page, 'Save plan').click(); await button(page, 'Calendar').click(); await button(page, 'Week').click(); await page.getByLabel('Calendar date', { exact: true }).fill('2024-12-30'); await button(page, 'Add Plan').click(); await stagePlan(page, 'Second plan')
   await page.evaluate(() => {
     const original = IDBObjectStore.prototype.add
     ;(window as unknown as { restoreCalendarWrite: () => void }).restoreCalendarWrite = () => { IDBObjectStore.prototype.add = original }

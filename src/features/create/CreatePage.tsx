@@ -1,3 +1,5 @@
+import { DeleteLibraryDialog } from './DeleteLibraryDialog'
+import { MergeExerciseDialog } from './MergeExerciseDialog'
 import { WorkoutLibrary } from './WorkoutLibrary'
 import { createId } from '../../lib/browser-crypto.ts'
 import { ImportPanel } from './ImportPanel'
@@ -40,6 +42,7 @@ function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPl
   const [archived, setArchived] = useState(false)
   const [editor, setEditor] = useState<{ key: string; original?: Exercise; draft?: ExerciseInput }>()
   const [selected, setSelected] = useState<Exercise>()
+  const [deleting, setDeleting] = useState<Exercise>(), [merging, setMerging] = useState<Exercise>()
   const [archiveTarget, setArchiveTarget] = useState<Exercise>()
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -62,7 +65,7 @@ function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPl
     {!editor && !planOpen && <h1>Create</h1>}
     {editor && <ExerciseEditor key={editor.key} profileId={profileId} initial={editor.draft} original={editor.original} tags={data?.tags ?? []} onClose={close} onMerged={record => { close(); setSelected(record); setStatus(`Saved ${record.name}.`) }} onSaved={(name) => { close(); setStatus(`Saved ${name}.`) }} />}
     <div hidden={!!editor || planOpen}>
-      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button id="create-workout" aria-label="Create workout" onClick={onWorkout}>Workout</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button></div><button className="imported-button" id="import-output-trigger" disabled={busy} onClick={onImport}>Imported</button>
+      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button id="create-workout" aria-label="Create workout" onClick={onWorkout}>Workout</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button></div><button className="imported-button" id="import-output-trigger" disabled={busy} onClick={onImport}>Import</button>
     </div>
     {plans}
     {workouts}
@@ -74,15 +77,18 @@ function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPl
         <LibraryFilters search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={data.tags} />
         <label className="check-label"><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />Show archived exercises</label>
         <p role="status">{status}</p>{error && <p role="alert">{error}</p>}
-        <p className="muted">{visible.length} {archived ? 'archived' : 'active'} exercise{visible.length === 1 ? '' : 's'}</p>
+        <p className="muted">{visible.length} {archived ? 'total' : 'active'} exercise{visible.length === 1 ? '' : 's'}</p>
         {!visible.length && <p>{search || filterTags.length ? 'No exercises match these filters.' : archived ? 'No archived exercises.' : 'No exercises yet. Choose Create exercise to add one.'}</p>}
-        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><LibraryExerciseCard name={record.name} createdAt={record.createdAt} onClick={(event) => { trigger.current = event.currentTarget; setError(''); setSelected(record) }} /></article>)}</div>
+        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><LibraryExerciseCard name={record.name} createdAt={record.createdAt} onClick={(event) => { trigger.current = event.currentTarget; setError(''); setSelected(record) }} />{record.archivedAt && <small>Archived</small>}</article>)}</div>
       </>}
     </div>
     {selected && <ExerciseDetails exercise={selected} tags={data ? exerciseToInput(selected, data.tags).tagNames : []} busy={busy} error={error} onClose={() => setSelected(undefined)}
+      onDelete={() => setDeleting(selected)} onMerge={selected.archivedAt ? undefined : () => { setMerging(selected); setSelected(undefined) }}
       onEdit={() => data && open(exerciseToInput(selected, data.tags), selected)}
       onDuplicate={() => { setBusy(true); setError(''); void exercises.duplicateDraft(profileId, selected.id).then((draft) => open(draft)).catch((e: Error) => setError(e.message)).finally(() => setBusy(false)) }}
       onArchive={() => selected.archivedAt ? void toggleArchive(selected) : (setSelected(undefined), setArchiveTarget(selected))} />}
+    {deleting && <DeleteLibraryDialog profileId={profileId} kind="exercise" record={deleting} onClose={() => setDeleting(undefined)} onDeleted={() => { setDeleting(undefined); setSelected(undefined); setStatus('Exercise deleted.'); requestAnimationFrame(() => createButton.current?.focus()) }} />}
+    {merging && data && <MergeExerciseDialog profileId={profileId} edited={merging} input={exerciseToInput(merging, data.tags)} onClose={() => { setSelected(merging); setMerging(undefined) }} onSaved={record => { setMerging(undefined); setSelected(record); setStatus('Exercises merged.') }} />}
     {archiveTarget && <ConfirmDialog title="Archive exercise?" confirmLabel="Archive" onCancel={() => { setArchiveTarget(undefined); requestAnimationFrame(() => trigger.current?.focus()) }} onConfirm={() => { void toggleArchive(archiveTarget); setArchiveTarget(undefined) }}><p>{archiveTarget.name} will leave the active library. Its record is kept and can be restored.</p></ConfirmDialog>}
   </>
 }

@@ -4,9 +4,9 @@ import { ActionDialog } from '../../components/ui/ConfirmDialog'
 import { youtubeEmbedUrl } from '../../lib/youtube'
 import type { Exercise } from '../../schemas/exercise'
 
-export function ExerciseDetails({ exercise, tags, busy, error, onClose, onEdit, onDuplicate, onArchive }: {
+export function ExerciseDetails({ exercise, tags, busy, error, onClose, onEdit, onDuplicate, onArchive, onDelete, onMerge }: {
   exercise: Exercise; tags: string[]; busy: boolean; error: string; onClose: () => void
-  onEdit: () => void; onDuplicate: () => void; onArchive: () => void
+  onEdit: () => void; onDuplicate: () => void; onArchive: () => void; onDelete: () => void; onMerge?: () => void
 }) {
   const [actions, setActions] = useState(false)
   const embed = youtubeEmbedUrl(exercise.tutorialUrl)
@@ -21,6 +21,6 @@ export function ExerciseDetails({ exercise, tags, busy, error, onClose, onEdit, 
       {/* Dispose while a higher popup obscures the player, and on every exit. */}
       {embed && !actions && <iframe className="youtube-player" src={embed} title="YouTube exercise tutorial" referrerPolicy="strict-origin-when-cross-origin" allow="encrypted-media; fullscreen; picture-in-picture" allowFullScreen />}
     </ActionDialog>
-    {actions && <DetailsActions title="Exercise actions" busy={busy} archived={!!exercise.archivedAt} error={error} onClose={() => setActions(false)} onEdit={onEdit} onDuplicate={onDuplicate} onArchive={onArchive} />}
+    {actions && <DetailsActions title="Exercise actions" busy={busy} archived={!!exercise.archivedAt} error={error} onClose={() => setActions(false)} onEdit={onEdit} onDuplicate={onDuplicate} onArchive={onArchive} onDelete={onDelete} onMerge={onMerge} />}
   </>
 }

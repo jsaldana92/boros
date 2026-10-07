@@ -6,10 +6,10 @@ import { nameKey } from '../../schemas/profile'
 import { displayRunDate } from '../../lib/run-progress'
 import { EditorTitle } from './EditorTitle'
 
-export function ExercisePicker({ choices, onChoose, onClose, remaining, path = ['Create', 'Plan', 'Exercise'], single }: { choices: PrescriptionChoice[]; onChoose: (choices: PrescriptionChoice[]) => void; onClose: () => void; remaining: number; path?: string[]; single?: { selected?: string; onSelect: (id: string) => void } }) {
+export function ExercisePicker({ choices, onChoose, onClose, remaining, path = ['Create', 'Plan', 'Exercise'], single, initialTags = [] }: { initialTags?: string[]; choices: PrescriptionChoice[]; onChoose: (choices: PrescriptionChoice[]) => void; onClose: () => void; remaining: number; path?: string[]; single?: { selected?: string; onSelect: (id: string) => void } }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<LibrarySort>('az')
-  const [filterTags, setFilterTags] = useState<string[]>([])
+  const [filterTags, setFilterTags] = useState<string[]>(() => initialTags.filter(id => choices.some(c => c.tagIds.includes(id))))
   const [selected, setSelected] = useState<string[]>([])
   const submitting = useRef(false)
   const tags = [...new Map(choices.flatMap((choice) => choice.prescription.tagNames).map((name) => [nameKey(name), { id: nameKey(name), name }])).values()]

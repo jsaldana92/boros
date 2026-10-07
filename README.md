@@ -18,12 +18,13 @@ plan duration. Create preserves input during mode/count changes and confirms
 populated reductions. Calendar assigns weekdays separately for each definition.
 Train uses actual program week numbers; postponed weeks do not advance the cycle.
 Progress counts actual prescribed workouts (four weeks alternating four/three workouts
-have 14). Existing instances and performed snapshots stay independent of template
-edits. Dirty Create forms use an in-app Cancel/Leave warning, including Settings
+have 14). Library edits leave existing copies independent. Editing the plan itself
+updates eligible unstarted workouts in active runs; started and historical snapshots
+stay protected. Structural and duration changes retain their schedule-review rules. Dirty Create forms use an in-app Cancel/Leave warning, including Settings
 navigation; genuine browser reload/close retains native unload protection.
 
-Create now has **Plan / Workout / Exercise** and a full-width **Imported** action.
-The independent Workout library supports editing, duplication and archive/restore.
+Create now has **Plan / Workout / Exercise** and a full-width **Import** action.
+The independent Workout library supports editing, duplication, archive/restore and scoped deletion.
 Add workout in a plan copies a library template into the selected week with fresh
 execution IDs. Editing any copy leaves its template and other copies unchanged.
 
@@ -35,10 +36,11 @@ including partial Save, completes a workout; exercise statistics use actual resu
 Calendar reviews saved workouts in a modal with historical note dialogs. There is
 no Train Saved sessions entry point. Unfinished drafts still recover after reload.
 
-The database is still named `boros`; additive **v6** creates only the workout store.
+The database is still named `boros`; additive **v7** adds deleted-source identity
+metadata without rewriting existing records (v6 added the workout store).
 AI **v5** distinguishes Plan, Workout and Exercise while reading strict v1-v4
-contracts (legacy `workout` still means one exercise). Backup **v12** includes
-workouts and standalone/custom records and reads strict v1-v10 archives. See
+contracts (legacy `workout` still means one exercise). Backup **v13** includes
+workouts, standalone/custom records and deletion metadata, and reads strict v1-v12 archives. See
 [AI format](docs/ai-formatting.md), [backup format](docs/backup-format.md), and
 [workout verification](docs/workout-library-verification.md).
 
@@ -69,7 +71,8 @@ is still unresolved. This candidate has not been published.
 ## Exercise merge and editing fixes (2026-10-06)
 
 Edit a saved exercise from Create > Exercises to use **Merge**. The edited exercise
-is the default destination; **Switch** reverses it. Final confirmation saves valid
+is the default source; the picked exercise is the destination. **Switch** reverses
+both the displayed and actual operation (2026-10-07 owner override). Final confirmation saves valid
 current edits and the merge atomically. The destination keeps its identity/name/defaults,
 tags combine, and the retired source keeps its original metadata. Cancel retains
 unsaved input. Nested prescriptions and new unsaved exercises have no Merge action.
@@ -77,7 +80,7 @@ unsaved input. Nested prescriptions and new unsaved exercises have no Merge acti
 Explicit redirects combine Overall history without changing saved results or independent
 plan/workout prescriptions, repeated occurrences, or plan completion. Chained merges
 resolve to the final destination. Stale edits and unavailable sources are rejected.
-Backups use v12 on the unchanged database v6, retaining strict v1-v11 import support.
+Backups now use v13/database v7, retaining strict v1-v12 import support.
 Exercise restore matches IDs, never unrelated records by display name.
 
 Session autosave/validation now keeps result geometry stable; focused fields receive
@@ -85,6 +88,33 @@ only necessary clearance when the viewport changes. Skip has a compact touch tar
 Returning from a child exercise editor restores the parent occurrence and focus without
 resetting its form. Physical software-keyboard verification is still required.
 See [verification and owner checks](docs/exercise-merge-verification.md).
+
+## Train, library lifecycle and Progress update (2026-10-07)
+
+Train workout actions include a read-only **Preview** of the applicable occurrence,
+including protected session snapshots. Exercise menus contain Information, Note
+and Replace. Replacement affects one session occurrence, keeps its position/group,
+starts blank actual results, and persists with the draft. Entered results/notes
+require confirmation. Incomplete workouts use the existing confirmed **Reset**;
+the equivalent Discard Progress control has been removed.
+
+Rest Timer uses centered exercise/group and Set/Post-Exercise labels, clockwise
+large/compact rings, Stop/Reset/Close, and a compact mm:ss indicator. Audio preparation
+stays muted; only the atomically claimed countdown completion can play three times.
+Count-up has no percentage/alarm. Sound Off attempts supported vibration; browser
+API availability does not prove a device vibrates, especially in the background.
+
+Create preview menus add Delete (and exercise-only Merge); Show archived adds
+archived records to the active list. Delete uses stable ownership: exercise and
+workout deletion preserve plan copies/history; plan deletion removes all its owned
+runs/results and leaves an active plan in the same transaction. Confirmations reject
+stale scope changes. Minimum identity tombstones keep retained snapshots usable
+without recreating deleted library records. Backup merging across a live/deleted
+identity conflict requires an explicit New/Replace choice.
+
+Exercise graphs reuse the Body weight chart's fixed axis, scrolling plot, date
+filters and point dialogs; exercise points never offer measurement editing/deletion.
+See [verification, compatibility and owner checks](docs/train-library-lifecycle-verification.md).
 
 ## Local development
 
@@ -1100,7 +1130,7 @@ the old address, then import its original ZIP at the new one, preferably under a
 new name. Verify reload, plans/sessions/photos and another profile before retiring
 the source. Follow the [cross-origin procedure](docs/backup-format.md#moving-between-website-addresses).
 
-Restore supports original **backup schemas 1–9 / database schema 5** exports, not CSV
+Restore supports original **backup schemas 1-13 / database schemas 5-7** exports, not CSV
 reconstruction, future schemas or arbitrary repackaged ZIPs. The size/entry/photo
 limits and whole-family merge behavior above remain in force. An export can exceed
 restore limits; keep the original ZIP. Memory/device limits, physical phone/AT and
@@ -1178,7 +1208,7 @@ Group 3 introduced **backup v3** (now superseded by v8 above), retaining strict 
 verification. Selected plan IDs follow independent ownership and plan-root merge
 remapping; the chosen whole-profile merge precedence also chooses preferences.
 Clear Data clears selections and retains the time zone and units. AI remained v2
-for Group 3; the current v3 format adds optional plan instructions.
+for Group 3; v3 subsequently added optional plan instructions.
 
 See [Group 3 verification](docs/group3-verification.md) for actual checks and the
 remaining owner checklist. Group 4 is described below. HTTPS remains
@@ -1191,12 +1221,11 @@ Calendar's final staged Save creates its instance and Train compatibility link
 atomically. Train Add excludes every active template, including existing schedules
 with a missing selection link. Scheduling an existing Non-Scheduled run preserves
 its identity/results. Legacy duplicates remain available for explicit guarded
-resolution; historical instances permit new runs. The database remains boros v5.
+resolution; historical instances permit new runs.
 
 Calendar Month has independently collapsible Week sections with seven horizontal
-Monday–Sunday columns. Narrow screens scroll each expanded row horizontally. Today expands the relevant week. Create has Plan / Exercise /
-AI actions, then Plans and Exercises, using shared filters and measured scrolling
-lists. The Plans list shows approximately two rows.
+Monday–Sunday columns. Narrow screens scroll each expanded row horizontally. Today expands the relevant week. Create has Plan / Workout / Exercise and Import actions, followed by Plans,
+Workouts and Exercises, using shared filters and measured scrolling lists. The Plans list shows approximately two rows.
 
 Progress has Body weight / Plans / Exercises. Plans shares Calendar Previous
 Plans eligibility, cards, rings, filters, five-card scrolling and Hide/Unhide/Delete
@@ -1223,8 +1252,8 @@ restores Progress's overview, not an unsaved editor or nested view.
 
 See [current calculations, verification and exact manual checks](docs/progress-redesign-verification.md).
 [Group 4's earlier verification](docs/group4-verification.md) remains a historical
-record; the controls and counting rules above supersede it. Database/backup/AI
-formats remain v5/v8/v3, and the same-context cross-build regression is retained.
+record; the controls and counting rules above supersede it. Current database/backup/AI versions are listed above. The same-context cross-build
+regression remains in use.
 Release acceptance and publication remain separate.
 
 ## Current Settings and shared browsing

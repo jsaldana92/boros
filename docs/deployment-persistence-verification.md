@@ -243,3 +243,26 @@ conditional recovery guidance, not a confirmed fix. If the records are absent
 from every original context, use an existing downloaded backup; GitHub Pages
 does not contain a remote copy of these local user records. Never bypass HTTPS
 warnings or disable checksum validation to recover a backup.
+
+
+## 2026-10-07 additive v7 follow-up
+
+The Train/library lifecycle candidate adds only the deletedSources store to stable
+boros. A populated v6 fake-IndexedDB database upgrades to v7 without changing
+existing records/IDs/photo bytes. Backup v13 preserves minimal deleted identities;
+initialization/error handling, manifest identity, hosting and deploy commands remain
+unchanged. This does not diagnose or claim to fix the earlier production report.
+
+The cached a87dc13 -> aa9126e -> two new production-build regression passed **6/6**
+in 2.2 minutes using `npm run test:browser:updates` with the repository browser cache.
+A final rebuild after the saved-round display correction passed **6/6** again in
+2.1 minutes with the same unchanged persistence checks.
+Every case keeps exactly one origin/context, including page close/reopen. The test
+now also deletes a disposable library source, preserving its plan copy and tombstone
+across the second rebuild alongside the original IDs, active profile, measurement,
+photo bytes, templates, sessions and committed draft. Injected IndexedDB open failure
+still shows an error and leaves all records intact. Edge root desktop/project phone
+and Firefox desktop passed. No owner storage, actual deployment or hosting change
+was involved. See [current verification](train-library-lifecycle-verification.md)
+for final follow-up results and physical-device limitations. The evidence checklist
+above remains required for the unresolved production disappearance report.

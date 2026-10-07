@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowBigDown } from 'lucide-react'
+import { ArrowDown } from 'lucide-react'
 import { createId } from '../../lib/browser-crypto'
 import { exercises, exerciseToInput } from '../../db/exercises'
 import { nameKey } from '../../schemas/profile'
@@ -15,7 +15,7 @@ export function MergeExerciseDialog({ profileId, edited, input, onClose, onSaved
   useEffect(() => { let alive = true; exercises.library(profileId).then(value => { if (alive) setLibrary(value) }).catch((e: Error) => { if (alive) setError(e.message) }); return () => { alive = false } }, [profileId])
   const eligible = library?.exercises.filter(e => e.id !== edited.id && !e.archivedAt && !e.mergedIntoId) ?? []
   const selected = eligible.find(e => e.id === selectedId)
-  const source = switched ? { ...edited, name: input.name } : selected, destination = switched ? selected : { ...edited, name: input.name }
+  const source = switched ? selected : { ...edited, name: input.name }, destination = switched ? { ...edited, name: input.name } : selected
   const commit = async () => {
     if (locked.current || !selected || !source) return
     locked.current = true; setBusy(true); setError('')
@@ -29,7 +29,7 @@ export function MergeExerciseDialog({ profileId, edited, input, onClose, onSaved
     {!confirm && error && <p role="alert">{error}</p>}
   </ActionDialog>{confirm && selected && <ConfirmDialog title="Merging Exercises?" confirmLabel="Merge" busy={busy} onCancel={() => setConfirm(false)} onConfirm={() => void commit()}>
     <p>Merging these two exercises will combine both into only one.</p>
-    <div className="merge-direction"><strong>Merge: {source?.name}</strong><ArrowBigDown aria-hidden="true" size={44} strokeWidth={3} /><strong>Into: {destination?.name}</strong><button disabled={busy} onClick={() => { setSwitched(value => !value); operation.current = createId() }}>Switch</button></div>
+    <div className="merge-direction"><strong>Merge: {source?.name}</strong><ArrowDown aria-hidden="true" size={32} strokeWidth={1.75} /><strong>Into: {destination?.name}</strong><button disabled={busy} onClick={() => { setSwitched(value => !value); operation.current = createId() }}>Switch</button></div>
     {error && <p role="alert">{error}</p>}
   </ConfirmDialog>}</>
 }

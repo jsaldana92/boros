@@ -352,7 +352,7 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 .progress-drilldown > h2 { margin-top: 20px; }
 .point-chart { margin: 24px 0; min-width: 0; }
 .point-chart figcaption { font-weight: 600; overflow-wrap: anywhere; }
-.point-chart svg { display: block; width: 100%; height: auto; overflow: hidden; margin-top: 12px; }
+.point-chart .weight-chart svg { display: block; height: 300px; overflow: hidden; }
 .point-chart circle { cursor: pointer; }
 .point-chart .axis-label { fill: var(--text); font: 12px system-ui, sans-serif; }
 .point-chart select { max-width: 100%; text-overflow: ellipsis; }
@@ -470,3 +470,22 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 .skip-row .skip-control { display: inline-flex; width: auto; min-height: 44px; padding: 4px 8px; }
 .merge-direction { display: grid; justify-items: center; gap: 12px; margin-block: 24px; overflow-wrap: anywhere; }
 .exercise-selection-card[aria-pressed='true'] { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+/* Train/Create refinement controls share the existing theme palette. */
+.archive-action { color: var(--training-target); border-color: var(--training-target); }
+.train-section-heading { text-align: center; }
+.train-section-heading h2 { margin-bottom: 4px; }
+.train-section-heading p { margin-top: 0; }
+.add-plan-card { min-height: 44px; }
+.plan-add-button { margin-top: 24px; }
+.builder-exercise-heading { display: flex; align-items: start; gap: 12px; }
+.builder-exercise-heading h4 { flex: 1; min-width: 0; overflow-wrap: anywhere; margin-block: 8px; }
+.builder-exercise-heading button { flex: 0 0 auto; }
+.occurrence-controls { justify-content: center; }
+.rest-timer-dialog { text-align: center; }
+.rest-timer-dialog .dialog-heading { justify-content: center; }
+.rest-timer-dialog > .actions { justify-content: center; }
+.timer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: min(100%, 300px); }
+.timer-close { grid-column: 1 / -1; }
+.timer-compact { display: inline-flex; align-items: center; gap: 10px; }
+.timer-compact svg { width: 32px; height: 32px; fill: none; stroke-width: 8; }
