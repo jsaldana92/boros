@@ -1,0 +1,1 @@
+import{W as e}from"./plan-BY77rFog.js";async function t(t){e.pick({blob:!0}).parse({blob:t});let n;try{n=await createImageBitmap(t)}catch{throw Error(`This file is not a readable image. Choose a JPEG, PNG, or WebP photo.`)}try{return e.parse({blob:t,width:n.width,height:n.height})}finally{n.close()}}export{t};
