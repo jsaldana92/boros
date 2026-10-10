@@ -1,3 +1,4 @@
+import { legacyWorkspace } from '../fixtures/legacy-workspace.ts'
 import 'fake-indexeddb/auto'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -37,7 +38,7 @@ async function setup(t: { after: (fn: () => Promise<void>) => void }) {
 }
 
 test('empty/timer-only drafts are not recovery data; zero/notes are; deliberate discard defeats queued writes and keeps other data', async (t) => {
-  const { db, id, open, sessions } = await setup(t), draft = await open(0), other = await open(1)
+  const { db, id, open, sessions } = await setup(t), draft = await open(0); await legacyWorkspace(db); const other = await open(1); await legacyWorkspace(db)
   assert.equal(hasSessionInput(draft.input), false)
   await sessions.startTimer(id, draft.id, draft.revision, draft.day.exercises[0].id, 0)
   assert.equal(hasSessionInput((await sessions.getDraft(id, draft.id)).input), false)
@@ -128,10 +129,12 @@ test('scheduled Reset restores zone-based due states; Leave stops future generat
 
 test('Leave closes one run, deletes ALL unfinished weeks atomically, preserves completed history and creates fresh independent re-add', async (t) => {
   const { db, id, profiles, run, event, open, record, sessions, actions, weekly, plan, make } = await setup(t)
-  const completed = await record(0), a = await open(1), b = await open(3, 1)
+  const completed = await record(0), a = await open(1); await legacyWorkspace(db); const b = await open(3, 1); await legacyWorkspace(db)
   let marked = await weekly.outcome(id, event(2).ref, run.revision, 'completed')
   const otherPlan = await make('Other'), other = await sessions.start(id, otherPlan.id, otherPlan.days[0].id)
-  const second = await profiles.create('Second'), secondPlan = await planService(db).save(second.id, { name: 'Same name', durationWeeks: 2, days: structuredClone(plan.days) }), otherProfile = await sessions.start(second.id, secondPlan.id, secondPlan.days[0].id)
+  await legacyWorkspace(db)
+  const second = await profiles.create('Second'), secondPlan = await planService(db).save(second.id, { name: 'Same name', durationWeeks: 2, days: structuredClone(plan.days).map(({ publishedWorkoutId: _published, sourceWorkoutId: _source, ...day }) => day) }), otherProfile = await sessions.start(second.id, secondPlan.id, secondPlan.days[0].id)
+  await legacyWorkspace(db)
   await sessions.startTimer(id, b.id, b.revision, b.day.exercises[0].id, 0)
   const preview = await actions.preview(id, run.id, marked.revision); assert.equal(preview.draftCount, 2)
   const put = db.profiles.put.bind(db.profiles); db.profiles.put = async () => { throw new Error('Test leave rollback') }
@@ -155,6 +158,7 @@ test('another run of the same template survives Leave; stale preview is rejected
   // Preserve a legacy duplicate fixture; current services correctly reject creating one.
   const otherRun = { ...structuredClone(run), id: crypto.randomUUID() }; await db.schedules.add(otherRun)
   const e = occurrences(otherRun, otherRun.startWeek, addDays(otherRun.startWeek, 6))[0], independent = (await sessions.openOccurrence(id, otherRun.id, e.ref.dayId, e.ref.scheduledDate)).draft!
+  await legacyWorkspace(db)
   const abandoned = await open(0), preview = await actions.preview(id, run.id, run.revision), input = structuredClone(abandoned.input); input.notes = 'new write'
   const changed = await sessions.update(id, abandoned.id, abandoned.revision, input); await assert.rejects(actions.leave(preview), /changed after preview/)
   await actions.leave(await actions.preview(id, run.id, run.revision)); assert.deepEqual(await db.drafts.get([id, independent.id]), independent)
@@ -173,7 +177,7 @@ test('v6 closed state and completed history round-trip; reviewed restore removes
   const { db, id, run, record, open, actions } = await setup(t), completed = await record(0), abandoned = await open(1)
   await actions.leave(await actions.preview(id, run.id, run.revision)); await db.drafts.add(abandoned)
   const snapshot = await captureProfile(id, db), zip = await generateBackup(snapshot, 'train-refinement'), backup = await readBackup(zip.bytes)
-  assert.equal(backup.data.backupSchemaVersion, 13)
+  assert.equal(backup.data.backupSchemaVersion, 18)
   for (const choice of ['new', 'replace', 'device', 'import'] as const) {
     const restored = await buildRestorePlan(backup, choice === 'new' ? undefined : snapshot, choice, crypto.randomUUID(), snapshot.profile.name, new Date().toISOString())
     assert.ok(restored.result.schedules[0].closedAt); assert.equal(restored.result.sessions[0].id, completed.id)
@@ -202,7 +206,7 @@ test('hints use one prior actual corresponding set, stable run/day/occurrence id
   }
   assert.deepEqual(previousResults(target, [older, latest], 'lb'), hints)
   const changed = structuredClone(target); changed.day.exercises[0].prescription.sets.reverse(); changed.day.exercises[0].prescription.sets[0].reps.min = 1
-  assert.deepEqual(previousResults(changed, [latest, older], 'kg')[id], [undefined, undefined])
-  for (const mutate of [(s: typeof latest) => { s.occurrence!.scheduleId = crypto.randomUUID() }, (s: typeof latest) => { s.sourceDayId = crypto.randomUUID() }, (s: typeof latest) => { s.profileId = crypto.randomUUID() }]) { const wrong = structuredClone(latest); mutate(wrong); assert.deepEqual(previousResults(target, [wrong], 'kg')[id], [undefined, undefined]) }
+  assert.deepEqual(previousResults(changed, [latest, older], 'kg')[id], [undefined, { load: '54.431084', reps: '8', rir: '2' }])
+  for (const mutate of [(s: typeof latest) => { s.occurrence!.scheduleId = crypto.randomUUID() }, (s: typeof latest) => { s.profileId = crypto.randomUUID() }]) { const wrong = structuredClone(latest); mutate(wrong); assert.deepEqual(previousResults(target, [wrong], 'kg')[id], [undefined, undefined]) }
   assert.equal(hasSessionInput(target.input), false)
 })

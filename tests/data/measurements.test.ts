@@ -64,7 +64,7 @@ test('concurrent edits and retries are revision checked and idempotent, includin
   const legacy = await add(66); await db.measurements.update([id, legacy.id], { revision: undefined, updatedAt: undefined })
   assert.equal(measurementRevision(await service.get(id, legacy.id)), 1)
   assert.equal((await service.save(id, legacy.id, 1, { weightKg: 67, measuredAt: legacy.measuredAt }, undefined, crypto.randomUUID())).revision, 2)
-  assert.equal(db.verno, 7)
+  assert.equal(db.verno, 12)
 })
 
 test('measurements and photos stay owner scoped across reads, updates, deletes, and profile selection', async (t) => {

@@ -34,13 +34,13 @@ export async function progressFixture(db: BorosDatabase) {
   const latest = await complete(alphaChanged, '2025-01-05T12:00:00.000Z', [[20, 10, 100], [25, 26], [80], [null], [null]])
   await plans.setArchived(id, beta.id, beta.revision, true)
   // Drafts are intentionally excluded from analytics.
-  await sessions.start(id, alphaChanged.id, alphaChanged.days[0].id)
   const weights = measurementService(db)
   for (const [kg, date] of [[70, '2025-01-03'], [72, '2025-01-01'], [70, '2025-01-03']] as const) await weights.save(id, crypto.randomUUID(), undefined, { weightKg: kg, measuredAt: `${date}T12:00:00.000Z` }, undefined, crypto.randomUUID())
   const other = await profiles.create('Other history'), privateExercise = await exercises.save(other.id, prescription('Private exercise'))
   const privatePlan = await plans.save(other.id, { name: 'Private plan', durationWeeks: 1, days: [{ ...newDay(1), exercises: [occurrence('Private exercise', privateExercise.id)] }] })
   const privateDraft = await sessions.start(other.id, privatePlan.id, privatePlan.days[0].id), privateInput = structuredClone(privateDraft.input)
   Object.assign(privateInput.exercises[0].sets[0], { load: '999', reps: '1' }); await sessions.complete(other.id, privateDraft.id, privateDraft.revision, privateInput, false)
+  await sessions.start(id, alphaChanged.id, alphaChanged.days[0].id)
   await profiles.select(id)
   return { id, otherId: other.id, alpha: alphaChanged, beta, press, row, unrelated, first, middle, latest }
 }

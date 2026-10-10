@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { cardAction, occurrenceAction } from './create-actions'
 import { manageRun } from './calendar-actions'
 import { createNamedProfile } from './settings-actions'

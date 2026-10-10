@@ -1,3 +1,7 @@
+import { convertIntervalDay } from '../schemas/interval-conversion.ts'
+import { classifyStrengthRecords } from './training-migration.ts'
+import { publishWorkouts, workoutPrescription } from './workout-publication.ts'
+import { assertSameTrainingType, trainingTypeOf } from '../schemas/training-type.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { resolveTags } from './tags.ts'
@@ -14,7 +18,7 @@ export interface PrescriptionChoice {
   label: string; prescription: ExerciseInput; source: ExerciseSource
 }
 export function planService(database: BorosDatabase) {
-  const tables = [database.profiles, database.plans, database.tags, database.schedules, database.deletedSources]
+  const tables = [database.exercises, database.workouts, database.profiles, database.plans, database.tags, database.schedules, database.deletedSources]
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => {
     const plan = await database.plans.get([profileId, id])
@@ -45,7 +49,8 @@ export function planService(database: BorosDatabase) {
       })
     },
     async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }, creationId?: string) {
-      const input = planInputSchema.parse(raw)
+      const input = planInputSchema.parse({ ...raw, days: raw.days.map(convertIntervalDay) })
+      classifyStrengthRecords(input)
       if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing plan.') }
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
@@ -53,11 +58,18 @@ export function planService(database: BorosDatabase) {
         if (creationId) { const committed = await database.plans.get([profileId, creationId]); if (committed) return committed }
         const old = existing ? await get(profileId, existing.id) : undefined
         if ((!old || old.durationWeeks !== undefined) && input.durationWeeks === undefined) throw new Error('Enter a positive whole duration in weeks. Existing finite plans cannot silently become unbounded.')
-        if (old) checkRevision(old, existing!.revision)
+        if (old) { checkRevision(old, existing!.revision); assertSameTrainingType(old, input) }
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
         const now = new Date().toISOString()
         if (creationId) await resolveTags(database, profileId, input.days.flatMap((day) => day.exercises.flatMap((exercise) => exercise.prescription.tagNames)), now)
-        const result: Plan = { ...input, profileId, id: old?.id ?? creationId ?? createId(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
+        for (const day of input.days) for (const occurrence of day.exercises) {
+          const ref = occurrence.templateId ?? (occurrence.source?.kind === 'exercise' ? occurrence.source.id : occurrence.source?.libraryId)
+          const source = ref ? await database.exercises.get([profileId, ref]) : undefined
+          if (source) assertSameTrainingType(day, source)
+          if (ref && !source && (await database.exercises.toArray()).some(e => e.id === ref && e.profileId !== profileId)) throw new Error('A source exercise belongs to another profile.')
+        }
+        input.days = await publishWorkouts(database, profileId, input.days, now, old?.days)
+        const result: Plan = { ...input, trainingType: trainingTypeOf(input), profileId, id: old?.id ?? creationId ?? createId(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.plans.put(result)
         if (old && (JSON.stringify(old.weeks) !== JSON.stringify(result.weeks) || old.days.length !== result.days.length || old.days.some((day) => !result.days.some((next) => next.id === day.id)))) {
           const schedules = await database.schedules.where('[profileId+planId]').equals([profileId, result.id]).toArray()
@@ -68,7 +80,7 @@ export function planService(database: BorosDatabase) {
             await database.schedules.put({ ...schedule, revision: schedule.revision + 1, updatedAt: now, revisions: appendRevision(schedule, { ...last, id: createId(), effectiveFrom, effectiveUntil: undefined, createdAt: now, needsRepair: true }) })
           }
         }
-        if (old && JSON.stringify([old.days, old.name, old.instructions]) !== JSON.stringify([result.days, result.name, result.instructions]) && JSON.stringify(old.weeks) === JSON.stringify(result.weeks) && old.days.length === result.days.length && old.days.every((day) => result.days.some((next) => next.id === day.id))) {
+        if (old && JSON.stringify([old.days.map(workoutPrescription), old.name, old.instructions]) !== JSON.stringify([result.days.map(workoutPrescription), result.name, result.instructions]) && JSON.stringify(old.weeks) === JSON.stringify(result.weeks) && old.days.length === result.days.length && old.days.every((day) => result.days.some((next) => next.id === day.id))) {
           const runs = await database.schedules.where('[profileId+planId]').equals([profileId, result.id]).toArray()
           for (const run of runs.filter((r) => !r.closedAt && !r.stoppedFrom)) {
             const cutoff = monday(localToday(run.timeZone)), additions: typeof run.revisions = []

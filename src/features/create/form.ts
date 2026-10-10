@@ -6,7 +6,7 @@ export const blankSet = (): SetFields => ({ repMin: '', repMax: '', rirMin: '', 
 export function toForm(input?: ExerciseInput) {
   const text = (value?: number) => value === undefined ? '' : String(value)
   return {
-    name: input?.name ?? '', count: String(input?.sets.length ?? 1),
+    trainingType: input?.trainingType ?? 'strength', activeSeconds: restFields(input?.trainingType === 'interval' && Number.isFinite(input.activeSeconds) ? input.activeSeconds : undefined), recoverySeconds: restFields(input?.trainingType === 'interval' ? input.recoverySeconds : undefined), name: input?.name ?? '', count: String(input?.sets.length ?? 1),
     sets: input?.sets.map((set) => ({ repMin: text(set.reps.min), repMax: set.reps.max === set.reps.min ? '' : text(set.reps.max), rirMin: text(set.rir?.min), rirMax: set.rir?.max === set.rir?.min ? '' : text(set.rir?.max) })) ?? [blankSet()],
     restBetweenSeconds: restFields(input?.restBetweenSeconds), restAfterSeconds: restFields(input?.restAfterSeconds), instructions: input?.instructions ?? '', notes: input?.notes ?? '', tutorialUrl: input?.tutorialUrl ?? '', tagNames: input?.tagNames ?? [],
   }
@@ -19,6 +19,16 @@ export function parseForm(form: ExerciseForm): { value?: ExerciseInput; errors: 
     const value = Number(raw)
     if (!/^\d+$/.test(raw.trim()) || !Number.isSafeInteger(value) || value < minimum) errors[path] = `Use a whole number of ${minimum} or more.`
     return value
+  }
+  if (form.trainingType === 'interval') {
+    const active = parseRest(form.activeSeconds), recovery = parseRest(form.recoverySeconds)
+    for (const [key, result] of [['activeSeconds', active], ['recoverySeconds', recovery]] as const) {
+      for (const [field, message] of Object.entries(result.errors)) errors[`${key}.${field}`] = message
+      if (result.value === undefined) errors[`${key}.seconds`] = 'This field is required.'
+    }
+    const parsed = exerciseInputSchema.safeParse({ trainingType: 'interval', name: form.name, activeSeconds: active.value, recoverySeconds: recovery.value, tagNames: form.tagNames, instructions: form.instructions || undefined, notes: form.notes || undefined, tutorialUrl: form.tutorialUrl.trim() || undefined })
+    if (!parsed.success) for (const issue of parsed.error.issues) errors[issue.path.join('.') + (['activeSeconds', 'recoverySeconds'].includes(String(issue.path[0])) ? '.seconds' : '')] ??= issue.message
+    return { errors, value: !Object.keys(errors).length && parsed.success ? parsed.data : undefined }
   }
   const count = number(form.count, 'count', 1)
   if (count !== undefined && count > 100) errors.count = 'Use at most 100 sets.'
@@ -39,7 +49,7 @@ export function parseForm(form: ExerciseForm): { value?: ExerciseInput; errors: 
   })
   const between = parseRest(form.restBetweenSeconds), after = parseRest(form.restAfterSeconds)
   for (const [key, result] of [['restBetweenSeconds', between], ['restAfterSeconds', after]] as const) for (const [field, message] of Object.entries(result.errors)) errors[`${key}.${field}`] = message
-  const data = { name: form.name, sets, tagNames: form.tagNames, restBetweenSeconds: between.value, restAfterSeconds: after.value, instructions: form.instructions || undefined, notes: form.notes || undefined, tutorialUrl: form.tutorialUrl.trim() || undefined }
+  const data = { trainingType: 'strength', name: form.name, sets, tagNames: form.tagNames, restBetweenSeconds: between.value, restAfterSeconds: after.value, instructions: form.instructions || undefined, notes: form.notes || undefined, tutorialUrl: form.tutorialUrl.trim() || undefined }
   const parsed = exerciseInputSchema.safeParse(data)
   if (!parsed.success) for (const issue of parsed.error.issues) {
     const key = issue.path.join('.').replace('reps.min', 'repMin').replace('reps.max', 'repMax').replace('rir.min', 'rirMin').replace('rir.max', 'rirMax')

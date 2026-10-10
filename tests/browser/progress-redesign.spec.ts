@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { stagePlan, runPage, manageRun, returnCalendar } from './calendar-actions'
 
 test.setTimeout(90000)

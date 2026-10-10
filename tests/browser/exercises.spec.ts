@@ -1,6 +1,6 @@
 import { createNamedProfile } from './settings-actions'
 import { cardAction } from './create-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 async function openCreate(page: Page) {
   await page.goto('./')
@@ -98,7 +98,7 @@ test('combined search, sorting, ANY-tag filters and profile isolation', async ({
   await expect(page.locator('input[name="name"]')).toHaveValue('Other')
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByRole('article')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Tags', exact: true }).click(); await expect(page.getByText('No tags yet.')).toBeVisible()
+  await page.getByRole('button', { name: 'Tags', exact: true }).click(); await expect(page.getByRole('button', { name: 'Strength', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Interval', exact: true })).toBeVisible()
   await add(page, 'Zeta squat', 'Private tag')
   await page.reload()
   await expect(page.getByRole('article')).toHaveCount(1)

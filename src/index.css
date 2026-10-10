@@ -472,7 +472,7 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 .exercise-selection-card[aria-pressed='true'] { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* Train/Create refinement controls share the existing theme palette. */
-.archive-action { color: var(--training-target); border-color: var(--training-target); }
+.archive-action { color: var(--training-target); }
 .train-section-heading { text-align: center; }
 .train-section-heading h2 { margin-bottom: 4px; }
 .train-section-heading p { margin-top: 0; }
@@ -489,3 +489,56 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 .timer-close { grid-column: 1 / -1; }
 .timer-compact { display: inline-flex; align-items: center; gap: 10px; }
 .timer-compact svg { width: 32px; height: 32px; fill: none; stroke-width: 8; }
+
+.type-choices { display: grid; gap: .75rem; }
+.type-choices button { display: flex; align-items: center; justify-content: center; gap: .5rem; }
+.training-type-icon { display: inline-flex; flex: 0 0 auto; color: var(--muted); margin-inline: .3rem; vertical-align: middle; }
+.plan-card strong { display: flex; justify-content: space-between; align-items: start; }
+.workout-picker-controls { margin-bottom: 1.5rem; }
+.circuit-builder { margin-block: 1rem; }
+.interval-results { padding-left: 1.3rem; }
+
+/* All Interval timer presentations share the same execution and block progress. */
+.interval-mode, .interval-start, .interval-timer-main, .interval-timer-dialog { text-align: center; }
+.interval-mode { justify-content: center; }
+.interval-start > button { display: block; margin: 14px auto; }
+.interval-circle { width: min(210px, 100%); }
+.interval-circle [role='timer'] { flex-direction: column; gap: 6px; }
+.interval-circle strong { font-size: 32px; }
+.interval-circle small { font-size: 18px; font-weight: 400; }
+.interval-timer-main h3, .interval-timer-dialog h3 { overflow-wrap: anywhere; }
+.interval-timer-actions, .interval-timer-dialog > .actions { justify-content: center; }
+.interval-sticky { position: fixed; top: max(0px, env(safe-area-inset-top)); left: 0; right: 0; margin: auto; max-width: 800px; z-index: 4; display: flex; align-items: center; background: var(--bg); border-bottom: 1px solid var(--border); padding: 6px 12px; }
+.interval-sticky-main { display: flex; align-items: center; gap: 8px; border: 0; flex: 1; min-width: 0; text-align: left; }
+.interval-sticky-main svg { width: 32px; height: 32px; flex-shrink: 0; fill: none; stroke-width: 8; }
+.interval-sticky-time { display: flex; align-items: baseline; flex-shrink: 0; white-space: nowrap; }
+.interval-sticky-time small { display: inline; font-size: .75em; margin-left: 4px; }
+.interval-sticky-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.interval-play { border: 0; background: transparent; flex-shrink: 0; min-width: 44px; min-height: 44px; }
+
+/* Owner refinements: shared typography, without changing mobile card geometry. */
+.type-choice-dialog .dialog-heading { justify-content: center; }
+.type-choice-dialog .dialog-heading h2 { text-align: center; }
+.plan-card strong, .library-exercise-card strong { display: flex; justify-content: flex-start; align-items: start; gap: 4px; }
+.plan-card strong .card-name { margin: 0; font-weight: inherit; min-width: 0; }
+.plan-card .training-type-icon, .library-exercise-card .training-type-icon { display: inline-flex; width: 18px; height: 18px; flex: 0 0 18px; margin: 2px 0 0; }
+.workout-library-grid .card-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.workout-library-grid .library-exercise-card { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.workout-library-grid strong { width: 100%; line-height: 1.2; }
+.workout-library-grid small { display: block; font-size: clamp(9px, 2.55vw, 13px); white-space: nowrap; }
+@media (min-width: 900px) { .workout-library-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } .workout-library-grid button { aspect-ratio: auto; height: 110px; } }
+.train-plan-cards { row-gap: 8px; }
+.train-plan-cards .plan-card { margin-block: 0; }
+.train-plan-cards + .add-plan-card { margin-top: 24px; }
+.interval-start > button { width: 80%; max-width: 480px; }
+.interval-execution { margin-top: 16px; padding-top: 12px; }
+.interval-execution ~ .interval-execution { border-top: 1px solid var(--border); }
+.interval-circuit > h3, .interval-post-rest { text-align: center; }
+.interval-circuit > h3, .interval-post-rest > h3, .interval-occurrence h4 { font-weight: 700; }
+.interval-target { text-align: center; color: var(--training-target); }
+.interval-circuit-rest { text-align: center; color: var(--text); }
+.interval-execution .interval-occurrence { border: 2px solid transparent; padding: 10px; margin: 8px 0; }
+.interval-execution .interval-occurrence[aria-current='step'] { border-color: var(--focus); }
+
+/* Timer modal secondary controls share the entire two-column action row. */
+.timer-actions .timer-reset { grid-column: 1 / -1; width: 100%; }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 
 const dialogs: HTMLDialogElement[] = []
 let unlockScroll: (() => void) | undefined
@@ -18,16 +18,17 @@ export function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCanc
   return <ActionDialog title={title} onClose={() => { if (!busy) onCancel() }} actions={<><button type="button" disabled={busy} onClick={onCancel}>{cancelLabel}</button><button type="button" disabled={busy || confirmDisabled} className={destructive ? 'destructive' : 'primary'} onClick={onConfirm}>{confirmLabel}</button></>}>{children}</ActionDialog>
 }
 
-export function ActionDialog({ title, children, onClose, actions, headerActions, className, hideTitle = false }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode; headerActions?: ReactNode; className?: string; hideTitle?: boolean }) {
+export function ActionDialog({ title, children, onClose, actions, headerActions, className, hideTitle = false, returnFocus, initialFocus }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode; headerActions?: ReactNode; className?: string; hideTitle?: boolean; returnFocus?: RefObject<HTMLElement | null>; initialFocus?: RefObject<HTMLElement | null> }) {
   const ref = useRef<HTMLDialogElement>(null)
   const id = useId()
   useEffect(() => {
-    const trigger = document.activeElement as HTMLElement | null
+    const trigger = returnFocus?.current ?? document.activeElement as HTMLElement | null
     const dialog = ref.current!
     if (!dialogs.length) unlockScroll = lockScroll()
     dialogs.push(dialog)
     for (const item of dialogs) item.inert = item !== dialog
     dialog.showModal()
+    initialFocus?.current?.focus({ preventScroll: true })
     const keepFocus = (event: FocusEvent) => {
       if (dialogs.at(-1) === dialog && !dialog.contains(event.target as Node)) dialog.focus({ preventScroll: true })
     }
@@ -41,7 +42,7 @@ export function ActionDialog({ title, children, onClose, actions, headerActions,
       if (!dialogs.length) { unlockScroll?.(); unlockScroll = undefined }
       if (trigger?.isConnected && (!top || top.contains(trigger))) trigger.focus({ preventScroll: true })
     }
-  }, [])
+  }, [returnFocus, initialFocus])
   return <dialog ref={ref} tabIndex={-1} className={className} aria-modal="true" aria-labelledby={id} aria-describedby={`${id}-body`} onPointerDown={(event) => {
     if (event.target !== ref.current) return
     const box = event.currentTarget.getBoundingClientRect()

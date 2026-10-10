@@ -1,10 +1,11 @@
+import { openWorkoutNote } from './train-actions'
 import { openExerciseAction } from './train-actions'
 import { confirmDownload } from './settings-actions'
 import { createNamedProfile } from './settings-actions'
 import { addCalendarPlan } from './calendar-actions'
 import { waitForDraft } from './train-actions'
 import { cardAction, occurrenceAction } from './create-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { readFile } from 'node:fs/promises'
 import JSZip from 'jszip'
 
@@ -23,7 +24,7 @@ async function schedule(p: Page, name: string) {
   await button(p, 'Calendar').click(); await button(p, 'Week').click(); await addCalendarPlan(p, '2025-01-06', name)
 }
 async function note(p: Page, name: string, text: string) {
-  if (name.startsWith('Note for ')) await openExerciseAction(p, name.slice(9), 'Note'); else await button(p, name).click(); await field(p, 'Note').fill(text); await p.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click()
+  if (name.startsWith('Note for ')) await openExerciseAction(p, name.slice(9), 'Note'); else await openWorkoutNote(p); await field(p, 'Note').fill(text); await p.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click()
 }
 
 for (const withoutNativeUUID of [false, true]) test(`complete manual and AI journey, immutable history, saved draft, photos and semantic restore with network audit${withoutNativeUUID ? ' without native randomUUID' : ''}`, async ({ page, context }, info) => {
@@ -71,7 +72,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await page.locator('.calendar-event').filter({ hasText: /Manual four.*Day 1/ }).click()
   await note(page, 'Session Note', 'Session <script>inert</script> note')
   await note(page, 'Note for Journey squat', 'Knee felt good')
-  await openExerciseAction(page, 'Journey squat', 'Information')
+  await openExerciseAction(page, 'Journey squat', 'Instructions')
   await expect(page.getByRole('dialog')).toContainText('<b>Plain instructions</b>')
   await expect(page.locator('iframe')).toHaveAttribute('src', /youtube.com\/embed\/abcdefghijk/)
   expect(requests.every((url) => new URL(url).origin === new URL(address).origin || url.startsWith('https://www.youtube.com/embed/'))).toBe(true)
@@ -82,7 +83,7 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
     await field(page, `Journey squat set ${i} Actual RIR (optional)`).fill(String(i - 1))
   }
   await button(page, 'REST Journey squat after set 1').click()
-  await expect(page.getByRole('timer')).toContainText('0:30'); await button(page, 'Stop').click()
+  await expect(page.getByRole('timer')).toContainText('00:30'); await button(page, 'Stop').click()
   await button(page, 'Save').click(); await expect(page.getByRole('region', { name: 'Saved session details' })).toContainText('Complete session')
   await button(page, 'Calendar').click(); await button(page, 'Week').click(); await field(page, 'Calendar date').fill('2025-01-06')
   await expect(page.locator('.calendar-event.completed')).toHaveCount(1)
@@ -127,12 +128,12 @@ for (const withoutNativeUUID of [false, true]) test(`complete manual and AI jour
   await expect(page.getByText(/Changes are saved locally\./)).toBeVisible(); await page.reload()
   await expect(page.locator('input[name="name"]')).toHaveValue('Restored journey')
   const restored = await download(page)
-  const normalize = (data) => ({ ...data, profile: { ...data.profile, id: 'owner', name: 'name', nameKey: 'name' }, ...Object.fromEntries(['tags', 'exercises', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'assets'].map((key) => [key, data[key].map((r) => ({ ...r, profileId: 'owner' }))])) })
+  const normalize = (data) => ({ ...data, profile: { ...data.profile, id: 'owner', name: 'name', nameKey: 'name' }, ...Object.fromEntries(['tags', 'exercises', 'workouts', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'assets'].map((key) => [key, data[key].map((r) => ({ ...r, profileId: 'owner' }))])) })
   expect(normalize(restored.data)).toEqual(normalize(source.data))
   for (const asset of source.data.assets) expect(await restored.zip.file(asset.path)!.async('uint8array')).toEqual(await source.zip.file(asset.path)!.async('uint8array'))
-  await button(page, 'Train').click(); await page.getByRole('button', { name: /Resume Manual four \/ Day 3/ }).click()
+  await button(page, 'Train').click(); await expect(page.getByText('A workout is active in another profile.')).toBeVisible(); await button(page,'Return to workout').click(); await button(page,'Cancel').click(); await button(page,'Leave').click(); await button(page,'Settings').click(); await field(page,'Active profile').selectOption({label:'Restored journey'}); await button(page,'Train').click(); await page.getByRole('button',{name:/Resume Manual four.*Day 3/}).click(); await expect(page.getByRole('region',{name:'Training session',exact:true})).toBeVisible()
   await expect(field(page, 'Journey squat set 1 Weight (lb)')).toHaveValue('12.')
-  await button(page, 'Session Note').click(); await expect(field(page, 'Note')).toHaveValue('Resume me after restore'); await page.keyboard.press('Escape')
+  await openWorkoutNote(page); await expect(field(page, 'Note')).toHaveValue('Resume me after restore'); await page.keyboard.press('Escape')
   await page.reload(); await button(page, 'Progress').click(); await page.locator('.weight-point').last().click(); await expect(page.getByAltText('Saved progress photo')).toBeVisible()
   await page.keyboard.press('Escape'); await expect(page.locator('.weight-point').last()).toBeFocused()
   await page.setViewportSize({ width: 320, height: 740 }); await page.addStyleTag({ content: 'html { font-size: 24px; }' })

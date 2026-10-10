@@ -1,3 +1,4 @@
+import { assertSameTrainingType } from '../schemas/training-type.ts'
 import type { DeletedSource } from '../schemas/deleted-source.ts'
 import { createId } from './browser-crypto.ts'
 import { exerciseInputSchema, type Exercise, type Tag } from '../schemas/exercise.ts'
@@ -28,6 +29,7 @@ export function materializeTemplates(profileId: string, records: { plans: Plan[]
       if (ref && (byId.has(ref) || records.deletedSources?.some(t => t.profileId === profileId && t.kind === 'exercise' && t.id === ref))) continue // explicit valid identity wins over a renamed snapshot
       const input = exerciseInputSchema.parse(item.prescription), key = nameKey(input.name)
       let template = active.get(key) ?? (plan.archivedAt ? createdArchived.get(key) : undefined)
+      if (template) assertSameTrainingType(template, input)
       if (ref && template && template.id !== ref) throw new Error(`Ambiguous template reference for "${input.name}": missing ID ${ref} conflicts with an existing library name. Nothing was repaired. Restore under a separate profile or resolve the source records first.`)
       if (!template) {
         // Occurrence IDs are already locally generated UUIDs. Reusing the first

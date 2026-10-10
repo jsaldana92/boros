@@ -1,3 +1,4 @@
+import { releaseWorkout } from './active-workout.ts'
 import { planInstructionsSnapshot, weekSnapshot, planWeeks } from '../schemas/plan.ts'
 import { assertCalendarAssignment } from './calendar-assignment.ts'
 import { runLifecycle } from '../lib/run-progress.ts'
@@ -9,7 +10,7 @@ import { dateSchema, occurrences, programEnd, type OccurrenceRef, type Schedule 
 
 export interface MovePreview { scheduleId: string; revision: number; week: string; direction: 1 | -1; fingerprint: string; next: Schedule }
 export function weeklyService(database: BorosDatabase) {
-  const tables = [database.profiles, database.plans, database.schedules, database.drafts, database.sessions]
+  const tables = [database.activeWorkouts, database.profiles, database.plans, database.schedules, database.drafts, database.sessions]
   const owner = async (id: string) => { const value = await database.profiles.get(id); if (!value) throw new Error('This profile is unavailable.'); return value }
   const run = async (profileId: string, id: string, revision?: number) => {
     await owner(profileId)
@@ -92,7 +93,7 @@ export function weeklyService(database: BorosDatabase) {
         await owner(profileId)
         const draft = await database.drafts.get([profileId, draftId])
         if (!draft || draft.revision !== revision || draft.finalizedAt || await database.sessions.get([profileId, draftId])) throw new Error('The draft changed or has a saved session. Nothing was discarded.')
-        await database.drafts.delete([profileId, draftId])
+        await database.drafts.delete([profileId, draftId]); await releaseWorkout(database, profileId, [draftId])
         const timer = await database.restTimers.get('active')
         if (timer?.profileId === profileId && timer.draftId === draftId) await database.restTimers.delete('active')
       })

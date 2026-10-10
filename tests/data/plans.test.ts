@@ -1,3 +1,4 @@
+import { classifyStrengthRecords } from '../../src/db/training-migration.ts'
 import 'fake-indexeddb/auto'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,7 +10,7 @@ import { planService } from '../../src/db/plans.ts'
 import { copyExercise, newDay, planInputSchema, planToInput, type PlanInput } from '../../src/schemas/plan.ts'
 import { filterExercises } from '../../src/features/create/library.ts'
 
-const prescription = () => ({ name: 'Squat', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 } }], restBetweenSeconds: 0, instructions: '<b>Plain text</b>', notes: 'Local note', tutorialUrl: 'https://youtu.be/abcdefghijk', tagNames: ['Legs'] })
+const prescription = () => ({ trainingType: 'strength' as const, name: 'Squat', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 } }], restBetweenSeconds: 0, instructions: '<b>Plain text</b>', notes: 'Local note', tutorialUrl: 'https://youtu.be/abcdefghijk', tagNames: ['Legs'] })
 const input = (name = 'Strength', count = 4): PlanInput => ({ name, durationWeeks: 2, days: Array.from({ length: count }, (_, index) => ({ ...newDay(index + 1), exercises: [copyExercise(prescription())] })) })
 async function setup(t: { after: (fn: () => Promise<void>) => void }) {
   const db = new BorosDatabase(`boros-test-plans-${crypto.randomUUID()}`)
@@ -173,10 +174,10 @@ test('v2-to-v3 migration retains all populated stores including photo bytes and 
   const upgraded = new BorosDatabase(name)
   t.after(() => upgraded.delete())
   await upgraded.open()
-  assert.equal(upgraded.verno, 7)
+  assert.equal(upgraded.verno, 12)
   for (const [table, record] of Object.entries(records)) {
     const retained = (await upgraded.table(table).toArray())[0]
-    assert.deepEqual(retained, record)
+    assert.deepEqual(retained, (classifyStrengthRecords(record), record))
     if (table === 'photos') assert.equal(await retained.blob.text(), 'photo bytes')
   }
   assert.equal(await upgraded.plans.count(), 0)

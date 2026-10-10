@@ -1,3 +1,5 @@
+import { legacyWorkspace } from '../fixtures/legacy-workspace.ts'
+import { classifyStrengthRecords } from '../../src/db/training-migration.ts'
 import 'fake-indexeddb/auto'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -94,9 +96,12 @@ test('timer timestamps recover elapsed time; replacement, reset, zero and Clear 
   const { service, id, draft, db } = await setup(t), first = draft.day.exercises[0].id
   const timer = (await service.startTimer(id, draft.id, draft.revision, first, 0))!
   assert.equal(timer.durationSeconds, 60); assert.equal(timerRemaining(timer, Date.parse(timer.endAt) - 20500), 21); assert.equal(timerRemaining(timer, Date.parse(timer.endAt) + 900000), 0)
+  await assert.rejects(service.startTimer(id, draft.id, draft.revision, first, 1), /Stop/)
+  await service.changeTimer(id, draft.id, timer.token, 'stop')
   const after = (await service.startTimer(id, draft.id, draft.revision, first, 1))!; assert.equal(after.durationSeconds, 120); assert.equal(await db.restTimers.count(), 1)
   await assert.rejects(service.changeTimer(id, draft.id, timer.token, 'stop'), /changed/)
   await service.changeTimer(id, draft.id, after.token, 'reset'); assert.notEqual((await service.library(id)).timer!.token, after.token)
+  await service.changeTimer(id, draft.id, (await db.restTimers.get('active'))!.token, 'stop')
   await service.startTimer(id, draft.id, draft.revision, draft.day.exercises[1].id, 0); assert.equal((await service.library(id)).timer, undefined)
   await service.startTimer(id, draft.id, draft.revision, first, 0)
   const input = filled(draft); input.notes = 'Note'; input.exercises[0].notes = 'Exercise note'
@@ -138,13 +143,15 @@ test('an already-running write finishes only for its bound owner; Clear preserve
   const other = await profiles.create('Other'); await profiles.select(other.id); controller.dispose(); release(); await pending
   assert.equal((await service.getDraft(id, draft.id)).input.exercises[0].sets[0].load, '0')
   assert.equal((await service.library(other.id)).drafts.length, 0)
+  await legacyWorkspace(db)
   const anotherPlan = await plans.save(id, { ...planToInput(plan), name: 'Second' }), another = await service.start(id, anotherPlan.id, anotherPlan.days[0].id)
+  await legacyWorkspace(db)
   const current = await service.getDraft(id, draft.id)
   await service.startTimer(id, current.id, current.revision, current.day.exercises[0].id, 0)
   const fail = () => { throw new Error('Clear failed') }; db.drafts.hook('updating', fail)
   await assert.rejects(service.clear(id, current.id, current.revision), /Clear failed/); db.drafts.hook('updating').unsubscribe(fail)
   assert.deepEqual(await service.getDraft(id, current.id), current); assert.ok((await service.library(id)).timer)
-  await service.clear(id, current.id, current.revision); assert.deepEqual(await service.getDraft(id, another.id), another)
+  await service.clear(id, current.id, current.revision); assert.deepEqual(await db.drafts.get([id, another.id]), another)
 })
 
 test('v3-to-v4 preserves every populated store and photo bytes; orphaned sessions block replacement initialization', async (t) => {
@@ -158,8 +165,8 @@ test('v3-to-v4 preserves every populated store and photo bytes; orphaned session
   const records = new Map<string, unknown[]>()
   for (const table of old.tables) { const values = await db.table(table.name).toArray(); records.set(table.name, values); await table.bulkAdd(values) }
   old.close(); const upgraded = new BorosDatabase(name); t.after(() => upgraded.delete()); await upgraded.open()
-  assert.equal(upgraded.verno, 7)
-  for (const [table, values] of records) assert.deepEqual(await upgraded.table(table).toArray(), values)
+  assert.equal(upgraded.verno, 12)
+  for (const [table, values] of records) assert.deepEqual(await upgraded.table(table).toArray(), (classifyStrengthRecords(values), values))
   assert.equal(await (await upgraded.photos.toArray())[0].blob.text(), 'bytes'); assert.equal(await upgraded.drafts.count(), 0)
   await service.complete(id, draft.id, draft.revision, filled(draft), false)
   for (const table of db.tables.filter((table) => table.name !== 'sessions')) await table.clear()

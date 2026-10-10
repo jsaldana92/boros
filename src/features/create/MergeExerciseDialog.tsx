@@ -1,3 +1,4 @@
+import { trainingTypeOf } from '../../schemas/training-type'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
 import { createId } from '../../lib/browser-crypto'
@@ -13,7 +14,7 @@ export function MergeExerciseDialog({ profileId, edited, input, onClose, onSaved
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const locked = useRef(false), operation = useRef(createId())
   useEffect(() => { let alive = true; exercises.library(profileId).then(value => { if (alive) setLibrary(value) }).catch((e: Error) => { if (alive) setError(e.message) }); return () => { alive = false } }, [profileId])
-  const eligible = library?.exercises.filter(e => e.id !== edited.id && !e.archivedAt && !e.mergedIntoId) ?? []
+  const eligible = library?.exercises.filter(e => trainingTypeOf(e) === trainingTypeOf(edited) && e.id !== edited.id && !e.archivedAt && !e.mergedIntoId) ?? []
   const selected = eligible.find(e => e.id === selectedId)
   const source = switched ? selected : { ...edited, name: input.name }, destination = switched ? { ...edited, name: input.name } : selected
   const commit = async () => {

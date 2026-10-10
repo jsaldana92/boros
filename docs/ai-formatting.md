@@ -1,3 +1,126 @@
+# Boros AI interchange v8: circuit repetitions
+
+The current envelope uses `schemaVersion: 8`, `trainingType`, `kind`, and exactly
+one matching `exercise`, `workout` or `plan` payload. Strict raw JSON or a single
+complete json fence, useful field paths, plain text, HTTPS tutorial validation,
+preview-only editing and transactional Save remain unchanged. Strength retains
+its existing sets/reps/RIR and superset contract.
+
+An Interval circuit has `name`, ordered `exercises`, `repeat` (integer 0-10,
+default 0 when omitted), and `restAfterCircuitSeconds` (integer 0-86,400).
+`repeat` means additional executions. Every execution includes each positive
+exercise recovery and circuit rest, including the final execution. Separate
+positive consecutive rests are valid. V8 rejects Interval `sets`, `roundsPerSet`
+and `restBetweenSetsSeconds`, including contradictory payloads containing both
+models. Exercise targets still require positive active seconds and explicit
+nonnegative recovery seconds. Optional postWorkoutRestSeconds is continuous-only.
+Preparation is an execution feature, never AI-prescribed.
+
+```json
+{"schemaVersion":8,"trainingType":"interval","kind":"workout","workout":{
+  "name":"Sprint Madness","postWorkoutRestSeconds":60,"circuits":[
+    {"name":"Starting slow","repeat":1,"restAfterCircuitSeconds":30,"exercises":[
+      {"name":"Push-up","activeSeconds":20,"recoverySeconds":10},
+      {"name":"Sprint","activeSeconds":20,"recoverySeconds":10},
+      {"name":"Pull-up","activeSeconds":10,"recoverySeconds":20}]},
+    {"name":"Sprint madness","repeat":0,"restAfterCircuitSeconds":30,"exercises":[
+      {"name":"High knees","activeSeconds":50,"recoverySeconds":10},
+      {"name":"Backwards jog","activeSeconds":50,"recoverySeconds":10},
+      {"name":"Full sprint","activeSeconds":20,"recoverySeconds":10}]}
+  ]}}
+```
+
+This is 480 seconds before preparation, 485 including it. Circuit-only totals are
+245 and 185 seconds. Repeating and unique-week plans use these same workouts.
+New AI payloads retain limits of 100 circuits/occurrences and 10,000 active phases
+per workout. Legacy conversion may need extra stored circuit sections and copied
+occurrences; it preserves the validated activity limit without truncation.
+
+Original v6 and v7 Interval contracts are frozen in separate schemas. They parse
+strictly before explicit lossless conversion: zero-rest rounds are chunked into
+at most eleven executions; a positive old between-set/final rest belongs to a
+separate last execution, never every prior round. V6 continues to reject v7's
+post-workout rest. V1-v5 retain their historical Strength meaning. No type, target,
+missing value or duration is guessed. See the [migration record](interval-repeat-verification.md).
+
+## Historical v7 contract (superseded by v8 above)
+
+# Boros AI interchange v7: Strength and Interval
+
+The Import screen provides separate **Strength** and **Interval** formatting
+prompts for Plan, Workout and Exercise. Every current envelope requires
+`schemaVersion: 7`, `trainingType: "strength" | "interval"`, `kind`, and exactly
+one matching payload. It accepts raw JSON or exactly one complete `json` fenced
+block, with straight ASCII quotes and no surrounding text. The prompt requires
+asking about missing targets instead of inventing them. IDs, ownership, results,
+unknown fields, mixed training types and partial/truncated data are rejected with
+field paths before any write.
+
+Strength v7 retains the v5 exercise/set/superset and repeating/unique-week rules.
+Workouts inside a v6/v7 Strength plan also accept separate optional plain-text
+`instructions` and `notes` (up to 20,000 characters each). Those new fields are not
+accepted in older plan versions. Every saved nested prescription gets an explicit
+Strength discriminator.
+
+Interval v7 uses these exact shapes:
+
+- Exercise: `name`, positive integer `activeSeconds`, nonnegative integer
+  `recoverySeconds`; optional `instructions`, `notes`, `youtubeUrl` (supported
+  HTTPS YouTube URL or null), and `tags`. Seconds are at most 86,400. Missing
+  recovery is an error; explicit 0 advances immediately.
+- Circuit: `name`, ordered complete `exercises`, positive integer `roundsPerSet`
+  and `sets` (1-100 each), required nonnegative `restBetweenSetsSeconds` and
+  `restAfterCircuitSeconds`. No Circuit library or nested circuits.
+- Workout: `name`, optional `instructions`/`notes` and `postWorkoutRestSeconds`, `circuits` (1-100). Limit 100
+  exercise occurrences and 10,000 repeated active phases per workout.
+- Plan: `name`, `mode`, positive `durationWeeks`, optional instructions/notes.
+  Repeating uses `trainingDaysPerWeek` (1-7) and matching `days` of Workout objects.
+  Unique uses `uniqueWeekCount` (at least 2, dividing durationWeeks) and matching
+  `weeks`, each with its own trainingDaysPerWeek and days. Do not mix modes.
+
+Example:
+
+```json
+{
+  "schemaVersion": 7,
+  "trainingType": "interval",
+  "kind": "workout",
+  "workout": {
+    "name": "Sprint intervals",
+    "postWorkoutRestSeconds": 60,
+    "circuits": [{
+      "name": "Sprint circuit",
+      "roundsPerSet": 5,
+      "sets": 3,
+      "restBetweenSetsSeconds": 0,
+      "restAfterCircuitSeconds": 0,
+      "exercises": [{ "name": "Sprint", "activeSeconds": 20, "recoverySeconds": 10, "tags": [], "youtubeUrl": null }]
+    }]
+  }
+}
+```
+
+Validation uses the same typed prescription/circuit rules as manual builders.
+Preview editing is local until Save; plan publication, exercise matching and tags
+commit together. Name matches never silently cross training types. Versions 1-5
+retain their original strict contracts and always mean Strength; versions 1-4
+`kind: "workout"` still mean one exercise. No durations are manufactured.
+
+V7 adds only the optional workout-level `postWorkoutRestSeconds` for Interval
+workouts, including copies inside plan days/weeks. It is an integer 0-86,400;
+absence/zero means none. It is never inferred from exercise or circuit rests.
+Each active phase has recovery; sets contain rounds. Between-set rest is additive
+only between sets. Every circuit's positive post-circuit rest follows its final
+set, including the last circuit. Post-workout rest follows the final circuit rest
+only in continuous execution; circuit-only execution never runs it. Preparation
+is an execution feature, not an AI-prescribed field.
+
+Original v6 Interval shapes remain strict and reject this newly introduced field.
+V6 Strength remains supported unchanged. Unknown-field and single-fence rules
+apply to both old and new contracts. Previews share the manual editor fields.
+
+## Historical v5 and earlier contract notes
+
 # AI formatting and Create refinements
 
 The application generates authoritative instructions from
@@ -19,7 +142,7 @@ missing exercise templates and tags, reusing existing normalized exercise names
 without overwriting their defaults. Repeated prescriptions retain their own IDs.
 
 **Legacy meaning is frozen:** in schema versions 1-4, `kind: "workout"` and the
-`workout` payload mean one exercise. Only v5 uses that kind for a collection.
+`workout` payload mean one exercise. Versions 5 and 6 use that kind for a collection.
 Dispatch uses explicit version and kind; hybrid envelopes fail, with no guesses
 or silent reinterpretation. Legacy previews therefore remain exercise editors.
 

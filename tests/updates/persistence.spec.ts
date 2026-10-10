@@ -110,7 +110,7 @@ async function oldVersionFixture(page: Page, legacyPlan: boolean) {
 
 for (const legacyPlan of [false, true]) test(`same-context published releases and two rebuilds preserve ${legacyPlan ? 'legacy AI plan repair and history' : 'all linked records exactly'}`, async ({ context, page: initialPage }, info) => {
   const { stages } = JSON.parse(await readFile('test-results/update-builds/builds.json', 'utf8')) as { stages: Stage[] }
-  expect(stages.map((stage) => stage.label)).toEqual(['previous', 'deployed', 'build-1', 'build-2'])
+  expect(stages.map((stage) => stage.label)).toEqual(['previous', 'deployed', 'pre-interval', 'build-1', 'build-2'])
   expect(stages[0].entrySha256).not.toBe(stages[1].entrySha256)
   let active = stages[0]
   const mount = info.project.name.startsWith('project-') ? '/project-check/' : '/'
@@ -166,9 +166,21 @@ for (const legacyPlan of [false, true]) test(`same-context published releases an
       expect((await page.reload())!.headers()['x-update-test-build']).toBe(stage.label)
       await expect(field(page, 'Active profile')).toHaveValue(fixture.ownerId)
       const after = await records(page)
-      if (stage.label === 'build-1') {
+      if (stage.label === 'pre-interval') {
         expect(after.version).toBe(70); expect(after.tables.workouts).toEqual([]); expect(after.tables.deletedSources).toEqual([])
         for (const [store, rows] of Object.entries(expected.tables)) expect(after.tables[store], store).toEqual(rows)
+        expected = after
+      }
+      if (stage.label === 'build-1') {
+        expect(after.version).toBe(100); expect(after.tables.workouts).toHaveLength(1); expect(after.tables.deletedSources).toEqual([])
+        const withoutNewFields = (value: unknown) => JSON.parse(JSON.stringify(value, (key, v) => ['trainingType', 'publishedWorkoutId'].includes(key) ? undefined : v))
+        for (const [store, rows] of Object.entries(expected.tables)) {
+          if (store === 'workouts') continue
+          if (store === 'plans') {
+            expect(after.tables.plans).toHaveLength(rows.length)
+            for (const before of rows) { const current = after.tables.plans.find(p => p.id === before.id)!; expect(current.revision).toBe(Number(before.revision) + 1); expect(withoutNewFields({ ...current, revision: before.revision })).toEqual(before) }
+          } else expect(withoutNewFields(after.tables[store]), store).toEqual(rows)
+        }
         expected = after
       }
       if (legacyPlan && stage.label === 'deployed') {
@@ -237,7 +249,7 @@ for (const legacyPlan of [false, true]) test(`same-context published releases an
         await button(page, 'Train').click(); await button(page, 'Existing Workout').click(); await page.getByRole('article', { name: 'Workout Update workout', exact: true }).getByRole('button').click()
         await field(page, 'Update standalone press set 1 Weight (kg)').fill('0'); await field(page, 'Update standalone press set 1 Repetitions').fill('5'); await button(page, 'Save').click()
         await expect(page.getByRole('region', { name: 'Saved session details' })).toBeVisible()
-        await button(page, 'Back to workouts').click(); await button(page, 'Custom Workout').click(); await button(page, 'Add Exercise').click(); await button(page, 'Add Update standalone press').click()
+        await button(page, 'Back to workouts').click(); await button(page, 'Custom Workout').click(); await button(page, 'Strength').click(); await button(page, 'Add Exercise').click(); await button(page, 'Add Update standalone press').click()
         await field(page, 'Update standalone press set 1 Weight (kg)').fill('12.'); await button(page, 'Settings').click()
         // Retain the new deleted-source identity across the second rebuild too.
         // Delete a disposable source with no results; keep the copied plan usable.
@@ -245,10 +257,18 @@ for (const legacyPlan of [false, true]) test(`same-context published releases an
         await page.getByRole('article', { name: 'Cycle press', exact: true }).getByRole('button').click()
         await button(page, 'Exercise actions').click(); await button(page, 'Delete').click()
         await page.getByRole('dialog', { name: 'Delete exercise?', exact: true }).getByRole('button', { name: 'Delete', exact: true }).click()
+        // New typed data survives the second update in this SAME storage context.
+        await button(page, 'Import').click()
+        await field(page, 'AI output JSON').fill(JSON.stringify({ schemaVersion: 6, trainingType: 'interval', kind: 'workout', workout: { name: 'Update intervals', circuits: [{ name: 'Timed circuit', roundsPerSet: 1, sets: 1, restBetweenSetsSeconds: 0, restAfterCircuitSeconds: 0, exercises: [{ name: 'Update sprint', activeSeconds: 20, recoverySeconds: 0, tags: [], youtubeUrl: null }] }] } }))
+        await button(page, 'Validate and preview').click(); await button(page, 'Save workout').click()
+        await button(page, 'Train').click(); await button(page, 'Existing Workout').click(); await page.getByRole('article', { name: 'Workout Update intervals', exact: true }).getByRole('button').click()
+        await expect(button(page, 'Start')).toBeEnabled(); await button(page, 'Start').click(); await page.waitForTimeout(5350); await button(page, 'Pause').click()
+        await button(page, 'Save').click(); await button(page, 'Confirm').click(); await expect(page.getByRole('region', { name: 'Saved Interval session' })).toBeVisible()
         await button(page, 'Settings').click()
         expected = await records(page)
+        expect(expected.tables.sessions.some(s => !!s.interval)).toBe(true)
         expect(expected.tables.deletedSources).toHaveLength(1)
-        expect(expected.tables.workouts).toHaveLength(1)
+        expect(expected.tables.workouts).toHaveLength(6)
         expect(expected.tables.sessions.some(s => (s.source as { kind?: string })?.kind === 'workout')).toBe(true)
         expect(expected.tables.drafts.some(d => (d.source as { kind?: string })?.kind === 'custom' && !d.finalizedAt)).toBe(true)
         expect(expected.tables.schedules.some((run) => !!run.hiddenAt)).toBe(true)

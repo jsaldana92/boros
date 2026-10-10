@@ -1,5 +1,7 @@
+import { type TrainingType } from '../../schemas/training-type'
+import { newDay } from '../../schemas/plan'
 import { DeleteLibraryDialog } from './DeleteLibraryDialog'
-import { PlanBrowseControls } from './PlanBrowseControls'
+import { LibraryFilters } from './LibraryFilters'
 import { PlanCard } from './PlanCard'
 import { BoundedGrid } from '../../components/ui/BoundedGrid'
 import { PlanDetails } from './PlanDetails'
@@ -12,7 +14,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { PlanEditor } from './PlanEditor'
 import { filterExercises, type LibrarySort } from './library'
 
-export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profileId: string; startNew: number; onEditing: (value: boolean) => void; hidden: boolean }) {
+export function PlanLibrary({ profileId, startNew, trainingType, onEditing, hidden }: { profileId: string; startNew: number; trainingType: TrainingType; onEditing: (value: boolean) => void; hidden: boolean }) {
   const [attempt, setAttempt] = useState(0)
   const result = useLiveQuery(async () => {
     try { return { data: await plans.library(profileId), error: '' } }
@@ -23,6 +25,7 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
   const [deleting, setDeleting] = useState<Plan>()
   const [archiveTarget, setArchiveTarget] = useState<Plan>()
   const [archived, setArchived] = useState(false)
+  const [filterTags, setFilterTags] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<LibrarySort>('az')
   const [error, setError] = useState('')
@@ -32,8 +35,8 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
   const heading = useRef<HTMLHeadingElement>(null)
   const previousStart = useRef(startNew)
   useEffect(() => {
-    if (startNew !== previousStart.current) { previousStart.current = startNew; setEditor({ key: createId() }); setError(''); setStatus('') }
-  }, [startNew])
+    if (startNew !== previousStart.current) { previousStart.current = startNew; setEditor({ key: createId(), draft: { trainingType, name: '', days: [newDay(1, trainingType)] } }); setError(''); setStatus('') }
+  }, [startNew, trainingType])
   const open = (draft?: PlanInput, original?: Plan) => { setEditor({ key: createId(), draft, original }); setSelected(undefined); setError(''); setStatus(''); onEditing(true) }
   const close = () => { setEditor(undefined); onEditing(false); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : heading.current)?.focus()) }
   const toggleArchive = async (plan: Plan) => {
@@ -42,14 +45,14 @@ export function PlanLibrary({ profileId, startNew, onEditing, hidden }: { profil
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
   const data = result?.data
-  const visible = filterExercises((data?.plans ?? []).map((plan) => ({ ...plan, tagIds: [] })), search, sort, [], archived)
+  const visible = filterExercises((data?.plans ?? []).map((plan) => ({ ...plan, tagIds: [] })), search, sort, filterTags, archived)
   return <section hidden={hidden} aria-label="Plans">
     {editor && <PlanEditor key={editor.key} profileId={profileId} initial={editor.draft} original={editor.original} choices={data?.choices ?? []} tags={data?.tags ?? []} onClose={close} onSaved={(name) => { close(); setStatus(`Saved plan ${name}.`) }} />}
     <div hidden={!!editor} className="plan-library">
       <h2 className="library-heading" ref={heading} tabIndex={-1}>Plans</h2>
       {!result && <p role="status">Loading plans...</p>}
       {result?.error && <><p role="alert">Could not read plans. {result.error}</p><button onClick={() => setAttempt((value) => value + 1)}>Retry plans</button></>}
-      {data && <><PlanBrowseControls search={search} sort={sort} onSearch={setSearch} onSort={setSort} />
+      {data && <><LibraryFilters noun="plans" search={search} sort={sort} setSearch={setSearch} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={[]} />
         <label className="check-label"><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />Show archived plans</label>
         {!visible.length && <p>{search ? 'No plans match this search.' : archived ? 'No archived plans.' : 'No plans yet. Choose Create Plan to add one.'}</p>}
         <BoundedGrid rows={2} label="Plan catalog" className="catalog-grid">{visible.map((plan) => <PlanCard key={plan.id} plan={plan} onClick={() => { trigger.current = document.activeElement as HTMLElement; setError(''); setSelected(plan) }} />)}</BoundedGrid>

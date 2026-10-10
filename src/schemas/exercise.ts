@@ -17,7 +17,8 @@ export function isYouTubeUrl(value: string) {
     return /^\/(shorts|live|embed)\/[A-Za-z0-9_-]{11}$/.test(url.pathname)
   } catch { return false }
 }
-export const exerciseInputSchema = z.object({
+export const strengthInputSchema = z.object({
+  trainingType: z.literal('strength').optional(),
   name: z.string().trim().min(1, 'Enter an exercise name.').max(120, 'Use at most 120 characters.').refine((value) => !!nameKey(value), 'Enter an exercise name.'),
   sets: z.array(setSchema).min(1, 'Add at least one set.').max(100, 'Use at most 100 sets.'),
   restBetweenSeconds: integer(0).optional(),
@@ -26,9 +27,18 @@ export const exerciseInputSchema = z.object({
   notes: z.string().max(20000, 'Use at most 20,000 characters.').optional(),
   tutorialUrl: z.string().trim().refine(isYouTubeUrl, 'Use an HTTPS YouTube video URL (watch, youtu.be, shorts, live, or embed).').optional(),
   tagNames: z.array(tagNameSchema).max(50, 'Use at most 50 tags.'),
-})
+}).strict()
+export const intervalInputSchema = strengthInputSchema.omit({ sets: true, restBetweenSeconds: true, restAfterSeconds: true }).extend({
+  trainingType: z.literal('interval'),
+  // Empty compatibility collection, never lifting targets or results.
+  sets: z.array(z.never()).max(0).default([]),
+  activeSeconds: integer(1).max(86400),
+  recoverySeconds: integer(0).max(86400),
+  restBetweenSeconds: z.never().optional(), restAfterSeconds: z.never().optional(),
+}).strict()
+export const exerciseInputSchema = z.discriminatedUnion('trainingType', [strengthInputSchema, intervalInputSchema])
 export type ExerciseInput = z.infer<typeof exerciseInputSchema>
-export interface Exercise extends Omit<ExerciseInput, 'tagNames'> {
+type OwnedExercise = {
   id: string
   profileId: string
   nameKey: string
@@ -42,6 +52,7 @@ export interface Exercise extends Omit<ExerciseInput, 'tagNames'> {
   mergedAt?: string
   mergeOperationId?: string
 }
+export type Exercise = (Omit<z.infer<typeof strengthInputSchema>, 'tagNames'> | Omit<z.infer<typeof intervalInputSchema>, 'tagNames'>) & OwnedExercise
 export interface Tag {
   id: string
   profileId: string

@@ -1,6 +1,214 @@
+# Boros profile backup, schema 18 (schemas 1-17 supported)
+
+Current exports pair **backup v18 / database v12**; AI remains **v8**. The database
+name remains `boros`. V12 adds `activeWorkouts` with one workspace-wide `active`
+key, storing only stable profile/draft IDs. It rewrites no existing records.
+Initialization retains valid ownership or deterministically adopts the latest
+recoverable legacy draft. Other unfinished drafts are preserved. Save, discard,
+plan reset/end/delete and profile replacement remove ownership transactionally
+when they legitimately remove its draft. Read/write failures never reset storage.
+
+The pointer is local coordination data and is **not exported**. There are still
+**40 CSV tables**, with unchanged columns. Restored drafts lose foreign execution
+ownership and recover paused; local ownership reconciliation preserves an existing
+active workout before considering imported drafts. Import never starts audio.
+
+New Interval circuit/continuous executions compile one ten-second preparation;
+independently started rest-only execution contains only its positive workout-rest
+phase. Current validators retain original five-second checkpoints and old
+preparation-plus-rest executions unchanged. Restart compiles the new timing.
+Preparation remains separate from recorded exercise activity and scope totals.
+Strength starts/resets no longer create `preparationEndAt`; its old timestamps
+remain readable. No saved session snapshot is rewritten.
+
+Original v17 backup/session/phase validators are frozen in `backup-v17.ts`,
+`session-v11.ts`, `interval-session-v4.ts`. A v17 archive cannot claim a ten-second
+preparation. Original schema checks, inventory/counts, SHA-256 checksums, CSV and
+photo checks run before promotion to v18. No certificate or checksum bypass exists.
+See [Train runtime verification](train-runtime-verification.md).
+
+## Historical schema 17 contract (superseded by v18 above)
+
+# Boros profile backup, schema 17 (schemas 1-16 supported)
+
+Current exports pair **backup v17 / database v11**; AI remains **v8**. The database
+name stays `boros`. V11 adds no stores/indexes and rewrites no records. Existing
+profiles, active selection, photos, measurements, templates, drafts, schedules
+and history remain intact; earlier version migrations still run in order.
+
+The existing Interval execution envelope adds `execution.mode: "rest"` for an
+independent Post-Workout Rest. Its phase list contains exactly the existing
+five-second preparation and positive workout-rest snapshot. `state.mode` remains
+the chosen circuit/continuous preference. It uses the same revision, owner,
+anchor, elapsed time and paused checkpoint as other executions. Independent rest
+never writes exercise or rest actuals, and Stop retains all previous results and
+notes, including a rest result recorded by continuous execution. Explicit Save
+still requires meaningful active exercise time. Rest-only running/paused drafts
+remain resumable without treating them as completed exercise activity.
+
+The persisted cue ledger adds `kind: "rest"`, keyed by execution + phase + kind,
+for each positive recovery, legacy set-rest, circuit-rest or workout-rest entry.
+Those entries trigger local speech only; ordinary rest start/end beeps are still
+absent. Post-workout rest alone keeps the existing completion cue. Preparation
+and zero-duration rests do not announce. Existing phase IDs, repeat counts,
+engine versions, actuals and Strength audio are unchanged.
+
+There remain **40 CSV tables**, with unchanged columns. `interval_executions.mode`
+and `interval_cues.kind` serialize the new enum values. Original v16 validation
+and its v3 timer/session types are frozen separately from current validators;
+v16 cannot contain these new scopes/cues. Original JSON/CSV/inventory/counts,
+SHA-256 and photo checks run before promotion to v17. Older data is not rewritten
+merely to add a rest cue or ownership value. Restore retains checkpoints, makes
+running drafts paused, removes owner/anchor, and never starts media or a timer.
+References and profile ownership are revalidated before atomic commit.
+
+See [workout actions and rest verification](workout-actions-rest-verification.md).
+
+## Historical schema 16 contract (superseded by v17 above)
+
+# Boros profile backup, schema 16 (schemas 1-15 supported)
+
+Current exports pair **backup v16 / database v10**; AI is independently **v8**.
+Database name `boros`, storage context, manifest identity, deployment and routes
+remain unchanged. V10 atomically converts only editable Workout/Plan templates.
+Profiles, selection, measurements, Blob photos, schedule revisions/outcomes,
+started/finalized drafts and saved sessions retain their stored records.
+
+Current circuits have `repeat` (0-10 additional executions) and circuit rest.
+Every repetition has independent active/recovery/rest phases with zero-based
+`repetition` identities, `engineVersion: 3`, and one execution generation/cue
+ledger. Rest occurs after every execution, including the final one. Preparation
+is never a recorded activity. Stop removes only its scope's timer results;
+natural completion retains them until explicit Save. Old snapshots retain their
+sets/rounds and versioned phase identities; they are never reinterpreted as repeats.
+
+There are still **40 CSV tables**. V16 appends `repeat` to `circuits` and
+`repetition` to `interval_phases`; old columns remain blank for new fields/models
+where inapplicable. Legacy snapshots retain old columns. Canonical `data.json`
+remains authoritative. CSV inventory, row counts, original manifest/schema,
+SHA-256 and photo bytes are validated **before** promotion. The original v15
+validator and v2 timer schema are frozen separately; old version payloads cannot
+smuggle in v16 fields.
+
+Editable legacy conversion preserves each old active/recovery/rest boundary.
+Long zero-rest sequences split into sections of at most eleven executions; a
+positive old set/final rest remains on its last execution. First circuit and
+occurrence IDs stay; additional sections receive deterministic checked IDs and
+copied source-linked prescriptions. Conversion is idempotent. Identity collision,
+missing source or invalid data aborts the transaction with an actionable error;
+no fallback database, truncation, or silent reset is used. See
+[Interval repeat verification](interval-repeat-verification.md) for exact examples.
+
+Read/restore converts only editable templates after original validation. Imported
+unfinished timers become inert paused checkpoints without owners/anchors; frozen
+history retains actuals and completion meaning. Existing merge/replace/rename,
+source-reference remapping, stale preview guards and profile-scoped atomic writes
+remain. A mixed pending legacy snapshot can append a current circuit without
+losing old phases. Independent library/plan copies stay independent.
+
+## Historical schema 15 contract (superseded by v16 above)
+
+# Boros profile backup, schema 15 (schemas 1-14 supported)
+
+Current exports pair **backup v15 / database v9**; AI is independently **v7**.
+The database name remains `boros`. V9 changes no store/index names and rewrites no
+records: new optional fields and the versioned execution state are validated at
+service boundaries. Existing v8 snapshots/results/photos/selection remain intact.
+
+V15 adds optional nonnegative integer `postWorkoutRestSeconds` to Interval
+workouts and all copied/frozen days. Missing and explicit zero both mean no
+post-workout rest; neither is inferred from other rests. Strict earlier schemas
+reject this new field. Original v14 phase/state validation lives in
+`src/schemas/interval-legacy.ts` and remains the reader for historical records.
+
+Current Interval checkpoints carry `engineVersion: 2`, selected `mode`, and an
+optional `execution` with UUID generation, mode/circuit scope, ordered phase IDs,
+owner token and one-time cue ledger. Preparation and post-workout rest have
+separate phase kinds. Current cursor, elapsed milliseconds, timestamp anchors and
+results stay in the checkpoint. Results can be recorded circuit-by-circuit in a
+different execution order; their IDs are unique and snapshots must match. No
+preparation phase becomes an activity result. Unperformed active positions remain
+partial/skipped; an ended timer is separate from an explicitly saved session.
+
+Restore removes live ownership and running anchors from imported unfinished
+checkpoints and recovers them paused. It cannot steal a current timer slot or
+play audio. Historical finalized draft/session pairs remain identical. Ownership
+is an advisory live tab token; the shared transaction and draft revision checks
+remain authoritative. Media/DOM/callback objects and standalone rest timers are
+excluded. Original Interval checkpoints without engineVersion retain historical
+completion semantics and are upgraded lazily only when opened for execution.
+
+There are **40 CSV tables**. V15 adds `interval_execution_phases` (generation,
+phase ID/order) and `interval_cues` (generation/event identity/kind/phase/time).
+`interval_state` adds engineVersion/mode/executionId/executionMode/circuitId;
+`days` and `workouts` add postWorkoutRestSeconds. Canonical JSON retains the full
+checkpoint, while CSVs stay linked analysis tables. Original v1-v14 JSON, CSV,
+manifest, checksum and photo validation happens before promotion to v15.
+Existing restore scope, precedence, remapping, stale-preview and atomicity rules
+are unchanged. No error path clears or substitutes a database.
+
+## Historical schema 14 and earlier notes
+
+# Boros profile backup, schema 14 (schemas 1-13 supported)
+
+Historical v14 exports pair **backup v14 / database v8**, with the stable IndexedDB name
+`boros`. AI interchange is independently versioned at v6. No storage key, database
+name, manifest identity, origin or deployment configuration changed.
+
+V8 adds explicit `trainingType: "strength"` to recognized, validated older
+repetition prescriptions and their containers. It preserves IDs, optional/zero
+values, ordering, actual results, profiles, selection, photos and timestamps.
+Migration failure aborts the transaction and remains an actionable storage error;
+it never clears data or creates a substitute Guest database.
+
+V14 preserves discriminated Strength/Interval prescriptions in library templates,
+plan copies, schedule revisions/outcomes, drafts and saved sessions. Interval
+prescriptions contain active/recovery seconds and an empty compatibility `sets`
+collection, with no lifting targets or actuals. Workout circuits have independent
+UUIDs, ordered occurrence IDs, positive rounds/sets, and explicit nonnegative
+additional set/circuit rest. Every day must be a valid ordered partition of its
+circuits and contain only its training type. Repeated occurrences retain separate
+identities.
+
+Plan copies may have `publishedWorkoutId` in addition to `sourceWorkoutId`. The
+former records a publication already committed, including a surviving deletion
+identity, so ordinary edits/retries cannot keep creating templates. Restore remaps
+both references. Publication is atomic with plan saves; old active plans reconcile
+once where their missing library publication is demonstrable. A historical source
+link with neither a record nor deletion identity remains ambiguous and is not
+recreated. Existing archived library records remain archived.
+
+Interval draft/session `interval` holds the ordered immutable phase prescriptions,
+current phase, ready/running/paused/finished status, elapsed milliseconds,
+checkpoint anchor and phase start instant, plus ordered completed/partial/skipped
+results with actual elapsed time and timestamps. Phase snapshots retain exercise
+template identity through later session-only replacements. Partial results never
+fabricate completed activity. Saved sessions have matching finalized drafts and
+no Strength result rows. Reload explicitly pauses at the persisted checkpoint;
+wall time while the screen was closed is excluded. Export captures persisted
+checkpoints only, not pending input or a live timer recomputed in the worker.
+
+There are **38 CSV tables**. V14 adds `circuits`, `circuit_exercises`,
+`interval_state`, `interval_phases`, and `interval_results`, with scoped owner,
+revision/day/circuit/phase IDs and explicit order. Existing plan/workout/library
+exercise/prescription tables add training type, duration or publication columns
+where applicable. Phase rows include the historical template ID. Empty tables
+retain headers; zero is distinct from absence. CSV remains an analysis export,
+never the restoration source; `data.json` is authoritative.
+
+Original v1-v13 schemas, CSV contracts, manifest versions, checksums, record
+references and photos are verified **before** promotion/classification. New fields
+smuggled into old contracts are rejected; corruption is not repaired. V14 requires
+database v8. Restore keeps existing whole-plan family, stale-preview, atomicity,
+profile rotation, deletion and merge policies. Source identities and matches may
+not cross training types; archived/deleted templates cannot be revived implicitly.
+SHA-256 verification and local photo validation are unchanged.
+
+## Historical schema 13 and earlier notes
+
 # Boros profile backup, schema 13 (schemas 1-12 supported)
 
-Current exports pair **backup v13 / database v7**. The stable database name remains
+The preceding exports paired **backup v13 / database v7**. The stable database name remains
 `boros`. V7 adds only `deletedSources`, keyed by `(profileId, kind, id)`; existing
 stores, records, IDs and photos are not rewritten or reset. AI remains v5.
 

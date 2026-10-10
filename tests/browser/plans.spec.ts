@@ -1,6 +1,6 @@
 import { createNamedProfile } from './settings-actions'
 import { cardAction, occurrenceAction } from './create-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 test.setTimeout(90000)
 test.beforeEach(async ({ page }) => { await page.route('https://www.youtube.com/embed/**', (route) => route.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' })) })
@@ -138,7 +138,7 @@ test('validation, destructive cancellation, nested drafts, failed saves and mobi
   await expect(page.getByText('Add at least one exercise to this workout.', { exact: true })).toBeVisible()
   await page.getByLabel('Plan name', { exact: true }).fill('Recoverable'); await page.getByLabel('Duration (weeks)', { exact: true }).fill('2')
   await copy(page); const firstIds = await ids(page)
-  await button(page, 'Add workout').click(); await button(page, 'New empty workout').click(); await copy(page, 1)
+  await page.getByLabel('Workouts per week', { exact: true }).selectOption('2'); await copy(page, 1)
   await page.getByLabel('Workouts per week').selectOption('1')
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.getByLabel('Workouts per week')).toHaveValue('2')
@@ -147,14 +147,14 @@ test('validation, destructive cancellation, nested drafts, failed saves and mobi
   await occurrenceAction(page, days(page).first(), 'Delete')
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   for (const id of firstIds) expect(await ids(page)).toContain(id)
-  await button(page, 'Add workout').click(); await button(page, 'New empty workout').click(); await copy(page, 2)
+  await page.getByLabel('Workouts per week', { exact: true }).selectOption('3'); await copy(page, 2)
   await occurrenceAction(page, days(page).last(), 'Delete')
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(days(page).last().locator('[data-occurrence-id]')).toHaveCount(0)
   await days(page).last().getByRole('button', { name: 'Delete workout', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(days(page)).toHaveCount(2)
-  await button(page, 'Add workout').click(); await button(page, 'New empty workout').click(); await copy(page, 2)
+  await page.getByLabel('Workouts per week', { exact: true }).selectOption('3'); await copy(page, 2)
   await page.getByLabel('Workouts per week').selectOption('2')
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await expect(days(page)).toHaveCount(2)

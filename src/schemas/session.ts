@@ -1,3 +1,4 @@
+import { meaningfulInterval, type IntervalState } from './interval-session.ts'
 import type { SessionStructure } from './session-structure.ts'
 import { z } from 'zod'
 import type { TrainingDay } from './plan.ts'
@@ -6,11 +7,12 @@ import { displayNumber, fromKg, toKg, weightUnitSchema, type WeightUnit } from '
 
 const text = z.string().max(64)
 export const resultInputSchema = z.object({ load: text, reps: text, rir: text, unit: weightUnitSchema, skipped: z.boolean() }).strict()
-export const sessionInputSchema = z.object({ notes: z.string().max(20000), exercises: z.array(z.object({ id: z.string().uuid(), notes: z.string().max(20000), sets: z.array(resultInputSchema).min(1).max(100) }).strict()).min(0).max(100) }).strict()
+export const sessionInputSchema = z.object({ notes: z.string().max(20000), exercises: z.array(z.object({ id: z.string().uuid(), notes: z.string().max(20000), sets: z.array(resultInputSchema).min(0).max(100) }).strict()).min(0).max(10000) }).strict()
 export type ResultInput = z.infer<typeof resultInputSchema>
 export type SessionInput = z.infer<typeof sessionInputSchema>
 export type StandaloneSource = { kind: 'workout'; workoutId: string } | { kind: 'custom'; workoutId?: string }
 export interface SessionDraft {
+  interval?: IntervalState
   source?: StandaloneSource; timeZone?: string
   prunedAt?: string
   structure?: SessionStructure
@@ -20,6 +22,7 @@ export interface SessionDraft {
 }
 export type RecordedSet = { skipped: true } | { skipped: false; weightKg: number; load: number; unit: WeightUnit; reps: number; rir?: number }
 export interface CompletedSession {
+  interval?: IntervalState
   source?: StandaloneSource; timeZone?: string
   prunedAt?: string
   structure?: SessionStructure
@@ -28,12 +31,15 @@ export interface CompletedSession {
   planName?: string; planInstructions?: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
   partial: boolean; startedAt: string; completedAt: string; loggedAt: string
 }
-export type RestTimer = { id: 'active'; token: string; profileId: string; draftId: string; label: string; position?: string; exerciseId?: string; groupId?: string; alertedAt?: string } & ({ mode?: 'countdown'; durationSeconds: number; endAt: string } | { mode: 'countup'; startedAt: string })
+export type RestTimer = { preparationEndAt?: string; pausedAt?: string; id: 'active'; token: string; profileId: string; draftId: string; label: string; position?: string; exerciseId?: string; groupId?: string; alertedAt?: string } & ({ mode?: 'countdown'; durationSeconds: number; endAt: string } | { mode: 'countup'; startedAt: string })
 export const blankSession = (day: TrainingDay, unit: WeightUnit): SessionInput => ({ notes: '', exercises: day.exercises.map((exercise) => ({ id: exercise.id, notes: '', sets: exercise.prescription.sets.map(() => ({ load: '', reps: '', rir: '', unit, skipped: false })) })) })
 // Deliberate zero and explicit skips count; timer state and visual hints never do.
 export const hasSessionInput = (input: SessionInput) => !!input.notes || input.exercises.some((exercise) => !!exercise.notes || exercise.sets.some((set) => set.load !== '' || set.reps !== '' || set.rir !== '' || set.skipped))
-export const hasDraftProgress = (draft: SessionDraft) => !!draft.structure?.amended || hasSessionInput(draft.input)
-export const timerElapsed = (timer: RestTimer, now = Date.now()) => timer.mode === 'countup' ? Math.max(0, Math.floor((now - Date.parse(timer.startedAt)) / 1000)) : 0
+export const hasDraftProgress = (draft: SessionDraft) => !!draft.structure?.amended || meaningfulInterval(draft.interval) || !!draft.interval?.results.length || hasSessionInput(draft.input)
+// A rest checkpoint can be reopened without treating it as performed exercise
+// or changing the empty-session leave/Save rules.
+export const hasResumableDraft = (draft: SessionDraft) => hasDraftProgress(draft) || draft.interval?.execution?.mode === 'rest' && (draft.interval.status === 'running' || draft.interval.status === 'paused')
+export const timerElapsed = (timer: RestTimer, now = Date.now()) => timer.mode === 'countup' ? Math.max(0, Math.floor(((timer.pausedAt ? Date.parse(timer.pausedAt) : now) - Date.parse(timer.startedAt)) / 1000)) : 0
 export function validateDraftInput(raw: SessionInput, day: TrainingDay) {
   const input = sessionInputSchema.parse(raw)
   if (input.exercises.length !== day.exercises.length || input.exercises.some((exercise, index) => exercise.id !== day.exercises[index].id || exercise.sets.length !== day.exercises[index].prescription.sets.length)) throw new Error('Results must match the saved prescription. Nothing was saved.')
@@ -62,10 +68,12 @@ export function assessSession(input: SessionInput) {
   }) }))
   return { errors, recorded, skipped, exercises }
 }
-export const timerRemaining = (timer: RestTimer, now = Date.now()) => timer.mode === 'countup' ? 0 : Math.max(0, Math.ceil((Date.parse(timer.endAt) - now) / 1000))
+export const timerRemaining = (timer: RestTimer, now = Date.now()) => timer.mode === 'countup' ? 0 : Math.max(0, Math.ceil((Date.parse(timer.endAt) - (timer.pausedAt ? Date.parse(timer.pausedAt) : now)) / 1000))
 export function timerEnd(duration: number, now = Date.now()) {
   z.number().finite().int().nonnegative().max(Number.MAX_SAFE_INTEGER).parse(duration)
   const end = new Date(now + duration * 1000)
   if (!Number.isFinite(end.getTime())) throw new Error('This duration is too large for a timer.')
   return end.toISOString()
 }
+
+export const preparationRemaining = (timer: RestTimer, now = Date.now()) => timer.preparationEndAt ? Math.max(0, Math.ceil((Date.parse(timer.preparationEndAt) - (timer.pausedAt ? Date.parse(timer.pausedAt) : now)) / 1000)) : 0

@@ -1,3 +1,4 @@
+import { assertSameTrainingType } from './training-type.ts'
 import { z } from 'zod'
 import { createId } from '../lib/browser-crypto.ts'
 import { copyExercise, planInputSchema, trainingBlocks, type PlanExercise, type TrainingDay } from './plan.ts'
@@ -8,7 +9,7 @@ import type { PrescriptionChoice } from '../db/plans.ts'
 // Session-only identity and execution order. Plan/AI prescriptions stay unchanged.
 export const sessionStructureSchema = z.object({
   amended: z.boolean(),
-  exercises: z.array(z.object({ id: z.string().uuid(), sets: z.array(z.object({ id: z.string().uuid(), round: z.number().int().min(1).max(100) }).strict()).min(1).max(100) }).strict()).min(0).max(100),
+  exercises: z.array(z.object({ id: z.string().uuid(), sets: z.array(z.object({ id: z.string().uuid(), round: z.number().int().min(1).max(100) }).strict()).min(0).max(100) }).strict()).min(0).max(100),
 }).strict()
 export type SessionStructure = z.infer<typeof sessionStructureSchema>
 export interface SessionSnapshot { day: TrainingDay; structure?: SessionStructure }
@@ -52,6 +53,7 @@ export function appendSessionSets(snapshot: SessionSnapshot, input: SessionInput
   const round = Math.max(...block.members.flatMap(m => structure.exercises.find(e => e.id === m.id)!.sets.map(s => s.round))) + 1
   if (round > 100) throw new Error('Use at most 100 rounds per superset.')
   for (const member of block.members) {
+    if (member.prescription.trainingType === 'interval') throw new Error('Interval repetitions belong to circuits.')
     member.prescription.sets.push(structuredClone(member.prescription.sets.at(-1)!))
     const i = day.exercises.findIndex((e) => e.id === member.id)
     const id = createId()
@@ -65,6 +67,7 @@ export function appendSessionSets(snapshot: SessionSnapshot, input: SessionInput
 export function appendSessionExercises(snapshot: SessionSnapshot, input: SessionInput, choices: PrescriptionChoice[], unit: WeightUnit) {
   const day = structuredClone(snapshot.day), structure = structuredClone(snapshot.structure ?? initialStructure(day)), next = structuredClone(input)
   if (!choices.length || day.exercises.length + choices.length > 100) throw new Error('Use at most 100 exercises per session.')
+  choices.forEach(c => assertSameTrainingType(day, c.prescription))
   const additions = choices.map((choice) => copyExercise(choice.prescription, choice.source))
   day.exercises.push(...additions)
   structure.exercises.push(...initialStructure({ ...day, exercises: additions }).exercises)

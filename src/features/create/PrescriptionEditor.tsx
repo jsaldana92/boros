@@ -59,7 +59,7 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
       <fieldset disabled={busy}>
         <legend className="sr-only">Exercise prescription</legend>
         <Field label="Exercise name" required maxLength={120} value={form.name} error={errors.name} onChange={(e) => change('name', e.target.value)} />
-        <div className="actions count-controls"><Field label="Number of sets" inputMode="numeric" required value={form.count} error={errors.count} onChange={(e) => change('count', e.target.value)} /><button type="button" onClick={applyCount}>Apply</button></div>
+        {form.trainingType === 'interval' ? <div className="rest-pair">{(['activeSeconds', 'recoverySeconds'] as const).map(key => <RestInput key={key} label={key === 'activeSeconds' ? 'Active' : 'Rest'} value={form[key]} errors={{ minutes: errors[`${key}.minutes`], seconds: errors[`${key}.seconds`] }} onChange={value => setForm(current => ({ ...current, [key]: value }))} />)}</div> : <><div className="actions count-controls"><Field label="Number of sets" inputMode="numeric" required value={form.count} error={errors.count} onChange={(e) => change('count', e.target.value)} /><button type="button" onClick={applyCount}>Apply</button></div>
         <p className="muted">Enter a minimum only for a fixed target. Add a maximum for a range. RIR is optional; 0 is valid.</p>
 
         {form.sets.map((set, index) => <fieldset className="set-fields" key={index}><legend>Set {index + 1}</legend><div className="prescription-grid">
@@ -70,14 +70,14 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
           else apply()
         }}>Apply to All</button>}</fieldset>)}
         <div className="rest-pair">{(['restBetweenSeconds', 'restAfterSeconds'] as const).map((key) => <div key={key}><RestInput label={key === 'restBetweenSeconds' ? 'Rest between sets (optional)' : 'Rest after exercise (optional)'} value={form[key]} errors={{ minutes: errors[`${key}.minutes`], seconds: errors[`${key}.seconds`] }} onChange={(value) => { setForm((current) => ({ ...current, [key]: value })) }} /></div>)}</div>
-        <p className="muted">Blank rest is unspecified. 0 means no timed rest.</p>
+        <p className="muted">Blank rest is unspecified. 0 means no timed rest.</p></>}
         <TextareaField label="Instructions (optional)" maxLength={20000} value={form.instructions} error={errors.instructions} onChange={(e) => change('instructions', e.target.value)} />
         <TextareaField label="Notes (optional)" maxLength={20000} value={form.notes} error={errors.notes} onChange={(e) => change('notes', e.target.value)} />
         <Field label="YouTube tutorial URL (optional)" type="url" value={form.tutorialUrl} error={errors.tutorialUrl} onChange={(e) => change('tutorialUrl', e.target.value)} />
         <p className="muted">HTTPS YouTube video links only. Videos are never loaded automatically.</p>
-        <fieldset className="tag-editor"><legend>Tags (optional)</legend>
+        <fieldset className="tag-editor"><legend>Tags (optional)</legend><span className="tag-chip">{form.trainingType === 'interval' ? 'Interval' : 'Strength'}</span>
           <div className="tag-filter-heading"><button type="button" aria-expanded={tagsExpanded} aria-controls={tagsId} onClick={() => setTagsExpanded((current) => !current)}>Tags{form.tagNames.length ? ` (${form.tagNames.length})` : ''}</button></div>
-          <div id={tagsId} hidden={!tagsExpanded}><TagPills tags={availableTags} selected={form.tagNames.map(nameKey)} onToggle={(id) => {
+          <div id={tagsId} hidden={!tagsExpanded}><TagPills tags={availableTags.map(t => ({ ...t, name: ['strength', 'interval'].includes(nameKey(t.name)) ? `${t.name} (tag)` : t.name }))} selected={form.tagNames.map(nameKey)} onToggle={(id) => {
             if (form.tagNames.some((name) => nameKey(name) === id)) { setForm((current) => ({ ...current, tagNames: current.tagNames.filter((name) => nameKey(name) !== id) })); setErrors((current) => ({ ...current, tag: '' })) }
             else addTag(availableTags.find((item) => item.id === id)!.name)
           }} /></div>

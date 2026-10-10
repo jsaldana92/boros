@@ -1,3 +1,4 @@
+import type { TrainingType } from '../../schemas/training-type'
 import { WorkoutEditor } from './WorkoutEditor'
 import { CreateLeaveGuard } from './CreateLeaveGuard'
 import { EditorTitle } from './EditorTitle'
@@ -14,6 +15,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 
 export function ImportPanel({ profileId, onClose }: { profileId: string; onClose: (message?: string) => void }) {
   const { setDirty } = useWorkspace()
+  const [trainingType, setTrainingType] = useState<TrainingType>('strength')
   const [kind, setKind] = useState<ImportKind>('plan')
   const [text, setText] = useState('')
   const [issues, setIssues] = useState<ImportIssue[]>([])
@@ -29,13 +31,14 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
   }, [profileId, attempt])
   useEffect(() => { return () => setDirty(false) }, [setDirty])
   useEffect(() => { setDirty(!!text.trim() || !!preview) }, [text, preview, setDirty])
-  const instructions = formattingInstructions(kind)
+  const instructions = formattingInstructions(kind, trainingType)
   const cancelPreview = () => { setPreview(undefined); requestAnimationFrame(() => document.getElementById('validate-import')?.focus()) }
   return <section className="import-panel" aria-label="Import AI Output"><CreateLeaveGuard kind={preview?.draft.kind ?? 'plan'} enabled={!preview || preview.draft.kind === 'exercise'} />
     {!preview && <EditorTitle path={['Create', 'AI']} />}
     {!preview ? <>
       <p className="muted">Use these instructions with your own request in an external chatbot, then paste its JSON here. Boros does not connect to an AI service.</p>
       <label htmlFor="instruction-kind">Formatting instructions for</label><select id="instruction-kind" value={kind} onChange={(event) => { setKind(event.target.value as ImportKind); setClipboard('') }}><option value="plan">Plan</option><option value="workout">Workout</option><option value="exercise">Exercise</option></select>
+      <label>Training type<select value={trainingType} onChange={e => { setTrainingType(e.target.value as TrainingType); setClipboard('') }}><option value="strength">Strength</option><option value="interval">Interval</option></select></label>
       <label htmlFor="formatting-instructions">Formatting instructions</label><textarea id="formatting-instructions" className="formatting-instructions" ref={instructionsRef} readOnly value={instructions} />
       <button type="button" onClick={async () => {
         try { await navigator.clipboard.writeText(instructions); setClipboard('Formatting instructions copied.') }

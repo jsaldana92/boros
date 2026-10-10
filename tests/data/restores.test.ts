@@ -57,7 +57,7 @@ test('new-name restore uses a fresh owner, preserves canonical records and photo
   assert.equal(id, repeated); assert.equal(await service.commit(plan, true), id)
   const restored = await captureProfile(id, db), roundTrip = await read((await output(restored)).bytes)
   const expected = canonicalSnapshot(original); expected.profile = { ...expected.profile, id, name: 'Restored copy', nameKey: 'restored copy', kind: 'named' }
-  for (const key of ['tags', 'exercises', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'assets'] as const) { for (const r of expected[key]) r.profileId = id; expected[key].sort((a,b) => a.id.localeCompare(b.id)); roundTrip.data[key].sort((a,b) => a.id.localeCompare(b.id)) }
+  for (const key of ['tags', 'exercises', 'workouts', 'plans', 'schedules', 'drafts', 'sessions', 'measurements', 'assets'] as const) { for (const r of expected[key]) r.profileId = id; expected[key].sort((a,b) => a.id.localeCompare(b.id)); roundTrip.data[key].sort((a,b) => a.id.localeCompare(b.id)) }
   assert.deepEqual(JSON.parse(JSON.stringify(roundTrip.data)), JSON.parse(JSON.stringify(expected)))
   for (const p of restored.photos) assert.deepEqual(new Uint8Array(await p.blob.arrayBuffer()), photoBytes)
   assert.deepEqual(semantic(await captureProfile(fixture.id, db)), semantic(original)); assert.equal((await db.settings.get('workspace'))!.activeProfileId, id)

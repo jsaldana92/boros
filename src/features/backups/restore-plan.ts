@@ -1,3 +1,4 @@
+import { assertSameTrainingType, type TrainingType } from '../../schemas/training-type.ts'
 import { closedRunDraftIds } from '../../lib/closed-runs.ts'
 import { materializeTemplates } from '../../lib/template-ownership.ts'
 import { validateBackupData, type ProfileSnapshot } from '../../schemas/backup.ts'
@@ -41,6 +42,7 @@ function matches<T extends Named>(incoming: T[], local: T[], label: string) {
     const byId = local.find((row) => row.id === item.id), byName = local.filter((row) => nameKey(row.name) === nameKey(item.name))
     if (byName.length > 1 || (byId && byName.some((row) => row.id !== byId.id))) throw new Error(`Ambiguous ${label} "${item.name}": ID and normalized name identify different records. Import under a new name or resolve the names first.`)
     const found = byId ?? byName[0]
+    if (found && label !== 'tag') assertSameTrainingType(item as T & { trainingType?: TrainingType }, found as T & { trainingType?: TrainingType })
     if (found) { if (used.has(found.id)) throw new Error(`Ambiguous ${label} matching: multiple imported records identify "${found.name}".`); used.add(found.id); result.set(item.id, found) }
   }
   return result
@@ -61,7 +63,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     ? { id: newId, name: source.name, nameKey: source.nameKey, kind: source.kind, weightUnit: source.weightUnit, heightUnit: source.heightUnit, ...(source.timeZone ? { timeZone: source.timeZone } : {}), revision: 1, createdAt: at, updatedAt: at }
     : { ...structuredClone(source), id: newId, ...(choice === 'new' ? { name: displayName.trim(), nameKey: nameKey(displayName), kind: input!.profile.kind === 'guest' && displayName === 'Guest' ? 'guest' as const : 'named' as const } : {}) }
   if (!profile.nameKey || profile.name.length > 80) throw new Error('Enter an unused profile name of 1–80 characters.')
-  const result: ProfileSnapshot = { databaseVersion: 7, deletedSources: [], capturedAt: at, profile, tags: [], exercises: [], workouts: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
+  const result: ProfileSnapshot = { databaseVersion: 11, deletedSources: [], capturedAt: at, profile, tags: [], exercises: [], workouts: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
   const plan: RestorePlan = { id: newId, choice, targetId: local?.profile.id, targetName: local?.profile.name, targetFingerprint: local && snapshotFingerprint(local), targetPhotoFingerprint: local && await photoFingerprint(local.photos), result, counts, warnings, conflicts }
   if (choice === 'clear') { for (const key of ownedStores) counts[key].removed = (local![key] ?? []).length; return plan }
   const file = input!, device = current
@@ -95,6 +97,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     exercise.tagIds = exercise.tagIds.map((id) => tagIds.get(id)!)
     if (exercise.mergedIntoId) exercise.mergedIntoId = exerciseIds.get(exercise.mergedIntoId) ?? exercise.mergedIntoId
     const previous = localExercises.find(e => e.id === exercise.id)
+    if (previous) assertSameTrainingType(previous, exercise)
     // A pre-merge backup may update fields according to precedence, but cannot
     // revive a retired identity used by retained device history.
     if (previous?.mergedIntoId && !exercise.mergedIntoId) {
@@ -118,7 +121,18 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     return ids
   }
   const scheduleIds = await allocate('schedule', importedSchedules, localSchedules), draftIds = await allocate('draft', importedDrafts, [...localDrafts, ...localSessions])
-  const remapDay = (day: TrainingDay) => { if (day.sourceWorkoutId) day.sourceWorkoutId = workoutIds.get(day.sourceWorkoutId) ?? day.sourceWorkoutId; for (const exercise of day.exercises) { if (exercise.templateId) exercise.templateId = exerciseIds.get(exercise.templateId) ?? exercise.templateId; if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } } }
+  const remapInterval = (state?: import('../../schemas/interval-session.ts').IntervalState) => {
+    if (!state) return
+    for (const phase of [...state.phases, ...state.results.map(r => r.phase)]) if (phase.templateId) phase.templateId = exerciseIds.get(phase.templateId) ?? phase.templateId
+  }
+  for (const item of [...importedDrafts, ...importedSessions]) remapInterval(item.interval)
+  // Imported drafts are inert checkpoints, never imported live ownership.
+  for (const draft of importedDrafts.filter(d => !d.finalizedAt)) if (draft.interval) {
+    if (draft.interval.status === 'running') draft.interval.status = 'paused'
+    draft.interval.anchorAt = undefined
+    if (draft.interval.execution) draft.interval.execution.owner = undefined
+  }
+  const remapDay = (day: TrainingDay) => { if (day.publishedWorkoutId) day.publishedWorkoutId = workoutIds.get(day.publishedWorkoutId) ?? day.publishedWorkoutId; if (day.sourceWorkoutId) day.sourceWorkoutId = workoutIds.get(day.sourceWorkoutId) ?? day.sourceWorkoutId; for (const exercise of day.exercises) { if (exercise.templateId) exercise.templateId = exerciseIds.get(exercise.templateId) ?? exercise.templateId; if (exercise.source) { const ids = exercise.source.kind === 'exercise' ? exerciseIds : planIds; exercise.source.id = ids.get(exercise.source.id) ?? exercise.source.id; if (exercise.source.kind === 'plan' && exercise.source.libraryId) exercise.source.libraryId = exerciseIds.get(exercise.source.libraryId) ?? exercise.source.libraryId } } }
   for (const w of workouts.imported) remapDay(w)
   for (const p of plans.imported) p.days.forEach(remapDay)
   for (const schedule of importedSchedules) { schedule.id = scheduleIds.get(schedule.id)!; schedule.planId = planIds.get(schedule.planId)!; for (const ref of schedule.occurrenceExceptions ?? []) { ref.scheduleId = schedule.id; ref.key = occurrenceKey(schedule.id, ref.dayId, ref.scheduledDate, ref.programWeek) } for (const revision of schedule.revisions) revision.days.forEach(remapDay); for (const outcome of schedule.outcomes ?? []) { outcome.ref.scheduleId = schedule.id; outcome.ref.key = occurrenceKey(schedule.id, outcome.ref.dayId, outcome.ref.scheduledDate, outcome.ref.programWeek); remapDay(outcome.day) } }

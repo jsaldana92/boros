@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 test('failed screen chunk keeps the last opened preference and navigation usable', async ({ page }) => {
   await page.goto('./')

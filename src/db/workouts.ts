@@ -1,3 +1,6 @@
+import { convertIntervalDay } from '../schemas/interval-conversion.ts'
+import { classifyStrengthRecords } from './training-migration.ts'
+import { assertSameTrainingType, trainingTypeOf } from '../schemas/training-type.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { nameKey } from '../schemas/profile.ts'
 import { duplicateDay } from '../schemas/plan.ts'
@@ -15,11 +18,12 @@ export function workoutService(database: BorosDatabase) {
     get,
     async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return database.workouts.where('profileId').equals(profileId).toArray() }) },
     async save(profileId: string, raw: WorkoutInput, existing?: { id: string; revision: number }, importing = false) {
-      const input = workoutInputSchema.parse(raw)
+      const input = workoutInputSchema.parse(convertIntervalDay(raw))
+      classifyStrengthRecords(input)
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
         const old = existing ? await get(profileId, existing.id) : undefined
-        if (old) checkRevision(old, existing!.revision)
+        if (old) { checkRevision(old, existing!.revision); assertSameTrainingType(old, input) }
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
         if (await database.deletedSources.get([profileId, 'workout', input.id])) throw new Error('This workout was deleted. Your input is kept; create a new workout to save a separate copy.')
         if (!old && await database.workouts.get([profileId, input.id])) throw new Error('This workout was already saved. Reopen it before editing.')
@@ -28,14 +32,16 @@ export function workoutService(database: BorosDatabase) {
         for (const item of input.exercises) {
           const ref = templateReference(item)
           const template = ref ? await database.exercises.get([profileId, ref]) : undefined
+          if (template) assertSameTrainingType(input, template)
           if (ref && !template && !await database.deletedSources.get([profileId, 'exercise', ref])) throw new Error('A source exercise is unavailable in this profile.')
           if (importing && !template && !ref) {
             const match = await database.exercises.where('[profileId+activeNameKey]').equals([profileId, nameKey(item.prescription.name)]).first()
+            if (match) assertSameTrainingType(input, match)
             const linked = match ?? await exerciseService(database).save(profileId, item.prescription)
             item.source = { kind: 'exercise', id: linked.id }; item.templateId = linked.id
           }
         }
-        const now = new Date().toISOString(), value: Workout = { ...input, id: old?.id ?? input.id, profileId, nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
+        const now = new Date().toISOString(), value: Workout = { ...input, trainingType: trainingTypeOf(input), id: old?.id ?? input.id, profileId, nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.workouts.put(value); return value
       })
     },

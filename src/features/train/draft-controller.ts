@@ -13,6 +13,7 @@ export class DraftController {
   error = ''
   busy = false
   discarded = false
+  retired = false
   private service: ReturnType<typeof sessionService>
   private listeners = new Set<() => void>()
   private tail: Promise<unknown> = Promise.resolve()
@@ -22,11 +23,12 @@ export class DraftController {
   private disposed = false
   constructor(record: SessionDraft, service = sessions) { this.record = record; this.snapshot = { day: structuredClone(record.day), structure: structuredClone(record.structure) }; this.input = structuredClone(record.input); this.service = service }
   activate() { this.disposed = false; if (this.status === 'pending') this.schedule() }
+  retire() { this.retired = true; clearTimeout(this.timeout); this.status = 'failed'; this.error = 'This workout was saved or removed in another tab. Your input is kept.'; this.emit() }
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   private emit() { this.listeners.forEach((listener) => listener()) }
   private schedule() { clearTimeout(this.timeout); this.timeout = setTimeout(() => { void this.flush().catch(() => {}) }, 400) }
   change(input: SessionInput) {
-    if (this.busy || this.disposed || this.record.finalizedAt) return
+    if (this.busy || this.disposed || this.retired || this.record.finalizedAt) return
     this.input = input; this.sequence++; this.status = 'pending'; this.error = ''; this.emit(); this.schedule()
   }
   private enqueue<T>(work: () => Promise<T>) {
@@ -37,6 +39,7 @@ export class DraftController {
     return this.enqueue(() => this.persist())
   }
   private async persist() {
+    if (this.retired) throw new Error(this.error)
     if (this.disposed || this.record.finalizedAt) return this.record
     if (this.persisted === this.sequence) { this.status = 'saved'; this.error = ''; this.emit(); return this.record }
     const sequence = this.sequence, input = structuredClone(this.input), snapshot = structuredClone(this.snapshot)
@@ -117,7 +120,7 @@ export class DraftController {
   startGroupTimer(groupId: string, round: number, seconds?: number) {
     return this.command(async () => { await this.persist(); return this.service.startGroupTimer(this.record.profileId, this.record.id, this.record.revision, groupId, round, seconds) })
   }
-  changeTimer(token: string, action: 'stop' | 'reset') {
+  changeTimer(token: string, action: 'stop' | 'reset' | 'pause' | 'resume') {
     return this.command(() => this.service.changeTimer(this.record.profileId, this.record.id, token, action))
   }
   dispose() { this.disposed = true; clearTimeout(this.timeout); this.listeners.clear() }

@@ -1,3 +1,4 @@
+import { assertSameTrainingType } from '../schemas/training-type.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
 import { resolveTags } from './tags.ts'
@@ -39,6 +40,7 @@ export function exerciseService(database: BorosDatabase) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
         const current = await get(profileId, edited.id), selected = await get(profileId, other.id)
+        assertSameTrainingType(current, selected); assertSameTrainingType(current, input)
         const source = sourceId === current.id ? current : selected, destination = source === current ? selected : current
         if (source.mergeOperationId === operationId && source.mergedIntoId === destination.id) {
           const all = await database.exercises.where('profileId').equals(profileId).toArray()
@@ -48,7 +50,7 @@ export function exerciseService(database: BorosDatabase) {
         if (current.archivedAt || selected.archivedAt) throw new Error('An exercise was archived. Your input is kept. Cancel and reopen the merge picker.')
         const now = new Date().toISOString(), tagIds = await resolveTags(database, profileId, input.tagNames, now)
         const { tagNames: _tags, ...fields } = input
-        const updated = { ...current, ...fields, nameKey: nameKey(input.name), activeNameKey: nameKey(input.name), tagIds }
+        const updated = { ...current, ...fields, nameKey: nameKey(input.name), activeNameKey: nameKey(input.name), tagIds } as Exercise
         const from = source === current ? updated : source, into = destination === current ? updated : destination
         const combinedTags = [...new Set([...into.tagIds, ...from.tagIds])]
         if (combinedTags.length > 50) throw new Error('The combined exercise exceeds 50 tags. Remove some tags before merging.')
@@ -62,14 +64,14 @@ export function exerciseService(database: BorosDatabase) {
       })
     },
     async save(profileId: string, raw: ExerciseInput, existing?: { id: string; revision: number }, creationId?: string) {
-      const input = exerciseInputSchema.parse(raw)
+      const input = exerciseInputSchema.parse({ ...raw, trainingType: raw.trainingType ?? 'strength' })
       if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing exercise.') }
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
         if (creationId && await database.deletedSources.get([profileId, 'exercise', creationId])) throw new Error('This exercise was deleted. Reopen the editor to create a separate copy.')
         if (creationId) { const committed = await database.exercises.get([profileId, creationId]); if (committed) return committed }
         const old = existing ? await get(profileId, existing.id) : undefined
-        if (old) checkRevision(old, existing!.revision)
+        if (old) { checkRevision(old, existing!.revision); assertSameTrainingType(old, input) }
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
         const now = new Date().toISOString()
         const tagIds = await resolveTags(database, profileId, input.tagNames, now)
@@ -103,6 +105,6 @@ export function exerciseService(database: BorosDatabase) {
   }
 }
 export function exerciseToInput(record: Exercise, tags: Tag[]): ExerciseInput {
-  return { name: record.name, sets: structuredClone(record.sets), restBetweenSeconds: record.restBetweenSeconds, restAfterSeconds: record.restAfterSeconds, instructions: record.instructions, notes: record.notes, tutorialUrl: record.tutorialUrl, tagNames: record.tagIds.map((id) => tags.find((tag) => tag.id === id && tag.profileId === record.profileId)?.name).filter((name): name is string => name !== undefined) }
+  return { ...(record.trainingType === 'interval' ? { trainingType: 'interval' as const, activeSeconds: record.activeSeconds, recoverySeconds: record.recoverySeconds } : { trainingType: record.trainingType }), name: record.name, sets: structuredClone(record.sets), restBetweenSeconds: record.restBetweenSeconds, restAfterSeconds: record.restAfterSeconds, instructions: record.instructions, notes: record.notes, tutorialUrl: record.tutorialUrl, tagNames: record.tagIds.map((id) => tags.find((tag) => tag.id === id && tag.profileId === record.profileId)?.name).filter((name): name is string => name !== undefined) } as ExerciseInput
 }
 export const exercises = exerciseService(db)

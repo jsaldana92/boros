@@ -1,16 +1,21 @@
+import { intervalInterchangeSchema as v7IntervalInterchangeSchema } from './interval-interchange-v7.ts'
+export { v7IntervalInterchangeSchema }
+import { intervalInterchangeSchema as v6IntervalInterchangeSchema } from './interval-interchange-v6.ts'
+export { v6IntervalInterchangeSchema }
+import { intervalInterchangeSchema } from './interval-interchange.ts'
 import { z } from 'zod'
-import { exerciseInputSchema, range } from './exercise.ts'
+import { strengthInputSchema, range } from './exercise.ts'
 import { daySchema, planInstructionsSchema, positiveInteger } from './plan.ts'
 
 // Public data deliberately has no IDs, profile ownership, revisions or provenance.
 export const interchangeExerciseSchema = z.object({
-  name: exerciseInputSchema.shape.name,
+  name: strengthInputSchema.shape.name,
   sets: z.array(z.object({ reps: range(1), rir: range(0).nullable().default(null) }).strict()).min(1, 'Add at least one set.').max(100, 'Use at most 100 sets.'),
-  restBetweenSetsSeconds: exerciseInputSchema.shape.restBetweenSeconds.unwrap().nullable().default(null),
-  restAfterExerciseSeconds: exerciseInputSchema.shape.restAfterSeconds.unwrap().nullable().default(null),
-  instructions: exerciseInputSchema.shape.instructions.unwrap().default(''),
-  youtubeUrl: exerciseInputSchema.shape.tutorialUrl.unwrap().nullable().default(null),
-  tags: exerciseInputSchema.shape.tagNames.default([]),
+  restBetweenSetsSeconds: strengthInputSchema.shape.restBetweenSeconds.unwrap().nullable().default(null),
+  restAfterExerciseSeconds: strengthInputSchema.shape.restAfterSeconds.unwrap().nullable().default(null),
+  instructions: strengthInputSchema.shape.instructions.unwrap().default(''),
+  youtubeUrl: strengthInputSchema.shape.tutorialUrl.unwrap().nullable().default(null),
+  tags: strengthInputSchema.shape.tagNames.default([]),
 }).strict()
 export const interchangePlanSchema = z.object({
   name: daySchema.shape.name,
@@ -23,7 +28,7 @@ export const legacyInterchangeSchema = z.discriminatedUnion('kind', [
   z.object({ schemaVersion: z.literal(1), kind: z.literal('workout'), workout: interchangeExerciseSchema }).strict(),
   z.object({ schemaVersion: z.literal(1), kind: z.literal('plan'), plan: interchangePlanSchema }).strict(),
 ])
-export const interchangeGroupSchema = z.object({ number: positiveInteger, restBetweenRoundsSeconds: exerciseInputSchema.shape.restBetweenSeconds.unwrap().nullable().default(null), restAfterGroupSeconds: exerciseInputSchema.shape.restAfterSeconds.unwrap().nullable().default(null) }).strict()
+export const interchangeGroupSchema = z.object({ number: positiveInteger, restBetweenRoundsSeconds: strengthInputSchema.shape.restBetweenSeconds.unwrap().nullable().default(null), restAfterGroupSeconds: strengthInputSchema.shape.restAfterSeconds.unwrap().nullable().default(null) }).strict()
 const groupedDay = z.object({ name: daySchema.shape.name, exercises: z.array(interchangeExerciseSchema.extend({ superset: positiveInteger.nullable().default(null) })).min(1).max(100), supersets: z.array(interchangeGroupSchema).max(50).default([]) }).strict().superRefine((day, context) => {
   const numbers = new Set<number>()
   day.supersets.forEach((group, g) => {
@@ -78,13 +83,31 @@ export const currentInterchangeSchema = z.discriminatedUnion('kind', [
   z.object({ schemaVersion: z.literal(5), kind: z.literal('workout'), workout: interchangeWorkoutSchema }).strict(),
   z.object({ schemaVersion: z.literal(5), kind: z.literal('plan'), plan: cycleInterchangePlan }).strict(),
 ])
-export const interchangeSchema = z.union([currentInterchangeSchema, v4InterchangeSchema, v3InterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
+const strengthWeek = z.object({ trainingDaysPerWeek: z.number().int().min(1).max(7), days: z.array(interchangeWorkoutSchema).min(1).max(7) }).strict().superRefine(validateDayCount)
+const strengthPlan = z.discriminatedUnion('mode', [
+  z.object({ ...v4PlanBase, mode: z.literal('repeating'), trainingDaysPerWeek: z.number().int().min(1).max(7), days: z.array(interchangeWorkoutSchema).min(1).max(7) }).strict(),
+  z.object({ ...v4PlanBase, mode: z.literal('unique'), uniqueWeekCount: positiveInteger.min(2), weeks: z.array(strengthWeek).min(2) }).strict(),
+]).superRefine((plan, context) => {
+  if (plan.mode === 'repeating') validateDayCount(plan, context)
+  else {
+    if (plan.weeks.length !== plan.uniqueWeekCount) context.addIssue({ code: 'custom', path: ['weeks'], message: 'Week count must equal uniqueWeekCount.' })
+    if (plan.durationWeeks % plan.uniqueWeekCount !== 0) context.addIssue({ code: 'custom', path: ['uniqueWeekCount'], message: 'Unique week count must divide durationWeeks evenly.' })
+  }
+})
+export const strengthInterchangeSchema = z.discriminatedUnion('kind', [
+  currentInterchangeSchema.options[0].extend({ schemaVersion: z.literal(6), trainingType: z.literal('strength') }),
+  currentInterchangeSchema.options[1].extend({ schemaVersion: z.literal(6), trainingType: z.literal('strength') }),
+  currentInterchangeSchema.options[2].extend({ schemaVersion: z.literal(6), trainingType: z.literal('strength'), plan: strengthPlan }),
+])
+export const v7StrengthInterchangeSchema = z.discriminatedUnion('kind', [strengthInterchangeSchema.options[0].extend({ schemaVersion: z.literal(7) }), strengthInterchangeSchema.options[1].extend({ schemaVersion: z.literal(7) }), strengthInterchangeSchema.options[2].extend({ schemaVersion: z.literal(7) })])
+export const v8StrengthInterchangeSchema = z.discriminatedUnion('kind', [v7StrengthInterchangeSchema.options[0].extend({ schemaVersion: z.literal(8) }), v7StrengthInterchangeSchema.options[1].extend({ schemaVersion: z.literal(8) }), v7StrengthInterchangeSchema.options[2].extend({ schemaVersion: z.literal(8) })])
+export const interchangeSchema = z.union([intervalInterchangeSchema, v7IntervalInterchangeSchema, v8StrengthInterchangeSchema, v6IntervalInterchangeSchema, v7StrengthInterchangeSchema, strengthInterchangeSchema, currentInterchangeSchema, v4InterchangeSchema, v3InterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
 export type Interchange = z.infer<typeof interchangeSchema>
 export type InterchangeExercise = z.infer<typeof interchangeExerciseSchema>
 export type ImportKind = Interchange['kind']
 
 // Both visible instructions and tests consume these schema-checked examples.
-export function interchangeExample(kind: ImportKind): Interchange {
+export function interchangeExample(kind: ImportKind): z.infer<typeof currentInterchangeSchema> {
   const exercise = { name: 'Example exercise', sets: [{ reps: { min: 5, max: 8 }, rir: { min: 0, max: 0 } }, { reps: { min: 10, max: 10 }, rir: null }], restBetweenSetsSeconds: 0, restAfterExerciseSeconds: null, instructions: 'Illustrative instructions only.', youtubeUrl: null, tags: ['Example tag'] }
-  return interchangeSchema.parse(kind === 'exercise' ? { schemaVersion: 5, kind, exercise } : kind === 'workout' ? { schemaVersion: 5, kind, workout: { name: 'Example workout', exercises: [{ ...exercise, superset: null }], supersets: [] } } : { schemaVersion: 5, kind, plan: { mode: 'repeating', name: 'Example plan', instructions: 'Illustrative plan instructions only.', durationWeeks: 2, trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [{ ...exercise, superset: null }, { ...exercise, superset: 1 }, { ...exercise, name: 'Second example', superset: 1 }], supersets: [{ number: 1, restBetweenRoundsSeconds: 0, restAfterGroupSeconds: null }] }] } })
+  return currentInterchangeSchema.parse(kind === 'exercise' ? { schemaVersion: 5, kind, exercise } : kind === 'workout' ? { schemaVersion: 5, kind, workout: { name: 'Example workout', exercises: [{ ...exercise, superset: null }], supersets: [] } } : { schemaVersion: 5, kind, plan: { mode: 'repeating', name: 'Example plan', instructions: 'Illustrative plan instructions only.', durationWeeks: 2, trainingDaysPerWeek: 1, days: [{ name: 'Day 1', exercises: [{ ...exercise, superset: null }, { ...exercise, superset: 1 }, { ...exercise, name: 'Second example', superset: 1 }], supersets: [{ number: 1, restBetweenRoundsSeconds: 0, restAfterGroupSeconds: null }] }] } })
 }

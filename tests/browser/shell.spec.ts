@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './strength-test'
 
 const destinations = [
   ['Train', 'train'], ['Create', 'create'], ['Calendar', 'calendar'],

@@ -62,7 +62,7 @@ test('unequal supersets append one final round, stable identities, independent r
   const progress = await progressService(db).read(id), analytics = progress.plans.find(p=>p.id===run.id)!
   assert.equal(analytics.daysCompleted, 1); assert.equal(analytics.exercisesCompleted, 5); assert.equal(analytics.items.length,5)
   const backup = await generateBackup(await captureProfile(id,db),'amend-test'), bytes = backup.bytes, read = await readBackup(bytes,async()=>{})
-  assert.equal(read.data.backupSchemaVersion, 13); assert.deepEqual(read.data.sessions[0].structure,ids)
+  assert.equal(read.data.backupSchemaVersion, 18); assert.deepEqual(read.data.sessions[0].structure,ids)
   assert.equal(backup.manifest.csvRows['csv/session_structure.csv'],22)
   const restored = await buildRestorePlan(read,undefined,'new',crypto.randomUUID(),'Restored',new Date().toISOString())
   validateBackupData(canonicalSnapshot(restored.result)); assert.deepEqual(restored.result.sessions[0].structure,ids)
@@ -95,6 +95,8 @@ test('count-up timestamps, zero rest, legacy countdown/reset and token claims re
   c.addSets(groupId,'kg');await c.flush();assert.deepEqual(await db.restTimers.get('active'),up)
   await c.changeTimer(up!.token,'reset'); const reset=await db.restTimers.get('active');assert.equal(reset!.mode,'countup');assert.notEqual(reset!.token,up!.token)
   c.addExercises((await plans.library(id)).choices,'kg');await c.flush();const extra=c.record.day.exercises.at(-1)!
+  await assert.rejects(c.startTimer(extra.id,0), /Stop/)
+  await c.changeTimer(reset!.token,'stop')
   assert.equal(await c.startTimer(extra.id,0),undefined);assert.equal(await db.restTimers.count(),0)
   const down=await c.startGroupTimer(groupId,0,60);assert.equal(down!.mode,'countdown');assert.equal(timerRemaining(down!),60)
   const legacy={...down};delete legacy.mode;await db.restTimers.put(legacy as any)

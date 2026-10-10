@@ -1,0 +1,3 @@
+export function SessionActions({ save, cancel, clear, disabled = false, saveDisabled = disabled, clearDisabled = disabled, working = false }: { save: () => void; cancel: () => void; clear: () => void; disabled?: boolean; saveDisabled?: boolean; clearDisabled?: boolean; working?: boolean }) {
+  return <div className="session-actions"><button className="primary" disabled={saveDisabled} onClick={save}>{working ? 'Working...' : 'Save'}</button><div className="session-secondary"><button disabled={disabled} onClick={cancel}>Cancel</button><button disabled={clearDisabled} onClick={clear}>Clear</button></div></div>
+}

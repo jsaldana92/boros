@@ -1,3 +1,4 @@
+import { TrainingRuntimeProvider } from './TrainingRuntimeProvider'
 import { lazy, useCallback, useRef, useState, type ReactNode } from 'react'
 import { MemoryRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { AppShell } from '../components/layout/AppShell'
@@ -52,7 +53,7 @@ function NavigationProvider({ children }: { children: ReactNode }) {
 
 export function AppRouter({ initialScreen }: { initialScreen: Screen }) {
   // Keep memory history alive while profile selection reloads the workspace.
-  return <MemoryRouter initialEntries={[`/${initialScreen}`]}><WorkspaceProvider><NavigationProvider><Routes>
+  return <MemoryRouter initialEntries={[`/${initialScreen}`]}><WorkspaceProvider><NavigationProvider><TrainingRuntimeProvider><Routes>
     <Route element={<AppShell />}>
       <Route path="/settings" element={<ScreenView screen="settings"><SettingsPage /></ScreenView>} />
       <Route path="/create" element={<ScreenView screen="create"><CreatePage /></ScreenView>} />
@@ -61,5 +62,5 @@ export function AppRouter({ initialScreen }: { initialScreen: Screen }) {
       <Route path="/progress" element={<ScreenView screen="progress"><ProgressPage /></ScreenView>} />
       <Route path="*" element={<Navigate to="/train" replace />} />
     </Route>
-  </Routes></NavigationProvider></WorkspaceProvider></MemoryRouter>
+  </Routes></TrainingRuntimeProvider></NavigationProvider></WorkspaceProvider></MemoryRouter>
 }

@@ -1,3 +1,4 @@
+import { stripTrainingFields } from '../fixtures/training-compatibility.ts'
 import { recordCounts } from '../../src/schemas/backup.ts'
 import 'fake-indexeddb/auto'
 import { test } from 'node:test'
@@ -20,7 +21,7 @@ import { readBackup } from '../../src/features/backups/read-backup.ts'
 import { csvTables } from '../../src/features/backups/csv.ts'
 import { validateBackupData } from '../../src/schemas/backup.ts'
 
-const prescription = (name = 'A', count = 3, reps = 20) => ({ name, sets: Array.from({ length: count }, () => ({ reps: { min: reps, max: reps }, rir: { min: 0, max: 0 } })), tagNames: ['Strength'], notes: 'Library note', restAfterSeconds: 0 })
+const prescription = (name = 'A', count = 3, reps = 20) => ({ trainingType: 'strength' as const, name, sets: Array.from({ length: count }, () => ({ reps: { min: reps, max: reps }, rir: { min: 0, max: 0 } })), tagNames: ['Strength'], notes: 'Library note', restAfterSeconds: 0 })
 const input = (name = 'Plan') => ({ name, durationWeeks: 2, days: [{ ...newDay(1), exercises: [copyExercise(prescription()), copyExercise(prescription(' a ', 4, 10)), copyExercise(prescription('B', 1, 8))] }] })
 async function setup(t) {
   const db = new BorosDatabase(`boros-test-ownership-${crypto.randomUUID()}`); t.after(() => db.delete())
@@ -51,9 +52,9 @@ test('discarded previews and failure after template creation leave all stores un
   const { db, id } = await setup(t), before = await records(db), session = importSession(id, db)
   input(); importSession(id, db); assert.deepEqual(await records(db), before)
   const fail = () => { throw Error('disk full after templates') }
-  db.plans.hook('updating', fail)
+  db.plans.hook('creating', fail)
   await assert.rejects(session.savePlan(input()), /disk full/)
-  db.plans.hook('updating').unsubscribe(fail)
+  db.plans.hook('creating').unsubscribe(fail)
   assert.deepEqual(await records(db), before)
   const connection = new BorosDatabase(db.name); t.after(() => connection.close())
   await Promise.all([session.savePlan(input()), importSession(id, connection).savePlan(input('Other tab'))])
@@ -129,7 +130,7 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
     data.backupSchemaVersion = version; delete data.workouts; delete data.deletedSources
     if (version < 3) { delete data.profile.timeZone; delete data.profile.selectedPlanIds }
     if (version === 1) delete data.plans[0].durationWeeks
-    validateBackupData(data)
+    stripTrainingFields(data); validateBackupData(data)
     const payload = new Map([['data.json', JSON.stringify(data)], ...csvTables(data).map((f) => [f.path, f.text] as [string, string])])
     const manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = version; manifest.databaseSchemaVersion = 5; manifest.counts = recordCounts(data)
     manifest.inventory = await Promise.all([...payload].map(async ([path, text]) => ({ path, bytes: new TextEncoder().encode(text).length, sha256: await sha256(new TextEncoder().encode(text)), mediaType: path === 'data.json' ? 'application/json' : 'text/csv; charset=utf-8' })))
@@ -143,7 +144,7 @@ test('strict schema 1–3 backups repair only through validated restore; v4 link
     assert.equal(templateReference(restored.plans[0].days[0].exercises[0]), original.days[0].exercises[0].id)
     assert.equal(restored.plans[0].createdAt, original.createdAt); assert.equal(restored.plans[0].updatedAt, original.updatedAt)
     const round = await readBackup((await generateBackup(restored, 'test')).bytes)
-    assert.equal(round.manifest.backupSchemaVersion, 13); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
+    assert.equal(round.manifest.backupSchemaVersion, 18); assert.deepEqual(round.data.plans, JSON.parse(JSON.stringify(restored.plans)))
     // Merge the original old backup again into its matching original profile.
     let target = id
     for (let repeat = 0; repeat < 2; repeat++) { const merge = await service.preview(backup, 'import'); target = await service.commit(merge, true); assert.equal((await captureProfile(target, db)).exercises.length, 2) }

@@ -34,14 +34,26 @@ export async function startWeekly(page: Page, plan: string, day: string) {
 }
 export async function closeTimer(page: Page) {
   const popup = page.getByRole('dialog', { name: 'Rest Timer', exact: true })
+  await page.locator('.timer-compact').evaluate((node: HTMLButtonElement) => { if (!document.querySelector('dialog.rest-timer-dialog[open]')) node.click() })
   await expect(popup).toBeVisible()
   await popup.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(popup).toHaveCount(0)
 }
 
-export async function openExerciseAction(page: Page, name: string, action: 'Information' | 'Note' | 'Replace') {
+export async function openExerciseAction(page: Page, name: string, action: 'Instructions' | 'Note' | 'Replace') {
   const menu = trainButton(page, 'Actions for ' + name)
   await expect(menu.or(trainButton(page, action + ' for ' + name))).toBeVisible()
   if (await menu.isVisible()) { await menu.click(); await page.getByRole('dialog', { name: 'Exercise actions', exact: true }).getByRole('button', { name: action, exact: true }).click() }
   else await trainButton(page, action + ' for ' + name).click()
+}
+
+export async function openWorkoutNote(page: Page) {
+  await trainButton(page, 'Workout actions').click()
+  await page.getByRole('dialog', { name: 'Workout actions', exact: true }).getByRole('button', { name: 'Note', exact: true }).click()
+}
+export async function setWorkoutNote(page: Page, text: string) {
+  await openWorkoutNote(page)
+  await page.getByLabel('Note', { exact: true }).fill(text)
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 }

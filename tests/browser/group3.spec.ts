@@ -1,7 +1,7 @@
 import { deviceZone, createNamedProfile } from './settings-actions'
 import { manageRun, returnCalendar, stagePlan } from './calendar-actions'
 import { waitForDraft, startWeekly } from './train-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 test.setTimeout(120000)
 const button = (p: Page, name: string) => p.getByRole('button', { name, exact: true })
@@ -55,7 +55,7 @@ test('immediate multi-plan selection, scheduling existing run, exact calendar oc
   const selected = (await records(page)).profiles[0].selectedPlanIds
   await button(page, 'Calendar').click(); await adjacent.locator('.calendar-event').click(); await expect(page.getByRole('heading', { level: 1 })).toHaveText('Alpha')
   await field(page, 'Press set 1 Weight (kg)').fill('42'); await field(page, 'Press set 1 Repetitions').fill('6'); await waitForDraft(page)
-  const draft = (await records(page)).drafts[0]; await page.reload(); await page.getByRole('button', { name: /^Resume Alpha/ }).click(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('42')
+  const draft = (await records(page)).drafts[0]; await page.reload(); await expect(field(page, 'Press set 1 Weight (kg)')).toHaveValue('42')
   await button(page, 'Save').click(); await button(page, 'Save partial session').click(); expect((await records(page)).sessions[0].occurrenceKey).toBe(draft.occurrenceKey); expect((await records(page)).profiles[0].selectedPlanIds).toEqual(selected)
   await button(page, 'Settings').click(); await button(page, 'Light').click(); await createNamedProfile(page, 'Other'); await expect(page.locator('input[name="name"]')).toHaveValue('Other')
   await button(page, 'Train').click(); await expect(page.getByText('No active plan(s) selected.')).toBeVisible()

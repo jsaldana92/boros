@@ -4,7 +4,7 @@ import { csvTables } from './csv.ts'
 import { sha256 } from './integrity.ts'
 export { sha256 } from './integrity.ts'
 
-export const exclusions = ['Other profiles and their records/assets', 'Browser-wide appearance, sound and storage-notice preference and active-profile selection', 'Navigation/sessionStorage, unsaved editor forms, unapplied notes and pending/failed autosaves', 'Active rest timers, interval/tick state and object URLs', 'Credentials, environment/configuration files and machine paths', 'Generated calendar occurrences (reconstruct from schedules and retained session identities)']
+export const exclusions = ['Other profiles and their records/assets', 'Browser-wide appearance, sound and storage-notice preference and active-profile selection', 'Navigation/sessionStorage, unsaved editor forms, unapplied notes and pending/failed autosaves', 'Active rest timer ownership, live callback/audio objects and object URLs (committed Interval checkpoints are included)', 'Credentials, environment/configuration files and machine paths', 'Generated calendar occurrences (reconstruct from schedules and retained session identities)']
 const encode = (value: string) => new TextEncoder().encode(value)
 export function backupFilename(name: string, exportedAt: string) {
   const safe = name.normalize('NFKC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'profile'
@@ -30,7 +30,7 @@ export async function validateGeneratedArchive(bytes: Uint8Array, expected: Back
 }
 export async function generateBackup(snapshot: ProfileSnapshot, appVersion: string, progress: (message: string) => void = () => {}) {
   progress('Validating saved records and references')
-  if (![5, 6, 7].includes(snapshot.databaseVersion)) throw new Error('This database version is not supported by backup schema 13. Update Boros before exporting.')
+  if (![5, 6, 7, 8, 9, 10, 11, 12].includes(snapshot.databaseVersion)) throw new Error('This database version is not supported by backup schema 18. Update Boros before exporting.')
   const { databaseVersion: _databaseVersion, capturedAt: _capturedAt, photos, ...records } = snapshot
   const data: BackupData = { format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, ...records, deletedSources: records.deletedSources ?? [], workouts: records.workouts ?? [], assets: photos.map(({ blob, ...asset }) => ({ ...asset, mediaType: blob.type as 'image/jpeg' | 'image/png' | 'image/webp', bytes: blob.size, path: `photos/${asset.id}.${blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1]}` })) }
   validateBackupData(data)
@@ -46,7 +46,7 @@ export async function generateBackup(snapshot: ProfileSnapshot, appVersion: stri
   const inventory: BackupManifest['inventory'] = []
   for (const [path, file] of payload) { progress(`Hashing payload ${inventory.length + 1}/${payload.size}`); inventory.push({ path, bytes: file.bytes.byteLength, mediaType: file.mediaType, sha256: await sha256(file.bytes) }) }
   const manifest: BackupManifest = {
-    format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, databaseSchemaVersion: 7, app: { name: 'boros', version: appVersion }, exportedAt: new Date().toISOString(), snapshotAt: snapshot.capturedAt,
+    format: 'boros-profile-backup', backupSchemaVersion: BACKUP_VERSION, databaseSchemaVersion: 12, app: { name: 'boros', version: appVersion }, exportedAt: new Date().toISOString(), snapshotAt: snapshot.capturedAt,
     profile: { id: data.profile.id, name: data.profile.name, kind: data.profile.kind }, snapshotPolicy: SNAPSHOT_POLICY,
     counts: recordCounts(data), csvRows: Object.fromEntries(tables.map((item) => [item.path, item.rows])),
     authoritative: ['data.json', 'manifest.json', 'photos/'], checksum: 'SHA-256 of every payload file as uncompressed bytes; manifest.json is excluded. Integrity only, not authenticity.', exclusions,

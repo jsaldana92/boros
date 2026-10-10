@@ -4,7 +4,7 @@ import { createNamedProfile } from './settings-actions'
 import { addCalendarPlan, manageRun, returnCalendar } from './calendar-actions'
 import { waitForDraft, startWeekly } from './train-actions'
 import { cardAction } from './create-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { groupedAI } from '../fixtures/group2'
 import { planFixture } from '../fixtures/interchange'
 import JSZip from 'jszip'
@@ -92,9 +92,9 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await openExerciseAction(page, 'Squat occurrence 2', 'Note'); await field(page, 'Note').fill('Only grouped squat'); await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click(); await saved(page)
   await button(page, 'REST Superset 1 after group').click()
   await expect(page.getByRole('timer')).toHaveText('00:00')
-  await page.reload(); await page.getByRole('button', { name: new RegExp("^Resume Two-week supersets / Mixed day") }).click()
+  await page.reload(); await expect(page.getByRole('region',{name:'Training session',exact:true})).toBeVisible()
   await expect(field(page, 'Squat occurrence 1 set 1 Weight (kg)')).toHaveValue('10'); await expect(field(page, 'Squat occurrence 2 set 1 Weight (kg)')).toHaveValue('40')
-  await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('Post-Exercise')
+  await page.locator('.timer-compact').click(); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('Post-Exercise')
   await button(page, 'Stop').click(); await button(page, 'Save').click(); await button(page, 'Save partial session').click()
   const details = page.getByRole('region', { name: 'Saved session details' }); await details.getByRole('region', { name: 'Saved superset 1' }).getByRole('button', { name: 'Note for Squat', exact: true }).click(); await expect(page.getByRole('dialog')).toContainText('Only grouped squat'); await button(page, 'Close note').click(); await expect(details.getByRole('region', { name: 'Saved superset 1' }).locator('.superset-round')).toHaveCount(3)
   const completed = (await records(page)).sessions[0]
@@ -112,7 +112,7 @@ test('unequal rounds isolate repeated results, recover timers/notes, retain immu
   await button(page, 'Settings').click();
   const pending = page.waitForEvent('download'); await confirmDownload(page)
   const bytes = await readFile((await (await pending).path())!), zip = await JSZip.loadAsync(bytes)
-  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(13)
+  expect(JSON.parse(await zip.file('data.json')!.async('string')).backupSchemaVersion).toBe(18)
   expect(zip.file('csv/supersets.csv')).toBeTruthy()
   await page.getByLabel('Backup ZIP', { exact: true }).setInputFiles({ name: 'groups.zip', mimeType: 'application/zip', buffer: bytes })
   await expect(page.getByRole('region', { name: 'Backup selection' })).toBeVisible()

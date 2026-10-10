@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { manageRun, returnCalendar, runPage, stagePlan } from './calendar-actions'
 
 test.setTimeout(90000)
@@ -54,7 +54,7 @@ test('menu blocks background, Escape restores focus; run pages return the view/d
   await returnCalendar(page); await expect(b(page, 'Week')).toHaveAttribute('aria-pressed', 'true'); await expect(f(page, 'Calendar date')).toHaveValue('2026-10-12'); expect(await page.evaluate(() => scrollY)).toBe(y)
   await expect(b(page, 'Calendar menu')).toBeFocused()
   await runPage(page, 'Previous Plans'); await expect(page.getByText('No previous plans.', { exact: true })).toBeVisible(); await returnCalendar(page); expect(page.url()).toBe(address)
-  const card = page.locator('.calendar-event').first(); await expect(card.locator(':scope > span')).toHaveCount(3); await expect(card).not.toContainText('Schedule'); await expect(card).not.toContainText('UTC'); await expect(card).toContainText('Pending')
+  const card = page.locator('.calendar-event').first(); await expect(card.locator(':scope > span')).toHaveCount(4); await expect(card).not.toContainText('Schedule'); await expect(card).not.toContainText('UTC'); await expect(card).toContainText('Pending')
   await b(page, 'Today').click(); await expect(page.locator('.calendar-event').first()).toContainText('Due Today')
   await b(page, 'Month').click(); await b(page, 'Week 1').click(); await expect(page.locator('.calendar-day.adjacent-month').first()).toBeVisible()
   await expect(page.getByText(/^Today uses/)).toHaveCount(0); await expect(page.getByRole('region', { name: 'Unassigned weekly training' })).toHaveCount(0)

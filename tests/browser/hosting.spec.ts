@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './strength-test'
 
 test('plain static root and project mounts serve only existing files', async ({ request }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('root-') && !testInfo.project.name.startsWith('project-'), 'Plain-static-host check only')

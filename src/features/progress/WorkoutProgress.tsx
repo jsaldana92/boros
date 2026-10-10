@@ -65,7 +65,7 @@ export function WorkoutProgress({ mainContent, mainOnly = false }: { mainContent
 function ItemBrowser({ items, tags, onSelect, overall = false }: { items: ProgressItem[]; tags: { id: string; name: string }[]; onSelect: (key: string) => void; overall?: boolean }) {
   const [search, setSearch] = useState(''), [sort, setSort] = useState<LibrarySort>('az'), [filterTags, setFilterTags] = useState<string[]>([])
   const visible = filterExercises(items.map((i) => ({ ...i, id: i.key })), search, sort, filterTags, false)
-  return <><LibraryFilters search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
+  return <><LibraryFilters showTrainingTypes={false} search={search} setSearch={setSearch} sort={sort} setSort={setSort} filterTags={filterTags} setFilterTags={setFilterTags} tags={tags} />
     {visible.length ? <BoundedGrid rows={3} label={overall ? 'Overall exercises' : 'Plan exercises'} className="workout-progress-grid">{visible.map((item) => <LibraryItemCard key={item.key} item={item} overall={overall} onSelect={onSelect} />)}</BoundedGrid> : <p>{search || filterTags.length ? 'No exercises match these filters.' : 'No exercises yet.'}</p>}
   </>
 }
@@ -90,5 +90,5 @@ function ExerciseStatistics({ performances, counts, unit, zone, overall, name }:
 }
 
 function LibraryItemCard({ item, overall, onSelect }: { item: ProgressItem; overall: boolean; onSelect: (key: string) => void }) {
-  return overall ? <LibraryExerciseCard name={item.name} createdAt={item.createdAt} onClick={() => onSelect(item.key)} /> : <button onClick={() => onSelect(item.key)}><strong>{item.name}</strong><small>{item.context}</small></button>
+  return overall ? <LibraryExerciseCard showType={false} name={item.name} createdAt={item.createdAt} onClick={() => onSelect(item.key)} /> : <button onClick={() => onSelect(item.key)}><strong>{item.name}</strong><small>{item.context}</small></button>
 }

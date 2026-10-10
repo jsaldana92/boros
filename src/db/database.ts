@@ -1,3 +1,4 @@
+import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import type { DeletedSource } from '../schemas/deleted-source.ts'
 import type { Workout } from '../schemas/workout.ts'
 import Dexie, { type Table } from 'dexie'
@@ -6,8 +7,11 @@ import type { Plan } from '../schemas/plan.ts'
 import type { Exercise, Tag } from '../schemas/exercise.ts'
 import type { CompletedSession, RestTimer, SessionDraft } from '../schemas/session.ts'
 import type { Schedule } from '../schemas/schedule.ts'
+import { classifyStrengthRecords } from './training-migration.ts'
+import type { ActiveWorkout } from './active-workout.ts'
 
 export class BorosDatabase extends Dexie {
+  activeWorkouts!: Table<ActiveWorkout, string>
   deletedSources!: Table<DeletedSource, [string, string, string]>
   profiles!: Table<Profile, string>
   settings!: Table<WorkspaceSettings, string>
@@ -55,6 +59,23 @@ export class BorosDatabase extends Dexie {
     this.version(6).stores({ workouts: '[profileId+id], profileId, &[profileId+activeNameKey]' })
     // Additive only: retain deleted library identities without resurrecting templates.
     this.version(7).stores({ deletedSources: '[profileId+kind+id], profileId' })
+    this.version(8).stores({}).upgrade(async transaction => {
+      for (const name of ['exercises', 'workouts', 'plans', 'schedules', 'drafts', 'sessions']) {
+        await transaction.table(name).toCollection().modify(record => { classifyStrengthRecords(record) })
+      }
+    })
+    // Optional timer-generation and workout-rest fields: existing snapshots stay intact.
+    this.version(9).stores({})
+    // Only editable templates are converted. Schedules, started drafts and
+    // completed snapshots retain their original phase identities and timing.
+    this.version(10).stores({}).upgrade(async transaction => {
+      await transaction.table('workouts').toCollection().modify(record => { Object.assign(record, convertIntervalDay(record)) })
+      await transaction.table('plans').toCollection().modify(record => { record.days = record.days.map(convertIntervalDay) })
+    })
+    // Optional independent-rest execution and rest cue ledger. No record rewrites.
+    this.version(11).stores({})
+    // Local ownership is not a foreign runtime lock or part of exported profiles.
+    this.version(12).stores({ activeWorkouts: 'id' })
   }
 }
 

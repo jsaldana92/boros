@@ -1,6 +1,6 @@
 import { createNamedProfile } from './settings-actions'
 import { cardAction, occurrenceAction } from './create-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { planFixture, workoutFixture } from '../fixtures/interchange'
 
 test.setTimeout(90000)

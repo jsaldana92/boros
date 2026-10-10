@@ -1,5 +1,5 @@
 import { createNamedProfile } from './settings-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 async function openSettings(page: Page) {
   await page.goto('./')

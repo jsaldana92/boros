@@ -25,6 +25,22 @@ for (const [label, revision] of [['previous', previous], ['deployed', deployed]]
   }
   stages.push({ label, directory, commit })
 }
+// The source immediately before this working-tree change is available locally.
+// Build an isolated archive with existing dependencies; no checkout/deploy/reset.
+{
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const archive = await JSZip.loadAsync(execFileSync('git', ['archive', '--format=zip', commit], { maxBuffer: 64 * 1024 * 1024 }))
+  const source = resolve(output, `pre-interval-source-${Date.now()}`)
+  for (const entry of Object.values(archive.files)) {
+    if (entry.dir) continue
+    const file = resolve(source, entry.name)
+    if (!file.startsWith(source + sep)) throw new Error('Archive path escapes source directory')
+    await mkdir(resolve(file, '..'), { recursive: true }); await writeFile(file, await entry.async('nodebuffer'))
+  }
+  const directory = resolve(output, `pre-interval-${Date.now()}`)
+  execFileSync(process.execPath, ['node_modules/vite/bin/vite.js', 'build', source, '--outDir', directory], { stdio: 'inherit' })
+  stages.push({ label: 'pre-interval', directory, commit })
+}
 for (const label of ['build-1', 'build-2']) {
   const directory = resolve(output, `${label}-${Date.now()}`)
   execFileSync(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--outDir', directory], { stdio: 'inherit' })
@@ -38,4 +54,4 @@ for (const stage of stages) {
   stage.entrySha256 = createHash('sha256').update(await readFile(resolve(stage.directory, stage.entry))).digest('hex')
 }
 await writeFile(resolve(output, 'builds.json'), JSON.stringify({ preparedAt: new Date().toISOString(), stages }, null, 2))
-console.log('Prepared four release directories in test-results/update-builds/builds.json')
+console.log('Prepared five release directories in test-results/update-builds/builds.json')

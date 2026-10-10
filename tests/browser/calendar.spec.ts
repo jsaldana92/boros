@@ -1,7 +1,7 @@
 import { createNamedProfile } from './settings-actions'
 import { manageRun, returnCalendar, addCalendarPlan, stagePlan } from './calendar-actions'
 import { waitForDraft } from './train-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 test.setTimeout(90000)
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })

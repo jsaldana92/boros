@@ -1,3 +1,5 @@
+import { TypeChoice } from '../../components/ui/TrainingType'
+import type { TrainingType } from '../../schemas/training-type'
 import { DeleteLibraryDialog } from './DeleteLibraryDialog'
 import { MergeExerciseDialog } from './MergeExerciseDialog'
 import { WorkoutLibrary } from './WorkoutLibrary'
@@ -22,15 +24,18 @@ export function CreatePage() {
 }
 
 function CreateWorkspace({ profileId }: { profileId: string }) {
+  const [creating, setCreating] = useState<'plan' | 'workout'>()
+  const [trainingType, setTrainingType] = useState<TrainingType>('strength')
   const [mode, setMode] = useState('library')
   const [startWorkout, setStartWorkout] = useState(0)
   const [startNew, setStartNew] = useState(0)
   const [importStatus, setImportStatus] = useState('')
   const closeImport = (message = '') => { setMode('library'); setImportStatus(message); requestAnimationFrame(() => document.getElementById('import-output-trigger')?.focus()) }
-  return <><ExerciseLibrary plans={<PlanLibrary profileId={profileId} startNew={startNew} onEditing={(value) => setMode(value ? 'plan' : 'library')} hidden={mode !== 'library' && mode !== 'plan'} />} workouts={<WorkoutLibrary profileId={profileId} startNew={startWorkout} onEditing={value => setMode(value ? 'workout' : 'library')} hidden={mode !== 'library' && mode !== 'workout'} />} onWorkout={() => { setStartWorkout(v => v + 1); setMode('workout') }} profileId={profileId} planOpen={mode === 'plan' || mode === 'import' || mode === 'workout'} onImport={() => { setImportStatus(''); setMode('import') }} onEditing={(value) => setMode(value ? 'exercise' : 'library')} onPlan={() => { setStartNew((value) => value + 1); setMode('plan') }} />{mode === 'import' && <ImportPanel profileId={profileId} onClose={closeImport} />}<p role="status">{importStatus}</p></>
+  return <><ExerciseLibrary plans={<PlanLibrary trainingType={trainingType} profileId={profileId} startNew={startNew} onEditing={(value) => setMode(value ? 'plan' : 'library')} hidden={mode !== 'library' && mode !== 'plan'} />} workouts={<WorkoutLibrary trainingType={trainingType} profileId={profileId} startNew={startWorkout} onEditing={value => setMode(value ? 'workout' : 'library')} hidden={mode !== 'library' && mode !== 'workout'} />} onWorkout={() => setCreating('workout')} profileId={profileId} planOpen={mode === 'plan' || mode === 'import' || mode === 'workout'} onImport={() => { setImportStatus(''); setMode('import') }} onEditing={(value) => setMode(value ? 'exercise' : 'library')} onPlan={() => setCreating('plan')} />{mode === 'import' && <ImportPanel profileId={profileId} onClose={closeImport} />}<p role="status">{importStatus}</p>{creating && <TypeChoice title={creating === 'plan' ? 'Plan Type' : 'Workout Type'} onClose={() => setCreating(undefined)} onChoose={type => { setTrainingType(type); if (creating === 'plan') setStartNew(v => v + 1); else setStartWorkout(v => v + 1); setMode(creating); setCreating(undefined) }} />}</>
 }
 
 function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPlan, onEditing, onImport }: { plans: ReactNode; workouts: ReactNode; onWorkout: () => void; profileId: string; planOpen: boolean; onPlan: () => void; onEditing: (value: boolean) => void; onImport: () => void }) {
+  const [choosingType, setChoosingType] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const result = useLiveQuery(async () => {
     try { return { data: await exercises.library(profileId), error: '' } }
@@ -65,7 +70,7 @@ function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPl
     {!editor && !planOpen && <h1>Create</h1>}
     {editor && <ExerciseEditor key={editor.key} profileId={profileId} initial={editor.draft} original={editor.original} tags={data?.tags ?? []} onClose={close} onMerged={record => { close(); setSelected(record); setStatus(`Saved ${record.name}.`) }} onSaved={(name) => { close(); setStatus(`Saved ${name}.`) }} />}
     <div hidden={!!editor || planOpen}>
-      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button id="create-workout" aria-label="Create workout" onClick={onWorkout}>Workout</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => open()}>Exercise</button></div><button className="imported-button" id="import-output-trigger" disabled={busy} onClick={onImport}>Import</button>
+      <div className="create-carousel" aria-label="Create actions"><button aria-label="Create Plan" disabled={busy} onClick={onPlan}>Plan</button><button id="create-workout" aria-label="Create workout" onClick={onWorkout}>Workout</button><button aria-label="Create exercise" ref={createButton} disabled={!data || busy} onClick={() => setChoosingType(true)}>Exercise</button></div><button className="imported-button" id="import-output-trigger" disabled={busy} onClick={onImport}>Import</button>
     </div>
     {plans}
     {workouts}
@@ -79,9 +84,10 @@ function ExerciseLibrary({ plans, workouts, onWorkout, profileId, planOpen, onPl
         <p role="status">{status}</p>{error && <p role="alert">{error}</p>}
         <p className="muted">{visible.length} {archived ? 'total' : 'active'} exercise{visible.length === 1 ? '' : 's'}</p>
         {!visible.length && <p>{search || filterTags.length ? 'No exercises match these filters.' : archived ? 'No archived exercises.' : 'No exercises yet. Choose Create exercise to add one.'}</p>}
-        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><LibraryExerciseCard name={record.name} createdAt={record.createdAt} onClick={(event) => { trigger.current = event.currentTarget; setError(''); setSelected(record) }} />{record.archivedAt && <small>Archived</small>}</article>)}</div>
+        <div className="exercise-list" role="region" aria-label="Exercise catalog">{visible.map((record) => <article key={record.id} className="exercise-card" aria-label={record.name}><LibraryExerciseCard trainingType={record.trainingType} name={record.name} createdAt={record.createdAt} onClick={(event) => { trigger.current = event.currentTarget; setError(''); setSelected(record) }} />{record.archivedAt && <small>Archived</small>}</article>)}</div>
       </>}
     </div>
+    {choosingType && <TypeChoice title="Exercise Type" onClose={() => setChoosingType(false)} onChoose={type => { setChoosingType(false); open(type === 'interval' ? { trainingType: type, name: '', sets: [], activeSeconds: NaN, recoverySeconds: 0, tagNames: [] } : undefined) }} />}
     {selected && <ExerciseDetails exercise={selected} tags={data ? exerciseToInput(selected, data.tags).tagNames : []} busy={busy} error={error} onClose={() => setSelected(undefined)}
       onDelete={() => setDeleting(selected)} onMerge={selected.archivedAt ? undefined : () => { setMerging(selected); setSelected(undefined) }}
       onEdit={() => data && open(exerciseToInput(selected, data.tags), selected)}

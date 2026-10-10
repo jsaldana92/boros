@@ -1,3 +1,4 @@
+import { trainingTypeName, trainingTypeOf } from '../../schemas/training-type'
 import { SessionReview } from '../train/SessionReview'
 import type { CompletedSession } from '../../schemas/session'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
@@ -94,7 +95,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
     <h3><time dateTime={day}>{weekdays[weekday(day)]} {day.slice(5)}</time>{day === today && ' · Today'}</h3>
     {events?.filter((activity) => activity.date === day).map((activity) => {
       const event = activity.event, status = activity.session ? 'Completed' : event?.outcome?.status === 'completed' ? 'Completed' : event?.draft ? 'Incomplete' : event ? dayStatus(event, instant) : 'Completed'
-      return <button key={activity.id} style={{ '--plan-color': `var(--calendar-plan-${colors[activity.planId ?? 'standalone'] ?? 0})` } as CSSProperties} className={`calendar-event${status === 'Completed' ? ' completed' : ''}`} disabled={busy} onClick={() => void openEvent(activity)}><span className="event-name">{activity.planName}</span><span className="event-day">{activity.day.name}</span><span className="status-pill">{status}</span></button>
+      return <button key={activity.id} style={{ '--plan-color': `var(--calendar-plan-${colors[activity.planId ?? 'standalone'] ?? 0})` } as CSSProperties} className={`calendar-event${status === 'Completed' ? ' completed' : ''}`} disabled={busy} onClick={() => void openEvent(activity)}><span className="event-name">{activity.planName}</span><span className="event-day">{activity.day.name}</span><span className="status-pill">{status}</span><span className="type-pill">{trainingTypeName(trainingTypeOf(activity.day))}</span></button>
     })}
     {data?.schedules.filter((run) => run.kind !== 'unscheduled' && weekday(day) === 0 && run.excludedWeeks?.includes(day)).map((run) => <p className="muted" key={run.id}>{run.revisions.at(-1)?.planName}: Excluded week</p>)}
     {data?.schedules.filter((run) => run.kind !== 'unscheduled' && scheduleActiveOn(run, day)).map((run) => { const revision = revisionAt(run, day); return revision?.needsRepair ? <p className="muted" key={run.id}>{revision.planName}: mapping needs repair</p> : revision && !revision.unscheduled && events && !events.some((activity) => activity.event?.ref.scheduleId === run.id && activity.date === day && !activity.event.unscheduled) ? <p className="muted" key={run.id}>{revision.planName}: Rest</p> : null })}

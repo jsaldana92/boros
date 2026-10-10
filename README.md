@@ -1,5 +1,98 @@
 # Boros
 
+Create and Train support **Strength** and **Interval**. Strength keeps its sets,
+reps, RIR and supersets. Interval now uses **Plan > Workout > Circuit > Exercises**.
+Each circuit has ordered active/recovery targets, rest after circuit, and a
+**Repeat circuit** dropdown (0-10 additional executions; default 0). Each execution
+includes every exercise recovery and its own circuit rest, including the final
+one. Continuous mode finishes all repetitions before the next circuit and adds
+optional post-workout rest once. Circuit-only mode never includes workout rest.
+
+A new Interval circuit or continuous execution starts with ten silent seconds labeled **Warm Up**. Strength countdown/count-up rests start immediately. Pause
+retains ownership; Start resumes without another preparation. Main, sticky and
+modal views share the compiled sequence. The main/modal denominator and ring cover one circuit
+execution's exercise/recovery targets; circuit rest, workout rest and preparation
+have their own blocks. The sticky row shows current phase time / total execution
+time, excluding preparation, followed by the phase name. Repeated sequences show
+1st, 2nd, 3rd, etc., restarting for each distinct circuit.
+
+**Stop resets that execution's timer-derived progress** and releases its timer
+slot, while keeping the workout active. Circuit-only Stop preserves other circuits'
+results. Clear retains the workout. Only successful Save, explicit Cancel, or a
+confirmed removal releases workspace-wide workout ownership. Failed writes keep
+recoverable input. One profile/draft owns the workspace across profiles and browser
+tabs; another profile can return to it without seeing its records.
+
+Changing Boros tabs preserves the workout, results, notes and timer controller.
+Train returns to that same workout; changing screens never creates another draft.
+A reload recovers committed Interval progress paused, requiring explicit recovery
+and Start; closed-app time is not activity. Strength restores its timestamp clock.
+Unapplied notes and unrelated editors still have their own discard safeguards.
+Legacy unfinished drafts remain stored; another can resume once ownership is free.
+
+Strength placeholders use compatible actual saved results, including partials,
+without entering or saving values. Planned hints are restricted to the current
+run, stable exercise identity/occurrence and each set's rep/RIR prescription.
+Compatible other workouts in that run may supply hints. Standalone hints consider
+the latest two exercise performances. Instructions shows actual set-by-set History
+when appropriate, with unit conversion; no name-only matches or invented values.
+
+The shared workout hamburger opens Note, then Instructions. Notes remain local
+to the session; read-only instructions come from the started workout snapshot.
+Exercise menus now say Instructions and retain their details, video, Note and
+Replace actions. Interval pending-exercise editing is removed. New custom Interval
+creation is unavailable for now; existing custom Interval drafts remain usable.
+
+The shared session footer matches Strength: Save, then Cancel/Clear. Initial
+per-circuit buttons say Start Circuit and remain wide; compact timer controls are unchanged. Create has centered type
+choosers, trailing 18px type icons, two-line mobile workout names with contained
+dates, compact desktop cards, and picker return anchors that retain builder
+position. Archive retains colored text and keyboard focus with a neutral border.
+
+Saving a plan atomically publishes unpublished workouts to the Workout library.
+Copies stay independent; archived/deleted templates are not silently revived.
+Sound still uses the local start/warning/end MP3s and the existing triple
+rest-complete routine only after post-workout rest. Positive ordinary rests now
+speak Rest once at entry, without gaining start/end beeps. Post-workout rest
+speaks Post-Workout Rest. Preparation and zero rests stay silent. Repeated
+activities/rests have distinct cue IDs; Stop produces no end cue.
+Media availability cannot affect timing; speech uses available local voices only.
+
+A positive Post-Workout Rest also has an independent Start. It starts that rest
+immediately, under the same single-timer ownership rule. Pause retains the
+slot; Stop/completion preserve all circuit results and notes. Rest alone cannot
+save or complete a workout. Active/paused rest-only checkpoints can be resumed
+after reload; closed time is not counted and no media autoplays.
+
+Current contracts: stable **boros database v12**, **backup v18**, **AI v8**.
+V12 adds only the local active-workout pointer store; existing records are not
+rewritten. Backup v18 accepts ten-second Warm Up and immediate rest scopes,
+preserving frozen v17 and earlier readers and the same 40 CSV tables. The local
+workout pointer is not exported; restore reconciles local drafts without importing
+runtime ownership or starting timers/audio.
+Legacy editable circuits convert to equivalent ordered sections, splitting counts
+and preserving every old rest boundary; e.g. three sets of five rounds with set
+and final rest become six sections. Deterministic occurrence IDs retain source
+links. Started drafts, schedules and history keep original snapshots and legacy
+execution support. Strict older AI/backup contracts validate before conversion;
+SHA-256 and photo validation remain intact. Errors abort rather than reset storage.
+
+Audio uses one gesture-enabled runtime across routes/popups, with local assets,
+three completion chimes and local-only speech. Sound Off cancels current/queued
+feedback; returning from background does not replay missed alerts. Short-alert
+mixing uses feature-detected audio-session support. A visible running timer requests
+an optional screen wake lock. Neither API guarantees locked/background alerts,
+external music ducking/resumption or physical-device playback.
+
+See [Train runtime verification](docs/train-runtime-verification.md) for current
+checks and the seven-step owner test. [Workout actions and rest verification](docs/workout-actions-rest-verification.md)
+records the preceding design. [Interval repeat verification](docs/interval-repeat-verification.md)
+records the preceding repeat migration. Earlier
+[Strength/Interval](docs/strength-interval-verification.md) and
+[timer](docs/interval-timer-verification.md) records describe superseded designs.
+Physical-device acceptance, earlier release gates and the production persistence
+investigation remain open. No deployment or hosting change is part of this update.
+
 A React / TypeScript / Vite workout tracker. Phases 1-9 provide a themed shell with single-address navigation,
 local profiles/settings, photos, dated weights, and an exercise library with
 Create exercise, manual plans, validated external AI paste imports, training drafts/timers, saved-session review, recurring calendar schedules, Progress body-weight charts/photos and plan/workout analytics, complete profile ZIP export, reviewed restore/merge/replace/rename, and profile Clear Data. See TODO.md for
@@ -9,7 +102,7 @@ A workout is an ordered collection of exercises; an exercise is one individual
 movement. Create uses Yes/No for unique weeks, consistent top-level field spacing,
 and centered Add exercise/Add workout buttons. Exercise tag assignments use the
 same compact, scrollable pills as library browsing; selections and new tags stay
-in the draft until saved. Names, notes and imported text are never renamed.
+in the draft until saved. Source names and text stay in their plan copies; newly published library variants use a suffix only to resolve a library-name conflict.
 See [Create verification](docs/create-terminology-verification.md).
 
 Plans now support ordered unique-week cycles as well as the existing repeating
@@ -36,10 +129,10 @@ including partial Save, completes a workout; exercise statistics use actual resu
 Calendar reviews saved workouts in a modal with historical note dialogs. There is
 no Train Saved sessions entry point. Unfinished drafts still recover after reload.
 
-The database is still named `boros`; additive **v7** adds deleted-source identity
+The preceding lifecycle revision kept `boros`; additive **v7** added deleted-source identity
 metadata without rewriting existing records (v6 added the workout store).
-AI **v5** distinguishes Plan, Workout and Exercise while reading strict v1-v4
-contracts (legacy `workout` still means one exercise). Backup **v13** includes
+That revision used AI **v5**, which distinguishes Plan, Workout and Exercise while reading strict v1-v4
+contracts (legacy `workout` still means one exercise). Its backup **v13** includes
 workouts, standalone/custom records and deletion metadata, and reads strict v1-v12 archives. See
 [AI format](docs/ai-formatting.md), [backup format](docs/backup-format.md), and
 [workout verification](docs/workout-library-verification.md).
@@ -80,7 +173,7 @@ unsaved input. Nested prescriptions and new unsaved exercises have no Merge acti
 Explicit redirects combine Overall history without changing saved results or independent
 plan/workout prescriptions, repeated occurrences, or plan completion. Chained merges
 resolve to the final destination. Stale edits and unavailable sources are rejected.
-Backups now use v13/database v7, retaining strict v1-v12 import support.
+That revision used v13/database v7, retaining strict v1-v12 import support.
 Exercise restore matches IDs, never unrelated records by display name.
 
 Session autosave/validation now keeps result geometry stable; focused fields receive

@@ -1,3 +1,4 @@
+import { reconcileWorkout } from './active-workout.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { type BorosDatabase, db } from './database.ts'
 import { effectiveProfileName, nameKey, photoSchema, profileInputSchema, selectedPlanIdsSchema, themeSchema, workspaceSettingsSchema } from '../schemas/profile.ts'
@@ -45,6 +46,7 @@ export function profileService(database: BorosDatabase) {
           await getProfile(settings.activeProfileId)
           await repairProfileTemplates(database, settings.activeProfileId)
           await repairClosedRunDrafts(database, settings.activeProfileId)
+          await reconcileWorkout(database)
           return settings
         }
         if ((await Promise.all(database.tables.map((table) => table.count()))).some(Boolean)) {
@@ -71,7 +73,7 @@ export function profileService(database: BorosDatabase) {
       })
     },
     async select(profileId: string) {
-      await database.transaction('rw', [database.profiles, database.settings, database.plans, database.exercises, database.tags, database.schedules, database.drafts, database.sessions, database.restTimers, database.deletedSources], async () => {
+      await database.transaction('rw', [database.activeWorkouts, database.workouts, database.profiles, database.settings, database.plans, database.exercises, database.tags, database.schedules, database.drafts, database.sessions, database.restTimers, database.deletedSources], async () => {
         await getProfile(profileId)
         await repairProfileTemplates(database, profileId)
         await repairClosedRunDrafts(database, profileId)

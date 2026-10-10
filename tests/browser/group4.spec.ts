@@ -1,7 +1,7 @@
 import { confirmDownload } from './settings-actions'
 import 'fake-indexeddb/auto'
 import { planService } from '../../src/db/plans'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { readFile } from 'node:fs/promises'
 import { BorosDatabase } from '../../src/db/database'
 import { scheduleService } from '../../src/db/schedules'

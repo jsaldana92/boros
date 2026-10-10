@@ -6,7 +6,7 @@ import type { CompletedSession } from '../../schemas/session'
 import { trainingBlocks, type PlanExercise } from '../../schemas/plan'
 import { ActionDialog } from '../../components/ui/ConfirmDialog'
 const target = (range?: { min: number; max: number }) => range ? range.min === range.max ? String(range.min) : `${range.min}–${range.max}` : 'unspecified'
-export function SessionReview({ session, onClose, backLabel = 'Back to workouts' }: { session: CompletedSession; onClose: () => void; backLabel?: string }) {
+function StrengthSessionReview({ session, onClose, backLabel = 'Back to workouts' }: { session: CompletedSession; onClose: () => void; backLabel?: string }) {
   const [note, setNote] = useState<{ title: string; text: string }>()
   const result = (exercise: PlanExercise, s: number) => {
     const entry = session.exercises.find((item) => item.id === exercise.id)!, set = entry.sets[s], prescribed = exercise.prescription.sets[s]
@@ -21,4 +21,10 @@ export function SessionReview({ session, onClose, backLabel = 'Back to workouts'
     {note && <ActionDialog title={note.title} onClose={() => setNote(undefined)} actions={<button onClick={() => setNote(undefined)}>Close note</button>}><p className="plain-text">{note.text || 'No notes.'}</p></ActionDialog>}
     <button onClick={onClose}>{backLabel}</button>
   </section>
+}
+
+export function SessionReview(props: Parameters<typeof StrengthSessionReview>[0]) {
+  const session = props.session
+  if (session.day.trainingType !== 'interval') return <StrengthSessionReview {...props} />
+  return <section aria-label="Saved Interval session"><h2>{session.day.name}</h2><p>{session.partial ? 'Partial session' : 'Complete session'}</p><p>Completed: {displayDateTime(session.completedAt)}</p>{session.notes && <section><h3>Note:</h3><p className="plain-text">{session.notes}</p></section>}<ol className="interval-results">{session.interval?.results.map(r => <li key={r.phase.id}><strong>{r.phase.exerciseName ?? r.phase.circuitName}</strong><p>{r.phase.circuitName} &middot; {r.phase.repetition === undefined ? <>Set {r.phase.set} &middot; Round {r.phase.round}</> : r.phase.repetition ? `Repeat ${r.phase.repetition}` : 'Initial'} &middot; {r.phase.kind === 'active' ? 'Active' : 'Rest'}</p><p>{r.status} &middot; {Number((r.elapsedMs / 1000).toFixed(2))}s / {r.phase.durationSeconds}s</p>{r.notes && <p className="plain-text">{r.notes}</p>}</li>)}</ol><button onClick={props.onClose}>{props.backLabel ?? 'Back'}</button></section>
 }

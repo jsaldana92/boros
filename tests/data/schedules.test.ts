@@ -1,3 +1,4 @@
+import { classifyStrengthRecords } from '../../src/db/training-migration.ts'
 import 'fake-indexeddb/auto'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -144,8 +145,8 @@ test('v4 migration preserves all ten populated stores including session/draft/ti
   old.version(4).stores({ profiles: 'id, &nameKey', settings: 'id', photos: '[profileId+id], profileId', measurements: '[profileId+id], [profileId+measuredAt], profileId', exercises: '[profileId+id], profileId, &[profileId+activeNameKey]', tags: '[profileId+id], profileId, &[profileId+nameKey]', plans: '[profileId+id], profileId, &[profileId+activeNameKey]', drafts: '[profileId+id], profileId, &[profileId+activeSourceKey]', sessions: '[profileId+id], profileId, &[profileId+draftId]', restTimers: 'id, profileId' })
   const records = new Map<string, unknown[]>()
   for (const table of old.tables) { const values = await db.table(table.name).toArray(); assert.ok(values.length); records.set(table.name, values); await table.bulkAdd(values) }
-  old.close(); const upgraded = new BorosDatabase(name); t.after(() => upgraded.delete()); await upgraded.open(); assert.equal(upgraded.verno, 7)
-  for (const [table, values] of records) assert.deepEqual(await upgraded.table(table).toArray(), values)
+  old.close(); const upgraded = new BorosDatabase(name); t.after(() => upgraded.delete()); await upgraded.open(); assert.equal(upgraded.verno, 12)
+  for (const [table, values] of records) assert.deepEqual(await upgraded.table(table).toArray(), (classifyStrengthRecords(values), values))
   assert.equal(await (await upgraded.photos.toArray())[0].blob.text(), 'photo'); assert.equal(await upgraded.schedules.count(), 0)
   await upgraded.schedules.add(schedule); upgraded.close(); await upgraded.open()
   assert.equal((await scheduleService(upgraded).get(id, schedule.id)).timeZone, 'America/New_York')

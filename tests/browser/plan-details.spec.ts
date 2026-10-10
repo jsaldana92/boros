@@ -1,5 +1,5 @@
 import { createNamedProfile } from './settings-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { cardAction } from './create-actions'
 
 test.setTimeout(90000)

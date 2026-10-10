@@ -1,6 +1,6 @@
 import { createNamedProfile } from './settings-actions'
 import { startWeekly, closeTimer } from './train-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { copyExercise } from '../../src/schemas/plan'
 import { cardAction, occurrenceAction } from './create-actions'
 
@@ -38,7 +38,7 @@ test('existing plans repair into standalone templates; library notes save direct
   await expect(catalog.getByRole('article')).toHaveCount(8)
   expect(await records(page, 'exercises')).toHaveLength(8)
   const repaired = (await records(page))[0]
-  expect(repaired.updatedAt).toBe(plan.updatedAt); expect(repaired.revision).toBe(2)
+  expect(repaired.updatedAt).toBe(plan.updatedAt); expect(repaired.revision).toBe(3)
   const a = catalog.getByRole('article', { name: 'A', exact: true })
   await expect(a.getByRole('button').locator('strong')).toHaveText('A'); await expect(a.getByRole('button').locator('small')).toHaveText(/Added: \d{2}\/\d{2}\/\d{4}/)
   await cardAction(page, a, 'Edit')
@@ -134,7 +134,7 @@ test('both themes: compact scrollable cards, keyboard dialogs, footer placement,
   await expect(first.locator('[data-occurrence-id]')).toHaveCount(2); await expect(first.locator('.superset-settings')).toHaveCount(0)
   await b(page, 'Save plan').click()
   const saved = (await records(page))[0], oldItems = original.days.flatMap((day) => day.exercises), newItems = saved.days.flatMap((day) => day.exercises)
-  for (const item of oldItems) expect(newItems.find((value) => value.id === item.id).prescription).toEqual(item.prescription)
+  for (const item of oldItems) expect(newItems.find((value) => value.id === item.id).prescription).toEqual({ ...item.prescription, trainingType: 'strength' })
 })
 
 test('A20 B8 rounds expose one correct rest each, including final block and timer recovery', async ({ page }) => {
@@ -144,8 +144,8 @@ test('A20 B8 rounds expose one correct rest each, including final block and time
   await expect(rounds.first().locator('.rest-control')).toHaveCount(1); await expect(rounds.last().locator('.rest-control')).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Superset 1', exact: true }).getByRole('button', { name: 'REST Superset 1 after group', exact: true })).toHaveCount(1)
   await expect(rounds.first()).toContainText('20'); await expect(rounds.first()).toContainText('8')
-  await b(page, 'REST Superset 1 after round 1').click(); await expect(page.getByRole('timer')).toContainText('1:15')
-  await closeTimer(page); await b(page, 'REST Superset 1 after group').click(); await expect(page.getByRole('timer')).toContainText('3:00')
+  await b(page, 'REST Superset 1 after round 1').click(); await expect(page.getByRole('timer')).toContainText('00:05'); await expect(page.getByRole('timer')).toContainText('1:15', { timeout: 8000 })
+  await closeTimer(page); await b(page, 'REST Superset 1 after group').click(); await expect(page.getByRole('timer')).toContainText('00:05'); await expect(page.getByRole('timer')).toContainText('3:00', { timeout: 8000 })
   await page.reload(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0); await startWeekly(page, 'Existing AI', 'First'); await expect(page.getByRole('region', { name: 'Rest timer' })).toContainText('Post-Exercise')
 })
 
@@ -179,7 +179,7 @@ test('picker selection obeys filtered identities, sort order, Select All, single
   await b(page, 'Add selected').evaluate((node: HTMLButtonElement) => { node.click(); node.click() })
   await expect(picker).toHaveCount(0); await expect(page.locator('[data-occurrence-id]')).toHaveCount(9)
   expect((await records(page)).filter((p) => p.name === 'Selection')).toHaveLength(0)
-  await b(page, 'Save plan').click(); await page.reload()
+  await b(page, 'Save plan').click(); await expect(page.getByRole('article', { name: 'Plan Selection', exact: true })).toBeVisible(); await page.reload()
   const saved = (await records(page)).find((p) => p.name === 'Selection'), items = saved.days[0].exercises
   expect(items.map((e) => e.prescription.name)).toEqual(['C','H','G','F','E','D','C','B','A'])
   expect(new Set(items.map((e) => e.id)).size).toBe(9)
@@ -195,7 +195,7 @@ test('occurrence popup keyboard order and Cancel preserve dirty input; tag contr
   for (const theme of ['Dark', 'Light']) {
     await b(page, 'Settings').click(); await b(page, theme).click(); await b(page, 'Create').click()
     await b(page, 'Tags').click()
-    const tags = page.locator('.tag-scroll'); await expect(tags.getByRole('button')).toHaveCount(38)
+    const tags = page.locator('.tag-scroll:visible'); await expect(tags.getByRole('button')).toHaveCount(40)
     expect(await tags.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
     expect(await tags.evaluate((node) => new Set([...node.children].map((el) => Math.round(el.getBoundingClientRect().top))).size)).toBeLessThanOrEqual(3)
     await tags.getByRole('button').last().focus(); expect(await tags.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0)

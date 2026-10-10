@@ -1,5 +1,5 @@
 import { openExerciseAction } from './train-actions'
-import { expect, test, type Page, type Locator } from '@playwright/test'
+import { expect, test, type Page, type Locator } from './strength-test'
 import { cardAction, occurrenceAction } from './create-actions'
 import { waitForDraft } from './train-actions'
 const b=(p:Page,n:string)=>p.getByRole('button',{name:n,exact:true})

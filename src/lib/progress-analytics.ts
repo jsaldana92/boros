@@ -33,14 +33,14 @@ export const legacyPlanKey = (planId: string) => `legacy:${planId}`
 const validActual = (set: RecordedSet): set is ActualSet => !set.skipped && Number.isFinite(set.weightKg) && set.weightKg >= 0 && Number.isSafeInteger(set.reps) && set.reps >= 0
 
 export function deriveProgress(profileId: string, _allPlans: Plan[], allExercises: Exercise[], allSessions: CompletedSession[], schedules: Schedule[] = [], drafts: SessionDraft[] = [], deletedSources: DeletedSource[] = []): ProgressAnalytics {
-  const library = allExercises.filter((e) => e.profileId === profileId), runs = schedules.filter((r) => r.profileId === profileId)
+  const library = allExercises.filter((e) => e.profileId === profileId && e.trainingType !== 'interval'), runs = schedules.filter((r) => r.profileId === profileId)
   const resolve = exerciseResolver(profileId, [...library, ...deletedSources.filter(t => t.kind === 'exercise')])
   const identity = (planId: string | undefined, dayId: string, exercise: PlanExercise) => { const key = exerciseIdentity(planId, dayId, exercise); return key.startsWith('library:') ? `library:${resolve(key.slice(8))}` : key }
   const sessions = allSessions.filter((s) => s.profileId === profileId).sort(sessionOrder), performances: Performance[] = [], outcomes = new Map<string, ExerciseOutcome>()
   const catalogs = new Map<string, Map<string, ProgressItem>>()
   const collect = (instanceId: string, day: TrainingDay, createdAt: string) => {
     const catalog = catalogs.get(instanceId) ?? new Map<string, ProgressItem>(); catalogs.set(instanceId, catalog)
-    for (const exercise of day.exercises) {
+    for (const exercise of day.exercises.filter(e => e.prescription.trainingType !== 'interval')) {
       const key = occurrenceItemKey(day.id, exercise.id), old = catalog.get(key)
       catalog.set(key, { key, name: exercise.prescription.name, nameKey: nameKey(exercise.prescription.name), context: day.name, createdAt: old?.createdAt ?? createdAt, tagIds: exercise.prescription.tagNames.map(nameKey) })
     }
@@ -52,6 +52,7 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
     collect(instanceId, session.day, session.completedAt)
     const savedDraft = drafts.find((d) => d.profileId === profileId && d.id === session.draftId && d.finalizedAt && d.sourcePlanId === session.sourcePlanId && d.sourceDayId === session.sourceDayId)
     for (const [index, occurrence] of session.day.exercises.entries()) {
+      if (occurrence.prescription.trainingType === 'interval') continue
       const results = session.exercises.find((e) => e.id === occurrence.id)?.sets ?? []
       const sets = results.flatMap((result, s) => validActual(result) ? [{ id: `${session.id}:${occurrence.id}:${session.structure?.exercises[index]?.sets[s]?.id ?? s}`, index: s, result }] : [])
       const itemKey = occurrenceItemKey(session.day.id, occurrence.id), exerciseKey = identity(session.sourcePlanId, session.day.id, occurrence)
@@ -72,7 +73,7 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
       if (marker.ref.scheduleId !== run.id) continue
       collect(run.id, marker.day, marker.recordedAt)
       if (!resolved.skipped.has(marker.ref.key)) continue
-      for (const exercise of marker.day.exercises) {
+      for (const exercise of marker.day.exercises.filter(e => e.prescription.trainingType !== 'interval')) {
         const id = `${run.id}:${marker.ref.key}:${exercise.id}`, old = outcomes.get(id)
         // A saved partial performance is not a wholly skipped exercise.
         if (old?.completed || performances.some((p) => p.instanceId === run.id && p.session.occurrence?.key === marker.ref.key && p.occurrence.id === exercise.id)) continue

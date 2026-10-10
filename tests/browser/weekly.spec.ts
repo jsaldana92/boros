@@ -1,7 +1,7 @@
 import { deviceZone } from './settings-actions'
 import { runPage, returnCalendar } from './calendar-actions'
 import { writeFile } from 'node:fs/promises'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import { waitForDraft, closeTimer } from './train-actions'
 
 test.setTimeout(90000)
@@ -59,15 +59,18 @@ test('draft resolution and expired timer recovery retain interrupted input', asy
   await f(page, 'Press set 1 Weight (kg)').fill('30'); await f(page, 'Press set 1 Repetitions').fill('5'); await waitForDraft(page)
   await b(page, 'REST Press after set 1').click(); await expect(page.getByRole('timer')).toContainText('1:05')
   await page.screenshot({ path: info.outputPath('timer-popup.png'), fullPage: true }); await closeTimer(page)
-  await page.evaluate(async () => { const request = indexedDB.open('boros'); await new Promise<void>((resolve) => { request.onsuccess = () => { const db = request.result, tx = db.transaction('restTimers', 'readwrite'), store = tx.objectStore('restTimers'), get = store.get('active'); get.onsuccess = () => store.put({ ...get.result, endAt: new Date(Date.now() - 1000).toISOString() }); tx.oncomplete = () => { db.close(); resolve() } } }) })
-  await page.reload(); await page.getByRole('button', { name: /^Resume Weekly strength/ }).click(); await expect(page.getByRole('timer')).toHaveText('Rest finished'); await expect.poll(async () => !!(await rows(page, 'restTimers'))[0].alertedAt).toBe(true); await b(page, 'Stop').click()
-  await page.reload(); await page.getByRole('article', { name: 'Plan Weekly strength', exact: true }).getByRole('button').click(); await card(page, 'Upper').click(); await expect(b(page, 'Skip')).toBeDisabled(); await b(page, 'Reset').click()
-  await page.getByRole('dialog', { name: 'Reset this workout?', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click(); expect(await rows(page, 'drafts')).toHaveLength(1)
-  await b(page, 'Reset').click(); await page.getByRole('dialog', { name: 'Reset this workout?', exact: true }).getByRole('button', { name: 'Reset', exact: true }).click(); await card(page, 'Upper').click(); await b(page, 'Skip').click(); expect(await rows(page, 'drafts')).toEqual([])
+  await page.evaluate(async () => { const request = indexedDB.open('boros'); await new Promise<void>((resolve) => { request.onsuccess = () => { const db = request.result, tx = db.transaction('restTimers', 'readwrite'), store = tx.objectStore('restTimers'), get = store.get('active'); get.onsuccess = () => store.put({ ...get.result, endAt: new Date(Date.now() - 2000).toISOString() }); tx.oncomplete = () => { db.close(); resolve() } } }) })
+  await page.reload(); await expect(page.getByRole('region', { name: 'Training session', exact: true })).toBeVisible(); await page.locator('.timer-compact').click(); await expect(page.getByRole('timer')).toHaveText('Rest finished'); await expect.poll(async () => !!(await rows(page, 'restTimers'))[0].alertedAt).toBe(true); await b(page, 'Stop').click()
+  expect(await rows(page, 'activeWorkouts')).toHaveLength(1)
+  await page.reload(); await expect(f(page, 'Press set 1 Weight (kg)')).toHaveValue('30')
+  await b(page, 'Cancel').click(); await b(page, 'Leave').click()
+  expect(await rows(page, 'drafts')).toEqual([]); expect(await rows(page, 'activeWorkouts')).toEqual([])
+
 })
 
-test('Sound preference persists; the real local MP3 plays three ended-driven repetitions at root/subpath', async ({ page, request }, info) => {
+test('Sound preference persists; native HTML audio fallback plays three ended-driven repetitions at root/subpath', async ({ page, request }, info) => {
   await page.addInitScript(() => {
+    Object.defineProperty(window, 'AudioContext', { value: undefined, configurable: true })
     ;(window as any).mediaEvidence = { ended: 0, starts: 0, calls: 0, sources: [] as string[], events: [] as string[] }
     ;(window as any).testAudio = []
     document.addEventListener('play', (event) => { const audio = event.target as HTMLAudioElement; if (audio.tagName === 'AUDIO' && !audio.muted) { (window as any).mediaEvidence.starts++; (window as any).mediaEvidence.sources.push(audio.src) } }, true)
@@ -90,7 +93,7 @@ test('Sound preference persists; the real local MP3 plays three ended-driven rep
   await expect(page.getByRole('group', { name: 'Sound', exact: true }).getByRole('button', { name: 'On', exact: true })).toHaveAttribute('aria-pressed', 'true')
   const asset = await request.get('./rest-complete.mp3'); expect(asset.status()).toBe(200); expect((await asset.body()).length).toBe(25913)
   await b(page, 'Train').click(); await page.getByRole('article', { name: 'Plan Weekly strength', exact: true }).getByRole('button').click(); await card(page, 'Upper').click(); await b(page, 'Start').click()
-  await page.clock.install(); await b(page, 'REST Press after set 1').click(); await expect(page.getByRole('timer')).toContainText('1:05'); await page.clock.fastForward(66000)
+  await page.clock.install(); await b(page, 'REST Press after set 1').click(); await expect(page.getByRole('timer')).toContainText('1:05'); await page.clock.runFor(66000)
   await expect(page.getByRole('timer')).toHaveText('Rest finished')
   try { await expect.poll(() => page.evaluate(() => (window as any).mediaEvidence.ended), { timeout: 15000 }).toBe(3) }
   finally { await writeFile(info.outputPath('media-diagnostics.json'), JSON.stringify({ timers: await rows(page, 'restTimers'), media: await page.evaluate(() => ({ ...(window as any).mediaEvidence, states: (window as any).testAudio.map((a: HTMLAudioElement) => ({ src: a.src, paused: a.paused, time: a.currentTime, duration: a.duration, error: a.error?.message, muted: a.muted })) })) })) }

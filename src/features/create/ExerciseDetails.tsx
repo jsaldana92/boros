@@ -1,3 +1,4 @@
+import { trainingTypeName, trainingTypeOf } from '../../schemas/training-type'
 import { DetailsActions, DetailsActionsButton } from './DetailsActions'
 import { useState } from 'react'
 import { ActionDialog } from '../../components/ui/ConfirmDialog'
@@ -13,9 +14,10 @@ export function ExerciseDetails({ exercise, tags, busy, error, onClose, onEdit, 
   return <>
     <ActionDialog title={exercise.name} className="exercise-details" onClose={onClose}
       headerActions={<DetailsActionsButton label="Exercise actions" expanded={actions} onClick={() => setActions(true)} />}>
-      <ol>{exercise.sets.map((set, index) => <li key={index}>Set {index + 1}: {set.reps.min === set.reps.max ? set.reps.min : `${set.reps.min}–${set.reps.max}`} reps; {set.rir ? `${set.rir.min === set.rir.max ? set.rir.min : `${set.rir.min}–${set.rir.max}`} RIR` : 'RIR unspecified'}</li>)}</ol>
-      <p>Rest between sets: {exercise.restBetweenSeconds === undefined ? 'unspecified' : `${exercise.restBetweenSeconds} seconds`}. Rest after exercise: {exercise.restAfterSeconds === undefined ? 'unspecified' : `${exercise.restAfterSeconds} seconds`}.</p>
-      <div className="tag-list">{tags.map((name) => <span className="tag-chip" key={name}>{name}</span>)}</div>
+      <p className="muted">{trainingTypeName(trainingTypeOf(exercise))}</p>
+      {exercise.trainingType === 'interval' ? <p>{exercise.activeSeconds}s active &middot; {exercise.recoverySeconds}s rest</p> : <><ol>{exercise.sets.map((set, index) => <li key={index}>Set {index + 1}: {set.reps.min === set.reps.max ? set.reps.min : `${set.reps.min}–${set.reps.max}`} reps; {set.rir ? `${set.rir.min === set.rir.max ? set.rir.min : `${set.rir.min}–${set.rir.max}`} RIR` : 'RIR unspecified'}</li>)}</ol>
+      <p>Rest between sets: {exercise.restBetweenSeconds === undefined ? 'unspecified' : `${exercise.restBetweenSeconds} seconds`}. Rest after exercise: {exercise.restAfterSeconds === undefined ? 'unspecified' : `${exercise.restAfterSeconds} seconds`}.</p></>}
+      <div className="tag-list">{tags.map((name) => <span className="tag-chip" key={name}>{['strength', 'interval'].includes(name.normalize('NFKC').trim().toLowerCase()) ? `${name} (tag)` : name}</span>)}</div>
       {exercise.instructions?.trim() && <section className="exercise-information" aria-label="Instructions"><h3>Instructions</h3><p className="plain-text">{exercise.instructions}</p></section>}
       {exercise.notes?.trim() && <section className="exercise-information exercise-note" aria-label="Note"><h3>Note</h3><p className="plain-text">{exercise.notes}</p></section>}
       {/* Dispose while a higher popup obscures the player, and on every exit. */}

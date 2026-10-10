@@ -1,3 +1,9 @@
+import { useTrainingScroll } from './use-training-scroll'
+import { SessionActions } from './SessionActions'
+import { WorkoutActions, NoteDialog } from './WorkoutActions'
+import { IntervalSession } from './IntervalSession'
+import { TypeChoice } from '../../components/ui/TrainingType'
+import type { TrainingType } from '../../schemas/training-type'
 import { WorkoutPicker } from '../create/WorkoutPicker'
 import { plans } from '../../db/plans'
 import { ExercisePicker } from '../create/ExercisePicker'
@@ -7,11 +13,12 @@ import { ExerciseInformation } from './ExerciseInformation'
 import { browserZone, localToday } from '../../lib/calendar-dates'
 import type { ResultHints } from '../../lib/previous-results'
 import { TimerDisplay } from './TimerDisplay'
-import { TimerFeedback } from './timer-feedback'
+import { trainingRuntime } from './training-runtime'
+import { activeWorkouts } from '../../db/active-workout'
 import { restLabel } from '../../lib/rest-duration'
 import { SessionReview } from './SessionReview'
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { Menu, NotebookPen } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWorkspace } from '../../app/workspace-context'
 import { PlanSelection } from './PlanSelection'
@@ -23,13 +30,11 @@ import { useCurrentInstant } from '../../lib/use-current-instant'
 import { activePlanRuns } from '../../db/active-plans'
 import { useScreenNavigation } from '../../app/navigation-context'
 import { sessions } from '../../db/sessions'
-import { assessSession, hasSessionInput, hasDraftProgress, displayedLoad, numericResult, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
+import { assessSession, hasSessionInput, hasResumableDraft, displayedLoad, numericResult, type CompletedSession, type RestTimer, type SessionDraft } from '../../schemas/session'
 import { nameKey, type WeightUnit } from '../../schemas/profile'
-import type { ExerciseInput } from '../../schemas/exercise'
 import { trainingBlocks, type PlanExercise } from '../../schemas/plan'
-import { DraftController } from './draft-controller'
 import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { Field, TextareaField } from '../../components/ui/Field'
+import { Field } from '../../components/ui/Field'
 
 const target = (range?: { min: number; max: number }) => range ? range.min === range.max ? String(range.min) : `${range.min}–${range.max}` : 'unspecified'
 export function TrainPage() {
@@ -37,38 +42,58 @@ export function TrainPage() {
   return <TrainWorkspace key={snapshot.profile.id} profileId={snapshot.profile.id} unit={snapshot.profile.weightUnit} />
 }
 function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUnit }) {
-  const { snapshot } = useWorkspace(), { trainingEntry, returnScreen, openScreen } = useScreenNavigation()
+  const { snapshot, select } = useWorkspace(), { trainingEntry, returnScreen, openScreen } = useScreenNavigation()
+  const [customType, setCustomType] = useState(false)
   const [selecting, setSelecting] = useState(false), [workoutPicker, setWorkoutPicker] = useState(false), [starting, setStarting] = useState(false)
   const [attempt, setAttempt] = useState(0), [error, setError] = useState(''), [planId, setPlan] = useState('')
-  const [opened, setOpened] = useState<SessionDraft>(), [review, setReview] = useState<CompletedSession>()
+  const [requested, setOpened] = useState<SessionDraft>(), [review, setReview] = useState<CompletedSession>()
+  const [dismissedDrafts, setDismissedDrafts] = useState(new Set<string>())
   const [programContext, setProgramContext] = useState<{ planId: string; runId: string; week?: string }>()
+  const ownership = useLiveQuery(() => activeWorkouts.current().then(active => ({ active })).catch(error => ({ active: undefined, error: (error as Error).message })), [attempt])
   const instant = useCurrentInstant()
   const result = useLiveQuery(async () => {
     try { return { data: await sessions.library(profileId), error: '' } } catch (error) { return { data: undefined, error: (error as Error).message } }
   }, [profileId, attempt])
-  const data = result?.data, activeRuns = activePlanRuns(data?.schedules ?? [], data?.sessions ?? [], instant), activeIds = new Set(activeRuns.map((run) => run.planId))
+  const data = result?.data
+  const active = ownership?.active
+  const activeDraft = active?.profileId === profileId && !dismissedDrafts.has(active.draftId) ? data?.drafts.find(d => d.id === active.draftId) : undefined
+  const opened = (requested && !dismissedDrafts.has(requested.id) ? requested : undefined) ?? activeDraft
+  const activeRuns = activePlanRuns(data?.schedules ?? [], data?.sessions ?? [], instant), activeIds = new Set(activeRuns.map((run) => run.planId))
   const selected = data?.plans.filter((plan) => activeIds.has(plan.id)) ?? []
   const plan = data?.plans.find((item) => item.id === planId)
   const focus = () => requestAnimationFrame(() => document.getElementById('train-heading')?.focus())
+  useEffect(() => {
+    if (!activeDraft || requested && !dismissedDrafts.has(requested.id)) return
+    let alive = true
+    // Synchronize the external ownership selection, retaining a stale editor's
+    // recoverable input if another tab subsequently removes/finalizes its record.
+    void Promise.resolve(activeDraft).then(draft => { if (alive && !dismissedDrafts.has(draft.id)) setOpened(draft) })
+    return () => { alive = false }
+  }, [activeDraft, requested, dismissedDrafts])
   const open = (value: { draft?: SessionDraft; session?: CompletedSession }) => { const record = value.draft ?? value.session; if (record?.occurrence) setProgramContext({ planId: record.sourcePlanId!, runId: record.occurrence.scheduleId, week: record.occurrence.scheduledWeek }); setOpened(value.draft); setReview(value.session); focus() }
   useEffect(() => {
     if (!trainingEntry || trainingEntry.profileId !== profileId) return
     let alive = true
-    sessions.library(profileId).then((saved) => {
+    sessions.library(profileId).then(async (saved) => {
       if (!alive) return
       const session = saved.sessions.find((item) => item.id === trainingEntry.sessionId || item.draftId === trainingEntry.draftId)
       const draft = saved.drafts.find((item) => item.id === trainingEntry.draftId)
       if (session) { setOpened(undefined); setReview(session) }
-      else if (draft) { setReview(undefined); setOpened(draft) }
+      else if (draft) { const claimed = await sessions.getDraft(profileId, draft.id); if (alive) { setReview(undefined); setOpened(claimed) } }
       else setError('This session is unavailable. Open it again from its program.')
     }).catch((e: Error) => { if (alive) setError(e.message) })
     return () => { alive = false }
   }, [trainingEntry, profileId])
-  const startWorkout = async (id?: string) => { if (starting) return; setStarting(true); setError(''); try { const draft = await sessions.startStandalone(profileId, id); setWorkoutPicker(false); setPlan(''); open({ draft }) } catch (e) { setError((e as Error).message) } finally { setStarting(false) } }
+  if (!ownership) return <p role="status">Loading workout...</p>
+  if ('error' in ownership && ownership.error && !opened) return <p role="alert">{ownership.error} <button onClick={() => setAttempt(n => n + 1)}>Retry training</button></p>
+  if (!opened && ownership.active && ownership.active.profileId !== profileId) return <><h1 id="train-heading" tabIndex={-1}>Train</h1><p>A workout is active in another profile.</p><button onClick={() => void select(ownership.active!.profileId)}>Return to workout</button></>
+  const startWorkout = async (id?: string, trainingType: TrainingType = 'strength') => { if (starting) return; setStarting(true); setError(''); try { const draft = await sessions.startStandalone(profileId, id, trainingType); setWorkoutPicker(false); setPlan(''); open({ draft }) } catch (e) { setError((e as Error).message) } finally { setStarting(false) } }
+  const resumeWorkout = async (draft: SessionDraft) => { if (starting) return; setStarting(true); setError(''); try { const claimed = await sessions.getDraft(profileId, draft.id); setPlan(claimed.sourcePlanId ?? ''); open({ draft: claimed }) } catch (e) { setError((e as Error).message) } finally { setStarting(false) } }
   const selectedRun = data?.schedules.find((run) => run.id === programContext?.runId && run.planId === planId)
   return <><h1 id="train-heading" tabIndex={-1}>{opened ? opened.source?.kind === 'custom' ? 'Custom Workout' : opened.source?.kind === 'workout' ? 'Standalone Workout' : opened.planName : !review && plan ? selectedRun ? programSummary(selectedRun, localToday(selectedRun.timeZone, instant)).name : plan.name : 'Train'}</h1>
+    {'error' in ownership && ownership.error && <p role="alert">{ownership.error} <button onClick={() => setAttempt(n => n + 1)}>Retry training</button></p>}
     {result?.error && <p role="alert">Could not refresh saved training data or timer. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry training</button></p>}
-    {opened ? <SessionEditor key={opened.id} initial={opened} unit={unit} timer={data?.timer?.draftId === opened.id ? data.timer : undefined} onClose={() => { setOpened(undefined); if (trainingEntry && returnScreen !== 'train') openScreen(returnScreen); else focus() }} onCompleted={(session) => { setOpened(undefined); setReview(session); focus() }} />
+    {opened ? <TypedSessionEditor key={opened.id} initial={opened} unit={unit} timer={data?.timer?.draftId === opened.id ? data.timer : undefined} onClose={() => { setDismissedDrafts(ids => new Set(ids).add(opened.id)); setOpened(undefined); if (trainingEntry && returnScreen !== 'train') openScreen(returnScreen); else focus() }} onCompleted={(session) => { setDismissedDrafts(ids => new Set(ids).add(opened.id)); setOpened(undefined); setReview(session); focus() }} />
       : review ? <SessionReview session={review} onClose={() => { setReview(undefined); focus() }} /> : <>
         {!result && <p role="status">Loading workouts...</p>}
         {data && <>
@@ -78,38 +103,44 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
               const runs = activeRuns.filter((run) => run.planId === item.id)
               return runs.map((run) => { const summary = programSummary(run, localToday(run.timeZone, instant)); return <PlanCard key={run.id} plan={summary} subtitle={<><span className="current-program-week">{currentProgramLabel(run, data.sessions, instant)}</span><span className="muted">{planSubtitle(summary)}</span></>} onClick={() => { setProgramContext({ planId: item.id, runId: run.id }); setPlan(item.id); focus() }} /> })
             })}</div><button className="catalog-card add-plan-card" onClick={() => setSelecting(true)}>Add Plan</button>
-            <hr /><div className="train-section-heading"><h2>Workout</h2><p>Start a workout</p></div><div className="train-workout-actions"><button disabled={starting} onClick={() => setWorkoutPicker(true)}>Existing Workout</button><button disabled={starting} onClick={() => void startWorkout()}>Custom Workout</button></div>
+            <hr /><div className="train-section-heading"><h2>Workout</h2><p>Start a workout</p></div><div className="train-workout-actions"><button disabled={starting} onClick={() => setWorkoutPicker(true)}>Existing Workout</button><button disabled={starting} onClick={() => setCustomType(true)}>Custom Workout</button></div>
           </>}
-          {data.drafts.some((draft) => hasDraftProgress(draft)) && <section aria-label="Unfinished sessions"><h2>Unfinished sessions</h2><div className="unfinished-cards">{data.drafts.filter((draft) => hasDraftProgress(draft)).map((draft) => <button className="catalog-card unfinished-card" key={draft.id} aria-label={'Resume ' + (draft.planName ?? draft.day.name) + ' / ' + draft.day.name + ' / ' + localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))} onClick={() => { setPlan(draft.sourcePlanId ?? ''); open({ draft }) }}><span>{draft.planName ?? (draft.source?.kind === 'custom' ? 'Custom Workout' : 'Standalone Workout')} &middot; {localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))}</span><small>{draft.day.name}</small></button>)}</div></section>}
+          {data.drafts.some((draft) => hasResumableDraft(draft)) && <section aria-label="Unfinished sessions"><h2>Unfinished sessions</h2><div className="unfinished-cards">{data.drafts.filter((draft) => hasResumableDraft(draft)).map((draft) => <button className="catalog-card unfinished-card" key={draft.id} aria-label={'Resume ' + (draft.planName ?? draft.day.name) + ' / ' + draft.day.name + ' / ' + localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))} disabled={starting} onClick={() => void resumeWorkout(draft)}><span>{draft.planName ?? (draft.source?.kind === 'custom' ? 'Custom Workout' : 'Standalone Workout')} &middot; {localToday(draft.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(draft.startedAt))}</span><small>{draft.day.name}</small></button>)}</div></section>}
           {selecting && <PlanSelection plans={data.plans} activeIds={activeIds} onClose={() => { setSelecting(false) }} />}
         </>}
       </>}
+    {customType && <TypeChoice intervalUnavailable onClose={() => setCustomType(false)} onChoose={type => { setCustomType(false); void startWorkout(undefined, type) }} />}
     {workoutPicker && <WorkoutPicker profileId={profileId} onClose={() => setWorkoutPicker(false)} onChoose={(workout) => void startWorkout(workout.id)} />}
     {error && <p role="alert">{error}</p>}
   </>
 }
+function TypedSessionEditor(props: Parameters<typeof SessionEditor>[0]) { return props.initial.day.trainingType === 'interval' ? <IntervalSession {...props} /> : <SessionEditor {...props} /> }
 function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial: SessionDraft; unit: WeightUnit; timer?: RestTimer; onClose: () => void; onCompleted: (session: CompletedSession) => void }) {
+  useTrainingScroll(initial.profileId, initial.id)
   const { setDirty, sound, registerLeaveGuard, snapshot } = useWorkspace()
   const { rememberTraining } = useScreenNavigation()
   const [picking, setPicking] = useState(false), [menu, setMenu] = useState<string>(), [replacing, setReplacing] = useState<string>(), [replacement, setReplacement] = useState<{ id: string; revision: number }>(), [confirmSwap, setConfirmSwap] = useState(false)
   const [savingCustom, setSavingCustom] = useState<{ partial: boolean }>(), [addToLibrary, setAddToLibrary] = useState(false), [workoutName, setWorkoutName] = useState('')
   const choices = useLiveQuery(async () => { try { return { data: await plans.library(initial.profileId) } } catch (error) { return { error: (error as Error).message } } }, [initial.profileId])
-  const [controller] = useState(() => new DraftController(initial)), [, render] = useState(0)
+  const [controller] = useState(() => trainingRuntime().strengthFor(initial)), [, render] = useState(0)
   const day = controller.snapshot.day, structure = controller.snapshot.structure
   useEffect(() => { rememberTraining({ profileId: initial.profileId, draftId: initial.id }) }, [initial.profileId, initial.id, rememberTraining])
   const [note, setNote] = useState<{ index?: number; value: string }>(), [noteDirty, setNoteDirty] = useState(false)
-  const [info, setInfo] = useState<ExerciseInput>(), [confirm, setConfirm] = useState<'clear' | 'partial' | 'reload' | 'leave'>()
+  const [info, setInfo] = useState<PlanExercise>(), [confirm, setConfirm] = useState<'clear' | 'partial' | 'reload' | 'leave' | 'noteLeave'>()
+  const exerciseMenuTrigger = useRef<HTMLButtonElement | null>(null)
+  const slot = useLiveQuery(() => sessions.timerSlot().catch(() => ({ profileId: '', draftId: '' })), [])
   const [error, setError] = useState(''), [timerBusy, setTimerBusy] = useState(false)
   const [leaving, setLeaving] = useState(false), leaveBusy = useRef(false), leaveReply = useRef<((allowed: boolean) => void) | undefined>(undefined)
+  const history = useLiveQuery(() => sessions.history({ ...controller.record, day }).catch(() => undefined), [initial.id, day])
   const hints = useLiveQuery(async () => { try { return { values: await sessions.hints({ ...controller.record, day }, unit) } } catch { return { values: {} as ResultHints, error: 'Previous results could not load. You can still enter this session.' } } }, [initial.id, day, unit])
-  const [feedback] = useState(() => new TimerFeedback(() => new Audio(new URL(import.meta.env.BASE_URL + 'rest-complete.mp3', document.baseURI).href), (milliseconds) => { navigator.vibrate?.(milliseconds) }, setError))
-  useEffect(() => () => feedback.cancel(), [feedback, sound])
+  const feedback = trainingRuntime().feedback
+  useEffect(() => trainingRuntime().subscribe(() => { if (trainingRuntime().error) setError(trainingRuntime().error) }), [])
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
     controller.activate()
     const unsubscribe = controller.subscribe(() => render((value) => value + 1))
     heading.current?.focus()
-    return () => { unsubscribe(); controller.dispose(); setDirty(false) }
+    return () => { unsubscribe(); setDirty(false) }
   }, [controller, setDirty])
   const unsaved = controller.status !== 'saved' || controller.busy || noteDirty
   useEffect(() => { setDirty(unsaved) }, [unsaved, setDirty])
@@ -122,7 +153,9 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     finally { leaveBusy.current = false; setLeaving(false); leaveReply.current = undefined }
   }
   const requestSessionLeave = (destination?: Screen) => new Promise<boolean>((resolve) => {
-    if (destination === 'settings') {
+    if (controller.retired) { resolve(true); return }
+    if (destination && noteDirty) { leaveReply.current = resolve; setConfirm('noteLeave'); return }
+    if (destination) {
       void controller.prepareSettings().then(() => { setDirty(false); resolve(true) }).catch((e: Error) => { setError(e.message); resolve(false) })
       return
     }
@@ -146,7 +179,7 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
   const memberLabel = (exercise: PlanExercise) => day.exercises.filter((item) => item.prescription.name === exercise.prescription.name).length > 1 ? `${exercise.prescription.name} occurrence ${day.exercises.findIndex((item) => item.id === exercise.id) + 1}` : exercise.prescription.name
   const memberHeading = (exercise: PlanExercise) => {
     const e = day.exercises.findIndex((item) => item.id === exercise.id), label = memberLabel(exercise)
-    return <div className="training-heading" key={exercise.id}><h3>{label}</h3><button aria-label={`Actions for ${label}`} onClick={() => setMenu(day.exercises[e].id)}><Menu aria-hidden="true" size={20} /></button></div>
+    return <div className="training-heading" key={exercise.id}><h3>{label}</h3><button aria-label={`Actions for ${label}`} onClick={event => { exerciseMenuTrigger.current = event.currentTarget; setMenu(day.exercises[e].id) }}><Menu aria-hidden="true" size={20} /></button></div>
   }
   const swap = () => act(async () => {
     if (!replacing || !replacement) return
@@ -171,19 +204,19 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     </div>{hint && <span className="sr-only" id={`previous-${exercise.id}-${s}`}>Placeholders show previous results, not entered values.</span>}{set.unit !== unit && set.load && numericResult(set.load) === undefined && <p className="field-error">Invalid saved load in {set.unit}; replace it with a valid {unit} value.</p>}<div className="skip-row"><label className="check-label skip-control"><input type="checkbox" aria-label={`Skip ${label}`} checked={set.skipped} onChange={(event) => update('skipped', event.target.checked)} />Skip</label></div></div>
   }
   return <section className="training-session" aria-label="Training session">
-    <div className="training-heading"><h2 ref={heading} tabIndex={-1}>{day.name}</h2><button aria-label="Session Note" disabled={controller.busy || !!controller.record.finalizedAt} onClick={() => setNote({ value: controller.input.notes })}><NotebookPen aria-hidden="true" size={20} /></button></div>
+    <div className="training-heading"><h2 ref={heading} tabIndex={-1}>{day.name}</h2><WorkoutActions instructions={day.instructions} noteDisabled={controller.busy || !!controller.record.finalizedAt} onNote={() => setNote({ value: controller.input.notes })} /></div>
     <p>Started: {localToday(initial.occurrence?.timeZone ?? snapshot.profile.timeZone ?? browserZone(), new Date(initial.startedAt))}</p>
     {hints?.error && <p role="alert">{hints.error}</p>}
     <p className="draft-save-status" role="status">{controller.status === 'saved' ? '' : controller.status === 'failed' ? 'Draft not saved. Your input is kept.' : 'Saving…'}</p>
     {controller.error && <p role="alert">{controller.error}</p>}
     {controller.status === 'failed' && <div className="actions"><button disabled={controller.busy} onClick={() => void act(() => controller.flush())}>Retry draft save</button><button disabled={controller.busy} onClick={() => setConfirm('reload')}>Reload saved draft</button></div>}
-    {timer && <TimerDisplay key={timer.token} feedback={feedback} sound={sound} timer={timer} disabled={timerBusy || controller.busy} onAction={(action) => void timerAction(() => controller.changeTimer(timer.token, action))} />}
+    {timer && <TimerDisplay feedback={feedback} sound={sound} timer={timer} disabled={timerBusy || controller.busy} onAction={(action) => void timerAction(async () => { await controller.changeTimer(timer.token, action); const data = await sessions.library(initial.profileId); trainingRuntime().ownTimer(data.timer) })} />}
     {controller.record.finalizedAt && <p role="status">This draft is completed. Return to workouts to review the saved session.</p>}
     <fieldset disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt}><legend className="sr-only">Session results</legend>
       {trainingBlocks(day).map((block) => {
         const rounds = sessionRounds(block.members, structure), member = block.members[0]
         const roundNumber = (r: number) => structure?.exercises.find(e => e.id === rounds[r][0].member.id)?.sets[rounds[r][0].index].round ?? r + 1
-        const rest = (index: number, after: boolean) => <RestControl label={block.group ? `Superset ${block.group.number} ${after ? 'after group' : `after round ${roundNumber(index)}`}` : `${memberLabel(member)} ${after ? 'between exercises' : `after set ${index + 1}`}`} seconds={block.group ? after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds : after ? member.prescription.restAfterSeconds : member.prescription.restBetweenSeconds} onStart={() => { feedback.unlock(sound && (block.group ? after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds : after ? member.prescription.restAfterSeconds : member.prescription.restBetweenSeconds) !== undefined); return timerAction(() => block.group ? controller.startGroupTimer(block.id, index) : controller.startTimer(block.id, index)) }} />
+        const rest = (index: number, after: boolean) => <RestControl disabled={!!slot} label={block.group ? `Superset ${block.group.number} ${after ? 'after group' : `after round ${roundNumber(index)}`}` : `${memberLabel(member)} ${after ? 'between exercises' : `after set ${index + 1}`}`} seconds={block.group ? after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds : after ? member.prescription.restAfterSeconds : member.prescription.restBetweenSeconds} onStart={() => { trainingRuntime().requestTimerPopup(); trainingRuntime().unlock(sound && (block.group ? after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds : after ? member.prescription.restAfterSeconds : member.prescription.restBetweenSeconds) !== undefined); return timerAction(async () => { const timer = await (block.group ? controller.startGroupTimer(block.id, index) : controller.startTimer(block.id, index)); trainingRuntime().ownTimer(timer) }) }} />
         return <section className={`training-exercise${block.group ? ' training-superset' : ''}`} key={block.id} aria-label={block.group ? `Superset ${block.group.number}` : memberLabel(member)}>
           {block.group && <><h3>Superset {block.group.number}</h3><p>{block.members.map((m) => `${memberLabel(m)}: ${m.prescription.sets.length} sets`).join(' \u00b7 ')}</p></>}
           {block.members.map(memberHeading)}
@@ -195,30 +228,26 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
       <div className="session-add session-add-exercise"><button disabled={day.exercises.length >= 100} onClick={() => setPicking(true)}>Add Exercise</button></div>
     </fieldset>
     {error && error !== controller.error && <p role="alert">{error}</p>}
-    <div className="session-actions"><button className="primary" disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={save}>{controller.busy ? 'Working...' : 'Save'}</button><div className="session-secondary"><button disabled={leaving || controller.busy || timerBusy} onClick={() => void requestSessionLeave().then((allowed) => { if (allowed) onClose() })}>Cancel</button><button disabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} onClick={() => hasSessionInput(controller.input) ? setConfirm('clear') : void act(() => controller.clear())}>Clear</button></div></div>
+    <SessionActions disabled={leaving || controller.busy || timerBusy} saveDisabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} clearDisabled={leaving || controller.busy || timerBusy || !!controller.record.finalizedAt} working={controller.busy} save={save} cancel={() => void requestSessionLeave().then(allowed => { if (allowed) onClose() })} clear={() => hasSessionInput(controller.input) ? setConfirm('clear') : void act(() => controller.clear())} />
     {note && <NoteDialog value={note.value} title={day.name} onDirty={setNoteDirty} onClose={() => { setNote(undefined); setNoteDirty(false) }} onApply={(value) => { const input = structuredClone(controller.input); if (note.index === undefined) input.notes = value; else input.exercises[note.index].notes = value; controller.change(input); setNote(undefined); setNoteDirty(false) }} />}
-    {picking && <ActionDialog title="Add Exercise" onClose={() => setPicking(false)}>{choices?.error ? <p role="alert">{choices.error}</p> : choices?.data ? <ExercisePicker path={['Train', 'Exercise']} choices={choices.data.choices} remaining={100 - day.exercises.length} onClose={() => setPicking(false)} onChoose={(items) => { try { controller.addExercises(items, unit); setPicking(false) } catch (e) { setError((e as Error).message); setPicking(false) } }} /> : <p role="status">Loading exercises...</p>}</ActionDialog>}
-    {menu && <ActionDialog title="Exercise actions" onClose={() => setMenu(undefined)}><div className="exercise-action-list"><button onClick={() => { setInfo(day.exercises.find(e => e.id === menu)!.prescription); setMenu(undefined) }}>Information</button><button onClick={() => { const index = day.exercises.findIndex(e => e.id === menu); setNote({ index, value: controller.input.exercises[index].notes }); setMenu(undefined) }}>Note</button><button onClick={() => { setReplacing(menu); setReplacement(undefined); setError(''); setMenu(undefined) }}>Replace</button></div></ActionDialog>}
+    {picking && <ActionDialog title="Add Exercise" onClose={() => setPicking(false)}>{choices?.error ? <p role="alert">{choices.error}</p> : choices?.data ? <ExercisePicker path={['Train', 'Exercise']} choices={choices.data.choices.filter(c => c.prescription.trainingType !== 'interval')} remaining={100 - day.exercises.length} onClose={() => setPicking(false)} onChoose={(items) => { try { controller.addExercises(items, unit); setPicking(false) } catch (e) { setError((e as Error).message); setPicking(false) } }} /> : <p role="status">Loading exercises...</p>}</ActionDialog>}
+    {menu && <ActionDialog title="Exercise actions" onClose={() => setMenu(undefined)}><div className="exercise-action-list"><button onClick={() => { setInfo(day.exercises.find(e => e.id === menu)!); setMenu(undefined) }}>Instructions</button><button onClick={() => { const index = day.exercises.findIndex(e => e.id === menu); setNote({ index, value: controller.input.exercises[index].notes }); setMenu(undefined) }}>Note</button><button onClick={() => { setReplacing(menu); setReplacement(undefined); setError(''); setMenu(undefined) }}>Replace</button></div></ActionDialog>}
     {replacing && <ActionDialog title="Replace Exercise" onClose={() => { if (!controller.busy) setReplacing(undefined) }} actions={<><button disabled={controller.busy} onClick={() => setReplacing(undefined)}>Cancel</button><button className="primary" disabled={!replacement || controller.busy} onClick={requestSwap}>Swap</button></>}>
-      {choices?.data ? <ExercisePicker choices={choices.data.choices} remaining={1} onChoose={() => {}} onClose={() => setReplacing(undefined)} initialTags={day.exercises.find(e => e.id === replacing)?.prescription.tagNames.map(nameKey)} single={{ selected: replacement ? `exercise:${replacement.id}` : undefined, onSelect: id => { const choice = choices.data!.choices.find(c => c.id === id)!, record = choices.data!.exercises.find(e => e.id === (choice.source.kind === 'exercise' ? choice.source.id : ''))!; setReplacement({ id: record.id, revision: record.revision }) } }} /> : <p role="status">{choices?.error ?? 'Loading exercises...'}</p>}{error && <p role="alert">{error}</p>}
+      {choices?.data ? <ExercisePicker choices={choices.data.choices.filter(c => c.prescription.trainingType !== 'interval')} remaining={1} onChoose={() => {}} onClose={() => setReplacing(undefined)} initialTags={day.exercises.find(e => e.id === replacing)?.prescription.tagNames.map(nameKey)} single={{ selected: replacement ? `exercise:${replacement.id}` : undefined, onSelect: id => { const choice = choices.data!.choices.find(c => c.id === id)!, record = choices.data!.exercises.find(e => e.id === (choice.source.kind === 'exercise' ? choice.source.id : ''))!; setReplacement({ id: record.id, revision: record.revision }) } }} /> : <p role="status">{choices?.error ?? 'Loading exercises...'}</p>}{error && <p role="alert">{error}</p>}
     </ActionDialog>}
     {confirmSwap && <ConfirmDialog title="Replace Exercise?" confirmLabel="Swap" busy={controller.busy} onCancel={() => setConfirmSwap(false)} onConfirm={() => void swap()}><p>This will clear the results and notes entered for this exercise.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
-    {info && <ExerciseInformation exercise={info} onClose={() => setInfo(undefined)} />}
+    {info && <ExerciseInformation exercise={info.prescription} history={history?.[info.id]} unit={unit} returnFocus={exerciseMenuTrigger} onClose={() => setInfo(undefined)} />}
     {savingCustom && <ActionDialog title="Saving Completed Workout" onClose={() => { if (!controller.busy) setSavingCustom(undefined) }} actions={<><button disabled={controller.busy} onClick={() => setSavingCustom(undefined)}>Cancel</button><button className="primary" disabled={controller.busy} onClick={() => void finish(savingCustom.partial, addToLibrary ? { name: workoutName } : undefined)}>Save</button></>}><p>Do you wish to add this workout to your workout library?</p><div className="segmented" aria-label="Add to workout library"><button aria-pressed={addToLibrary} onClick={() => setAddToLibrary(true)}>Yes</button><button aria-pressed={!addToLibrary} onClick={() => setAddToLibrary(false)}>No</button></div>{addToLibrary && <Field label="Workout name:" maxLength={120} value={workoutName} onChange={(event) => setWorkoutName(event.target.value)} />}{error && <p role="alert">{error}</p>}</ActionDialog>}
-    {confirm && <ConfirmDialog title={confirm === 'clear' ? 'Clear entered results?' : confirm === 'leave' ? `Leaving ${day.name}` : confirm === 'partial' ? 'Save partial session?' : 'Reload saved draft?'} confirmLabel={confirm === 'clear' ? 'Clear' : confirm === 'leave' ? 'Leave' : confirm === 'partial' ? 'Save partial session' : 'Reload draft'} busy={leaving || controller.busy} destructive={confirm === 'clear' || confirm === 'leave'} cancelLabel="Cancel" onCancel={() => { if (confirm === 'leave') { leaveReply.current?.(false); leaveReply.current = undefined } setConfirm(undefined) }} onConfirm={() => {
+    {confirm && <ConfirmDialog title={confirm === 'noteLeave' ? 'Leave pending edits?' : confirm === 'clear' ? 'Clear entered results?' : confirm === 'leave' ? `Leaving ${day.name}` : confirm === 'partial' ? 'Save partial session?' : 'Reload saved draft?'} confirmLabel={confirm === 'noteLeave' ? 'Leave' : confirm === 'clear' ? 'Clear' : confirm === 'leave' ? 'Leave' : confirm === 'partial' ? 'Save partial session' : 'Reload draft'} busy={leaving || controller.busy} destructive={confirm === 'clear' || confirm === 'leave'} cancelLabel="Cancel" onCancel={() => { if (confirm === 'leave' || confirm === 'noteLeave') { leaveReply.current?.(false); leaveReply.current = undefined } setConfirm(undefined) }} onConfirm={() => {
       const action = confirm; setConfirm(undefined)
-      if (action === 'leave') { const reply = leaveReply.current; if (reply) void discard(reply) }
+      if (action === 'noteLeave') { const reply = leaveReply.current; leaveReply.current = undefined; setNote(undefined); setNoteDirty(false); void controller.prepareSettings().then(() => reply?.(true)).catch((e: Error) => { setError(e.message); reply?.(false) }) }
+      else if (action === 'leave') { const reply = leaveReply.current; if (reply) void discard(reply) }
       else if (action === 'partial') requestFinish(true)
       else if (action === 'clear') { feedback.cancel(); void act(() => controller.clear()) }
       else void act(async () => { await controller.reload(); requestAnimationFrame(() => heading.current?.focus()) })
-    }}><p>{confirm === 'leave' ? 'Leaving now will clear all your progress and you will have to restart.' : confirm === 'clear' ? 'This will clear all entered results and notes.' : confirm === 'partial' ? `${assessed.skipped} omitted sets will be marked skipped. ${assessed.recorded} recorded sets will be saved. Cancel keeps all input.` : 'Copy any input you need first. Load the latest saved version and discard your unpersisted edits.'}</p></ConfirmDialog>}
+    }}><p>{confirm === 'noteLeave' ? 'Discard unapplied note changes?' : confirm === 'leave' ? 'Leaving now will clear all your progress and you will have to restart.' : confirm === 'clear' ? 'This will clear all entered results and notes.' : confirm === 'partial' ? `${assessed.skipped} omitted sets will be marked skipped. ${assessed.recorded} recorded sets will be saved. Cancel keeps all input.` : 'Copy any input you need first. Load the latest saved version and discard your unpersisted edits.'}</p></ConfirmDialog>}
   </section>
 }
-function NoteDialog({ value, title, onDirty, onApply, onClose }: { value: string; title: string; onDirty: (value: boolean) => void; onApply: (value: string) => void; onClose: () => void }) {
-  const [text, setText] = useState(value)
-  const close = () => { if (text === value || window.confirm('Discard unapplied note changes?')) onClose() }
-  return <ConfirmDialog title={title} confirmLabel="Save" onCancel={close} onConfirm={() => onApply(text)}><TextareaField label="Note" maxLength={20000} value={text} onChange={(event) => { setText(event.target.value); onDirty(event.target.value !== value) }} /></ConfirmDialog>
-}
-function RestControl({ label, seconds, onStart }: { label: string; seconds?: number; onStart: () => Promise<void> }) {
-  return <div className="rest-control"><button disabled={seconds === 0} aria-label={`REST ${label}`} onClick={() => void onStart()}>{seconds === undefined ? 'Rest' : `Rest \u00b7 ${seconds === 0 ? '0 seconds \u2014 no timed rest' : restLabel(seconds)}`}</button></div>
+function RestControl({ label, seconds, onStart, disabled }: { label: string; seconds?: number; disabled?: boolean; onStart: () => Promise<void> }) {
+  return <div className="rest-control"><button disabled={disabled || seconds === 0} aria-label={`REST ${label}`} onClick={() => void onStart()}>{seconds === undefined ? 'Rest' : `Rest \u00b7 ${seconds === 0 ? '0 seconds \u2014 no timed rest' : restLabel(seconds)}`}</button></div>
 }

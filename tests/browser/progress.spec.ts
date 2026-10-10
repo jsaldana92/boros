@@ -1,5 +1,5 @@
 import { createNamedProfile } from './settings-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 test.setTimeout(90000)
 const b = (page: Page, name: string) => page.getByRole('button', { name, exact: true })

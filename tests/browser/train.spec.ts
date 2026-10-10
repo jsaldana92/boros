@@ -1,8 +1,9 @@
+import { openWorkoutNote } from './train-actions'
 import { openExerciseAction } from './train-actions'
 import { createNamedProfile } from './settings-actions'
 import { waitForDraft, startWeekly, closeTimer } from './train-actions'
 import { cardAction, occurrenceAction } from './create-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 test.setTimeout(90000)
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
@@ -20,11 +21,11 @@ async function open(page: Page) {
   await startWeekly(page, 'Training plan', 'Upper')
 }
 async function saved(page: Page) { await waitForDraft(page) }
-async function resume(page: Page) { await page.getByRole('button', { name: new RegExp("^Resume Training plan / Upper") }).click() }
+async function resume(page: Page) { await expect(page.getByRole('region', { name: 'Training session', exact: true })).toBeVisible() }
 async function fillSet(page: Page, exercise = 'Press', set = 1, load = '0') {
   await input(page, `${exercise} set ${set} Weight (kg)`).fill(load); await input(page, `${exercise} set ${set} Repetitions`).fill('5')
 }
-async function note(page: Page, name: string, value: string) { if (name.startsWith('Note for ')) await openExerciseAction(page, name.slice(9), 'Note'); else await button(page, name).click(); await input(page, 'Note').fill(value); await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click() }
+async function note(page: Page, name: string, value: string) { if (name.startsWith('Note for ')) await openExerciseAction(page, name.slice(9), 'Note'); else await openWorkoutNote(page); await input(page, 'Note').fill(value); await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click() }
 async function recordCounts(page: Page) {
   return page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('boros'); request.onsuccess = () => resolve(request.result) })
@@ -37,20 +38,20 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   await open(page); const address = page.url()
   await expect(page.getByText('Hidden tag', { exact: true })).toHaveCount(0)
   await expect(page.getByText('<b>Plain instructions</b>', { exact: false })).toHaveCount(0)
-  await page.route('https://www.youtube.com/embed/**', r => r.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' })); await openExerciseAction(page, 'Press', 'Information'); await expect(page.getByRole('dialog')).toContainText('<b>Plain instructions</b>')
+  await page.route('https://www.youtube.com/embed/**', r => r.fulfill({ contentType: 'text/html', body: '<button>Simulated player</button>' })); await openExerciseAction(page, 'Press', 'Instructions'); await expect(page.getByRole('dialog')).toContainText('<b>Plain instructions</b>')
   await expect(page.locator('iframe')).toHaveAttribute('src', /youtube.com\/embed\/abcdefghijk/); await button(page, 'Close').click()
   await note(page, 'Session Note', 'Session\nplain <b>note</b>'); await note(page, 'Note for Press', 'Exercise note')
   await fillSet(page); await input(page, 'Press set 1 Actual RIR (optional)').fill('0'); await saved(page)
   await page.clock.install()
   await button(page, 'REST Press after set 1').click(); await expect(page.getByRole('timer')).toContainText('1:00')
-  await closeTimer(page); await button(page, 'REST Press between exercises').click(); await expect(page.getByRole('timer')).toContainText('2:00')
+  await closeTimer(page); await expect(button(page, 'REST Press between exercises')).toBeDisabled(); await page.locator('.timer-compact').click(); await button(page, 'Stop').click(); await button(page, 'REST Press between exercises').click(); await expect(page.getByRole('timer')).toContainText('2:00')
   const readTimer = () => page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('boros'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error) })
     try { return await new Promise<{ token: string; endAt: string }>((resolve, reject) => { const request = db.transaction('restTimers').objectStore('restTimers').get('active'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error) }) } finally { db.close() }
   })
   const beforeReload = await readTimer()
   await page.reload(); await resume(page); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0'); await expect(input(page, 'Press set 1 Actual RIR (optional)')).toHaveValue('0')
-  expect(await readTimer()).toEqual(beforeReload)
+  expect(await readTimer()).toEqual(beforeReload); await page.locator('.timer-compact').click()
   await expect(page.getByRole('timer')).toHaveText(/^(?:02:00|01:[0-5]\d)$/)
   const remaining = await page.getByRole('timer').evaluate((element, endAt) => {
     const [minutes, seconds] = element.textContent!.split(':').map(Number)
@@ -58,7 +59,7 @@ test('complete workout: notes, information, positioned rests, timestamp timer/re
   }, beforeReload.endAt)
   expect(Math.abs(remaining.displayed - remaining.expected)).toBeLessThanOrEqual(1)
   await page.clock.fastForward(130000); await expect(page.getByRole('timer')).toHaveText('Rest finished')
-  await button(page, 'Reset').click(); await expect(page.getByRole('timer')).toContainText('2:00'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
+  await button(page, 'Reset').click(); await expect(page.getByRole('timer')).toHaveText('02:00'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
   await button(page, 'REST Row after set 1').click(); await expect(page.getByRole('timer')).toHaveText('00:00'); await button(page, 'Stop').click(); await expect(page.getByRole('region', { name: 'Rest timer', exact: true })).toHaveCount(0)
   await fillSet(page, 'Press', 2, '20'); await fillSet(page, 'Row', 1, '30'); await fillSet(page, 'Row', 2, '40')
   await page.setViewportSize({ width: 320, height: 720 }); await input(page, 'Row set 2 Actual RIR (optional)').focus()
@@ -89,7 +90,7 @@ test('cancel Clear and partial Save preserve input; explicit skips and Clear aff
   await button(page, 'Clear').click(); await page.getByRole('dialog').getByRole('button', { name: 'Clear', exact: true }).click(); await saved(page)
   await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue(''); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
   await openExerciseAction(page, 'Press', 'Note'); await expect(input(page, 'Note')).toHaveValue(''); await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click(); await saved(page)
-  await page.reload(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0); await startWeekly(page, 'Training plan', 'Upper'); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); expect(await recordCounts(page)).toEqual([2, 1])
+  await page.reload(); await expect(page.getByRole('region', { name: 'Unfinished sessions' })).toHaveCount(0); await resume(page); await expect(input(page, 'Press set 2 Repetitions')).toHaveValue(''); expect(await recordCounts(page)).toEqual([2, 1])
 })
 
 test('failed autosave and completion preserve input; pending Save commits once; unapplied notes guard unload', async ({ page }) => {
@@ -102,7 +103,7 @@ test('failed autosave and completion preserve input; pending Save commits once; 
   await fillSet(page); await expect(page.getByText('Draft not saved. Your input is kept.')).toBeVisible(); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
   await button(page, 'Settings').click(); await expect(page.getByRole('alert').first()).toContainText('Simulated draft quota'); await expect(input(page, 'Press set 1 Weight (kg)')).toHaveValue('0')
   await page.evaluate(() => (window as unknown as { restoreWrite: () => void }).restoreWrite()); await button(page, 'Retry draft save').click(); await saved(page)
-  await button(page, 'Session Note').click(); await input(page, 'Note').fill('Unapplied')
+  await openWorkoutNote(page); await input(page, 'Note').fill('Unapplied')
   const unload = page.waitForEvent('dialog'); await page.evaluate(() => { setTimeout(() => window.location.reload(), 0) }); const warning = await unload; expect(warning.type()).toBe('beforeunload'); await warning.dismiss()
   await expect(input(page, 'Note')).toHaveValue('Unapplied'); await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click()
   for (const [name, s] of [['Press', 2], ['Row', 1], ['Row', 2]] as const) await fillSet(page, name, s)
@@ -122,7 +123,7 @@ test('profile switching and unit changes recover canonical loads; light theme an
   await closeTimer(page); await saved(page); await page.reload(); await button(page, 'Settings').click(); await button(page, 'Light').click()
   await page.getByRole('combobox', { name: 'Weight unit', exact: true }).selectOption('lb'); await button(page, 'Save profile').click(); await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
   await createNamedProfile(page, 'Other'); await expect(page.locator('input[name="name"]')).toHaveValue('Other'); await button(page, 'Train').click()
-  await expect(page.getByText('No active plan(s) selected.')).toBeVisible(); await expect(page.getByRole('button', { name: new RegExp("^Resume Training plan / Upper") })).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
+  await expect(page.getByText('A workout is active in another profile.')).toBeVisible(); await expect(page.getByRole('button', { name: new RegExp("^Resume Training plan / Upper") })).toHaveCount(0); await expect(page.getByRole('region', { name: 'Rest timer' })).toHaveCount(0)
   await button(page, 'Settings').click(); await page.getByRole('combobox', { name: 'Active profile', exact: true }).selectOption({ label: 'Guest' }); await button(page, 'Train').click(); await resume(page)
   await expect(input(page, 'Press set 1 Weight (lb)')).toHaveValue('100'); await expect(page.getByRole('region', { name: 'Rest timer' })).toBeVisible()
   await expect(page.getByRole('combobox')).toHaveCount(0)
@@ -140,6 +141,6 @@ test('stale tabs cannot overwrite drafts; reload conflict recovery and completio
   await expect(other.getByRole('alert')).toContainText('another tab'); await expect(input(other, 'Press set 1 Weight (kg)')).toHaveValue('50')
   await button(other, 'Reload saved draft').click(); await button(other, 'Reload draft').click(); await expect(input(other, 'Press set 1 Weight (kg)')).toHaveValue('0')
   await button(page, 'Save').click(); await button(page, 'Save partial session').click()
-  await button(other, 'Save').click(); await button(other, 'Save partial session').click(); await expect(other.getByRole('region', { name: 'Saved session details' })).toBeVisible()
+  await expect(other.getByRole('alert')).toContainText('saved or removed in another tab'); await expect(input(other, 'Press set 1 Weight (kg)')).toHaveValue('0'); await button(other, 'Cancel').click()
   expect(await recordCounts(page)).toEqual([1, 1])
 })

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
+import { openWorkoutNote } from './train-actions'
+import { expect, test, type Page } from './strength-test'
 import { cardAction } from './create-actions'
 import { createNamedProfile } from './settings-actions'
 import { waitForDraft } from './train-actions'
@@ -30,8 +31,8 @@ test('workout creation, guard, independent plan copies, archive/restore and prof
 
 test('custom save Cancel/No/Yes, repeated exercises, reload recovery, calendar nested notes preserve focus and address',async({page})=>{
  test.setTimeout(90000);await open(page);await exercise(page);const address=page.url();await b(page,'Train').click();await expect(page.getByRole('heading',{name:'Active Plans',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Saved sessions/})).toHaveCount(0)
- await b(page,'Custom Workout').click();await expect(page.getByRole('heading',{level:1})).toHaveText('Custom Workout');await add(page);await add(page);await partial(page);await page.reload();await page.getByRole('button',{name:/^Resume Workout/}).click();await expect(f(page,'Press occurrence 1 set 1 Weight (kg)')).toHaveValue('0')
- await b(page,'Session Note').click();await f(page,'Note').fill('Historical workout note');await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click();await waitForDraft(page)
+ await b(page,'Custom Workout').click();await expect(page.getByRole('heading',{level:1})).toHaveText('Custom Workout');await add(page);await add(page);await partial(page);await page.reload();await expect(page.getByRole('region',{name:'Training session',exact:true})).toBeVisible();await expect(f(page,'Press occurrence 1 set 1 Weight (kg)')).toHaveValue('0')
+ await openWorkoutNote(page);await f(page,'Note').fill('Historical workout note');await page.getByRole('dialog').last().getByRole('button', { name: 'Save', exact: true }).click();await waitForDraft(page)
  await b(page,'Settings').click();await b(page,'Train').click();await expect(page.getByRole('heading',{level:1})).toHaveText('Custom Workout');await expect(f(page,'Press occurrence 1 set 1 Weight (kg)')).toHaveValue('0')
  await b(page,'Save').click();await b(page,'Save partial session').click();const popup=page.getByRole('dialog',{name:'Saving Completed Workout'});await expect(popup.getByRole('button',{name:'No',exact:true})).toHaveAttribute('aria-pressed','true');await popup.getByRole('button',{name:'Cancel',exact:true}).click();expect(await records(page,'sessions')).toHaveLength(0)
  await b(page,'Save').click();await b(page,'Save partial session').click();await popup.getByRole('button',{name:'Yes',exact:true}).click();await popup.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('region',{name:'Saved session details'})).toBeVisible()
@@ -44,7 +45,7 @@ test('custom save Cancel/No/Yes, repeated exercises, reload recovery, calendar n
 
 test('v5 workout import, unique-week targeting, stale edits and light mobile layout',async({page,context},info)=>{
  test.setTimeout(60000);await open(page);await b(page,'Settings').click();await b(page,'Light').click();await b(page,'Create').click();await b(page,'Import').click()
- await f(page,'Formatting instructions for').selectOption('workout');expect(await f(page,'Formatting instructions').inputValue()).toContain('schemaVersion 5')
+ await f(page,'Formatting instructions for').selectOption('workout');expect(await f(page,'Formatting instructions').inputValue()).toContain('schemaVersion 8')
  await f(page,'AI output JSON').fill(JSON.stringify({schemaVersion:5,kind:'workout',workout:{name:'Circuit',instructions:'Workout instructions',notes:'Template note',supersets:[{number:1,restBetweenRoundsSeconds:0}],exercises:[{name:'A',superset:1,sets:[{reps:{min:5,max:8}},{reps:{min:10,max:10}}]},{name:'A',superset:1,sets:[{reps:{min:12,max:12}}]}]}}));await b(page,'Validate and preview').click();await expect(page.getByRole('heading',{level:1})).toHaveText('Create > Workout');await b(page,'Save workout').click();await expect(card(page,'Circuit')).toBeVisible()
  const source=(await records(page,'workouts'))[0];expect(source.exercises[0].id).not.toBe(source.exercises[1].id);expect(source.exercises[0].templateId).toBe(source.exercises[1].templateId)
  await card(page,'Circuit').getByRole('button').click();await expect(page.getByRole('dialog')).toContainText('Superset 1');await expect(page.getByRole('dialog')).toContainText('Workout instructions');await b(page,'Close').click()

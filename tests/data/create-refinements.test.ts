@@ -67,6 +67,7 @@ test('two rounds of A20/B8 have one group rest each, including post-group rest a
   assert.deepEqual([0, 1].flatMap((s) => block.members.map((m) => `${m.prescription.name}${m.prescription.sets[s].reps.min}`)), ['A20', 'B8', 'A20', 'B8'])
   const first = await sessions.startGroupTimer(id, draft.id, draft.revision, groupId, 0)
   assert.equal(first!.durationSeconds, 75); assert.equal(first!.position, 'Set 1')
+  await sessions.changeTimer(id, draft.id, first!.token, 'stop')
   const last = await sessions.startGroupTimer(id, draft.id, draft.revision, groupId, 1)
   assert.equal(last!.durationSeconds, 180); assert.equal(last!.position, 'Post-Exercise')
   assert.equal(await db.restTimers.count(), 1)

@@ -1,3 +1,4 @@
+import { releaseWorkout } from './active-workout.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { localToday, monday } from '../lib/calendar-dates.ts'
 import { occurrences, revisionAt, scheduleEnd, type OccurrenceRef, type Schedule } from '../schemas/schedule.ts'
@@ -7,7 +8,7 @@ import { assertCalendarAssignment } from './calendar-assignment.ts'
 
 export interface RunActionPreview { profileId: string; runId: string; revision: number; fingerprint: string; draftCount: number; stopsCalendar: boolean; restartWeek?: string; ref?: OccurrenceRef }
 export function runActionService(database: BorosDatabase) {
-  const tables = [database.profiles, database.schedules, database.drafts, database.sessions, database.restTimers]
+  const tables = [database.activeWorkouts, database.profiles, database.schedules, database.drafts, database.sessions, database.restTimers]
   const inspect = async (profileId: string, runId: string, revision: number, ref?: OccurrenceRef) => {
     const profile = await database.profiles.get(profileId), run = await database.schedules.get([profileId, runId])
     if (!profile || !run) throw new Error('This profile or plan run is unavailable.')
@@ -20,6 +21,7 @@ export function runActionService(database: BorosDatabase) {
     return { profile, run, drafts, sessions, preview }
   }
   const stopTimers = async (profileId: string, ids: string[]) => {
+    await releaseWorkout(database, profileId, ids)
     const timer = await database.restTimers.get('active')
     if (timer?.profileId === profileId && ids.includes(timer.draftId)) await database.restTimers.delete('active')
   }

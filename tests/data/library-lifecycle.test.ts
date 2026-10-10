@@ -1,3 +1,4 @@
+import { legacyWorkspace } from '../fixtures/legacy-workspace.ts'
 import 'fake-indexeddb/auto'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -45,7 +46,7 @@ async function fixture(t) {
 async function roundTrip(db,id) {
  const snapshot=await captureProfile(id,db);validateBackupData(canonicalSnapshot(snapshot))
  const backup=await readBackup((await generateBackup(snapshot,'test')).bytes,()=>{},async()=>{})
- assert.equal(backup.data.backupSchemaVersion,13);assert.equal(backup.manifest.databaseSchemaVersion,7)
+ assert.equal(backup.data.backupSchemaVersion,18);assert.equal(backup.manifest.databaseSchemaVersion,12)
  for(const choice of ['new','replace','device','import'] as const){const result=await buildRestorePlan(backup,choice==='new'?undefined:snapshot,choice,uid(),choice==='new'?'Restored':snapshot.profile.name,new Date().toISOString());validateBackupData(canonicalSnapshot(result.result));assert.equal(result.result.deletedSources.length,snapshot.deletedSources.length);assert.deepEqual(result.result.sessions.map(s=>s.id),snapshot.sessions.map(s=>s.id))}
  return backup
 }
@@ -54,13 +55,16 @@ test('plan edits 2 to 3 to 1 reach pending current/future copies, with protected
  const started=(await sessions.openOccurrence(id,run.id,events[0].day.id,events[0].ref.scheduledDate)).draft!
  await weekly.outcome(id,events[1].ref,run.revision,'skipped')
  const saved=await sessions.complete(id,started.id,started.revision,f.fill(started),false)
+ await legacyWorkspace(db)
  const pending=(await sessions.openOccurrence(id,run.id,events[2].day.id,events[2].ref.scheduledDate)).draft!
  const change=planToInput(plan);change.days[0].exercises[0].prescription.sets.push({reps:{min:9,max:9}})
  const three=await plans.save(id,change,plan), date=addDays(run.startWeek,7)
+ await legacyWorkspace(db)
  const next=(await sessions.openOccurrence(id,run.id,plan.days[0].id,date)).draft!;assert.equal(next.day.exercises[0].prescription.sets.length,3)
- assert.equal(next.day.exercises[2].prescription.sets.length,2);assert.equal((await sessions.getDraft(id,pending.id)).day.exercises[0].prescription.sets.length,2)
+ assert.equal(next.day.exercises[2].prescription.sets.length,2);assert.equal((await db.drafts.get([id,pending.id]))!.day.exercises[0].prescription.sets.length,2)
  const one=planToInput(three);one.days[0].exercises[0].prescription.sets=one.days[0].exercises[0].prescription.sets.slice(0,1);await plans.save(id,one,three)
  assert.deepEqual(await sessions.getDraft(id,next.id),next);assert.deepEqual(await db.sessions.get([id,saved.id]),saved)
+ await legacyWorkspace(db)
  const later=(await sessions.openOccurrence(id,run.id,plan.days[0].id,addDays(date,7))).draft!;assert.equal(later.day.exercises[0].prescription.sets.length,1)
  const current=await schedules.events(id,run.startWeek,addDays(run.startWeek,6));assert.equal(current.find(e=>e.outcome)!.day.exercises[0].prescription.sets.length,2)
  await f.exercises.save(id,{...exerciseToInput(f.a,f.tags),sets:[{reps:{min:50,max:50}}]},f.a)
@@ -129,15 +133,18 @@ test('mixed standalone deletion keeps unrelated results and explicit skipped out
 test('workout deletion uses explicit standalone/custom ownership and preserves same-name custom work and plan history',async t=>{
  const f=await fixture(t),{db,id,sessions,deletion,workout,plan}=f,draft=await sessions.startStandalone(id,workout.id)
  await sessions.complete(id,draft.id,draft.revision,f.fill(draft),false)
+ await legacyWorkspace(db)
  const planned=await sessions.start(id,plan.id,plan.days[0].id),history=await sessions.complete(id,planned.id,planned.revision,f.fill(planned),false)
  const independent=await sessions.startStandalone(id);await db.drafts.put({...independent,day:{...independent.day,name:workout.name}})
  await deletion.remove(await deletion.preview(id,'workout',workout.id,workout.revision))
  assert.equal(await db.sessions.get([id,draft.id]),undefined);assert.deepEqual(await db.sessions.get([id,history.id]),history);assert.ok(await db.drafts.get([id,independent.id]));assert.equal(await db.exercises.where('profileId').equals(id).count(),3)
+ await legacyWorkspace(db)
  assert.equal((await sessions.start(id,plan.id,plan.days[1].id)).day.sourceWorkoutId,workout.id);await roundTrip(db,id)
 })
 test('active plan deletion atomically removes all run/history/draft ownership, stops timers, blocks stale autosaves and preserves standalone/photos',async t=>{
  const f=await fixture(t),{db,id,sessions,plan,run,deletion}=f,draft=(await sessions.openOccurrence(id,run.id,plan.days[0].id,run.startWeek)).draft!
  await sessions.startGroupTimer(id,draft.id,draft.revision,draft.day.groups![0].id,0)
+ await legacyWorkspace(db)
  const standalone=await sessions.startStandalone(id,f.workout.id),before=await captureProfile(id,db),preview=await deletion.preview(id,'plan',plan.id,plan.revision)
  assert.equal(preview.active,true);await deletion.remove(preview)
  assert.equal(await db.schedules.where('profileId').equals(id).count(),0);assert.equal(await db.restTimers.count(),0);assert.equal(await db.drafts.get([id,draft.id]),undefined);assert.ok(await db.drafts.get([id,standalone.id]))

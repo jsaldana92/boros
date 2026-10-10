@@ -1,3 +1,4 @@
+import { legacyWorkspace } from '../fixtures/legacy-workspace.ts'
 import 'fake-indexeddb/auto'
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
@@ -39,6 +40,7 @@ test('unscheduled Calendar contains actual completions only, keeps partials and 
   let next = await weekly.outcome(id, events[2].ref, run.revision, 'skipped')
   await sessions.openOccurrence(id, run.id, events[3].ref.dayId, events[3].ref.scheduledDate)
   assert.deepEqual(await activity.events(id, '2026-10-01', '2026-11-30'), [])
+  await legacyWorkspace(db)
   const full = await save(), partial = await save(1, true)
   const entries = await activity.events(id, '2026-10-08', '2026-10-08')
   assert.equal(entries.length, 2); assert.deepEqual(entries.map((e) => e.session!.id).sort(), [full.id, partial.id].sort())

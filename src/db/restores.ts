@@ -1,3 +1,4 @@
+import { reconcileWorkout } from './active-workout.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { db, type BorosDatabase } from './database.ts'
 import Dexie from 'dexie'
@@ -55,6 +56,7 @@ export function restoreService(database: BorosDatabase, decodePhoto = decodeBack
         }
         await database.profiles.add(plan.result.profile)
         for (const store of ownedStores) if (plan.result[store].length) await database.table(store).bulkAdd(plan.result[store])
+        await reconcileWorkout(database)
         // Current weight remains derived from dated measurements, never a cache.
         await latestMeasurement(database, plan.id)
         if (!await database.settings.update('workspace', { activeProfileId: plan.id })) throw new Error('Workspace settings are unavailable. The operation was rolled back.')

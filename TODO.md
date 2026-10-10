@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
-Updated: 2026-10-07
-Status: Train, library lifecycle and Progress refinements complete in available local verification environments. Physical-device acceptance, earlier release gates and the production persistence investigation remain open.
-Current scope: occurrence Preview, session replacement, future plan prescriptions, timer feedback/layout, Create controls, scoped library deletion, additive archives, shared exercise graphs and backup compatibility. Stable boros database upgraded additively to v7; backup v13; AI v5 unchanged. No commit, push, deploy, hosting or dependency changes.
+Updated: 2026-10-09
+Status: Train runtime, audio, historical hints and workspace-wide workout ownership implemented; applicable automated verification passed. Physical-device acceptance, earlier release gates and the production persistence investigation remain open.
+Current scope: persistent active workouts with free tab navigation; shared foreground audio and visible-screen wake lock; immediate Strength rests; ten-second Interval Warm Up; prior-result hints and Instructions history. Stable boros database v12, AI v8, backup v18. Existing records and legacy checkpoints preserved. No commit, push, deploy, hosting or dependency changes.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -966,13 +966,39 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-06 | Exercise restore matches IDs only; existing retirement survives a pre-merge imported record | Avoid associating unrelated names or reactivating a retired identity; reviewed metadata precedence stays |
 | 2026-10-06 | Backup v12 on unchanged database v6, strict v1-v11 readers | Preserve redirects without migration/reset and keep old exports valid |
 | 2026-10-06 | Reserve result status/error geometry; restore nested editors by keyed occurrence | Avoid autosave layout jumps and autofocus-to-top while preserving validation and normal scrolling |
+| 2026-10-07 | Structured Strength/Interval discriminators; disambiguated ordinary core-name tags | Keep legacy repetitions as Strength and enforce separation through persistence/import/restore |
+| 2026-10-07 | Transactional once-only workout publication with explicit publication references | Reuse unchanged sources, publish authored variants, preserve copy independence and deletion intent |
+| 2026-10-07 | Frozen Interval phase actuals and explicit paused recovery | Prevent closed-time fabricated activity, stale overwrites and retroactive inserted rounds |
+| 2026-10-07 | Local voices only; once-per-phase warning with no backlog | Keep custom text on-device and optional sound independent of timing |
+| 2026-10-07 | Stable database v8, backup v14 and AI v6 with strict legacy readers | Preserve IDs/results/photos and validate original bytes before additive classification |
+
+| 2026-10-07 | Circuit-only default; opt-in continuous, one preparation per execution, separate circuit/workout rests | Match Workout A and preserve explicit session Save |
+| 2026-10-07 | Shared transactional timer slot and explicit paused ownership recovery | Prevent overlapping Strength/Interval starts and stale callbacks |
+| 2026-10-07 | Stable database v9, AI v7 and backup v15/40 CSVs; freeze original v6/v14 contracts | Preserve legacy snapshots, IDs and photo bytes without weakening strict validation |
+| 2026-10-07 | Local start/warning/end cues plus local-only active-name speech; silent preparation/rest boundaries | Keep feedback optional, prioritized, deduplicated and independent of timing |
+
+| 2026-10-08 | Replace new Interval sets/rounds with 0-10 additional circuit repetitions | Execute rest after each repetition; one compiled list drives timing, labels, ring, results, sequences and cues; Strength stays unchanged |
+| 2026-10-08 | Transactional v10 editable-template conversion, frozen legacy snapshots and versioned readers | Preserve old rest boundaries/counts with deterministic extra circuit sections; abort on invalid/colliding records instead of resetting |
+| 2026-10-08 | Stop resets its execution scope; natural completion retains results | Empty/preparation/reset sessions leave without stubs; notes, edits and other circuit results stay guarded; serialize user actions after checkpoints |
+| 2026-10-08 | AI v8 and backup v16 with original-contract validation before conversion | Reject contradictory current inputs while preserving strict earlier schemas, checksums, photos and restore references |
+| 2026-10-08 | Shared workout Note/Instructions use the started day snapshot; exercise action label becomes Instructions | Preserve session note scope and frozen prescriptions; no live-template or parent-plan fallback |
+| 2026-10-08 | Independent rest uses the existing execution/ownership slot with mode rest, no actuals; rest-only checkpoints remain resumable | Keep completed circuits and notes intact; rest alone cannot satisfy exercise Save |
+| 2026-10-08 | Positive ordinary rests speak Rest; workout rest speaks Post-Workout Rest; preparation/zero rests stay silent | Explicitly supersedes the earlier silent-rest voice rule without adding ordinary rest beeps or changing Strength audio |
+| 2026-10-08 | DB11 is an empty additive version; backup17 extends execution/cue enums, freezes v16 validators and keeps 40 CSV tables | Preserve IDs, Blobs, original checksum validation and inert imported checkpoints |
+| 2026-10-08 | Owner chose to keep new custom Interval creation unavailable after removing Edit pending exercises | No replacement edit button/builder; existing custom drafts remain readable and trainable |
+
+| 2026-10-09 | Document-level timer/audio controllers plus transactional profile/draft ownership | Free Boros tab navigation preserves one workout across routes, profiles and concurrent tabs; Save/Cancel/removal release ownership, Clear/Stop do not |
+| 2026-10-09 | Immediate Strength and rest-only timers; one ten-second new Interval Warm Up | Supersedes earlier preparation and navigation-discard rules without rewriting old five-second checkpoints |
+| 2026-10-09 | Canonical per-set actual-result hints and stable exercise occurrences | Avoid sibling, prescription and plan-run leakage; keep hints separate from input and expose appropriate Instructions history |
+| 2026-10-09 | Shared gesture-enabled Web Audio, optional transient alerts, visible-screen wake lock | Keep timing independent, cancel stale/disabled cues, preserve three completion plays; do not promise suspended-device alerts or external music control |
+| 2026-10-09 | Additive DB12 activeWorkouts store and backup18 with frozen v17 readers | Preserve records/photos/checksums; reconcile restored ownership locally without importing runtime locks or starting audio |
 
 ## 9. Current checkpoint
 
-- Train/library lifecycle/Progress update: **Complete in available local verification environments**. Phase 10 remains **Verification pending**, Phase 11 **In progress**; earlier handoffs remain historical.
-- Stable **boros v7**, additive deleted-source metadata only; **backup v13** validates original v1-v12 archives before promotion; **AI v5** unchanged. No deployment/configuration changes or owner data access.
-- Build/typecheck/lint/diff pass; **243/243 data**, **644/644 full Edge static matrix**, final affected checks covered by **75 passes + corrected 12/12 plan/round rerun**, **68 applicable Firefox passes + 38/38 final follow-up**, and **6/6 final same-origin/context release/two-rebuild**. Four older CDP-only Firefox attempts failed before reaching the app; they passed in Edge. Exact commands/results: [current verification](docs/train-library-lifecycle-verification.md).
-- Next: perform the disposable-profile owner checks in that record. Physical software keyboard, Safari/assistive technology, background timer/audio/vibration, quota/save sheets and live Ko-fi remain unverified. The earlier production disappearance report is still unresolved.
+- Train runtime, hints/history and one-active-workout behavior: **implemented; automated verification passed; physical-device acceptance pending**. Phase 10 remains **Verification pending**, Phase 11 **In progress**. Earlier route-discard, hash-routing, preparation and repeat-model handoffs remain historical.
+- Current contracts: stable `boros` v12, AI v8, backup v18 / 40 CSV tables. V12 only adds `activeWorkouts`; existing records/IDs/Blobs remain untouched. Frozen v17 validation remains strict; old five-second checkpoints stay valid and restore stays inert.
+- Build/typecheck/lint/diff pass; full data **307/307**, focused runtime **13/13**. Broad Edge static affected suite **264/264** at root/project mounts and desktop/phone. Edge runtime closeout **108/108**; additional legacy-resume/backup matrix **116/124**, with all eight old timer assertions corrected and covered by the final **24/24**. Final Firefox runtime/menu **40/40** and audio **6/6**. Exact commands, intermediate failures and artifacts: [Train runtime verification](docs/train-runtime-verification.md). Previous menu/repeat evidence remains in the historical records.
+- Next step: perform the seven-step owner check in that record. Physical phone/Home Screen/lock-screen/music/Bluetooth, Safari, real screen readers, native file sheets and live Ko-fi remain unverified. Do not deploy or claim the production persistence issue is fixed from isolated tests.
 
 ## 10. Handoff entry template
 
@@ -1878,3 +1904,81 @@ Fresh verification against the final build (isolated contexts/test databases):
 - [ ] Physical phone keyboard/viewport, Safari/iOS Blob storage/restore, real screen-reader operation, physical vibration/background audio, quota/native download sheets and live Ko-fi. Prior production disappearance remains unresolved; controlled upgrade tests do not establish its cause.
 - Preservation: initial HEAD `dcaaab3`, clean workspace. No owner records accessed/cleared, dependency/config changes, commit, push, deploy or hosting changes.
 - Next: perform the five disposable-profile owner checks in the verification record (plan edits, replacement, scoped deletion/restore, timers, graphs). No release action is authorized by this handoff.
+
+### Handoff - Strength and Interval training (2026-10-07)
+
+- Status: **Complete in available local verification environments**; implementation spans the full dependency groups. Phase 10 and 11 acceptance gates remain unchanged.
+- [x] Core classifications, chooser, shared icons/top-level previews, typed pickers and independent ordinary tags; no Progress type UI.
+- [x] Atomic manual/import/duplicate plan workout publication, stable relationships, normalized suffixes, source independence and idempotent conservative reconciliation.
+- [x] Interval duration/circuit builders, ordered/repeated occurrences, rounds/sets/additional rests, repeating/unique-week structure and strict cross-type validation.
+- [x] Scheduled/unscheduled/standalone/custom execution, timestamp ring, zero phases, pause/reload checkpoint, explicit/partial Save, actuals/notes, session-only changes, revision guards and failure recovery.
+- [x] Local-only voice, active warning MP3, Sound preference, no short/rest/background backlog warning; unchanged Strength chime behavior.
+- [x] Calendar actual review/type pill, generic completion counts, Strength analytics exclusion, scoped deletion/merge/restore protections.
+- [x] Nondestructive boros v8 migration, AI v6, backup v14/38 CSVs with strict legacy validation/checksums and source remapping; updated README/format docs.
+- [x] Production build/typecheck/lint/diff pass; data **260/260**, final Edge Interval **20/20**, Firefox **9 passes plus 1/1 unchanged teardown rerun**, retained-context upgrades **6/6**. Earlier corrected Firefox Create/lifecycle/Interval **34/34**. Exact broader attempts, fixes, commands and artifact receipts: [verification](docs/strength-interval-verification.md).
+- [ ] Physical phone/Safari/assistive technology/audio/vibration/quota/native save sheets/live Ko-fi checks remain unverified. Previous production persistence report remains unresolved.
+- Limitation: an older missing workout source without a record or deletion identity cannot prove never-published versus deliberately-deleted; leave that ambiguous link alone. Known deleted and archived templates are not revived.
+- Next: perform the eight exact owner checks in the verification record. No commit, push or deploy performed.
+
+### Handoff - Circuit count field order (2026-10-07)
+
+- [x] Shared Plan/Workout circuit editor lists Sets before Rounds per set, matching the containment hierarchy and keyboard reading order. Sets is left on the two-column layout and above rounds when the existing narrow-phone layout stacks.
+- [x] `npm run build` (including TypeScript) and `npm run lint` pass. The first restricted build failed with Windows `spawn EPERM`/Tailwind loading errors; the approved subprocess-access rerun passed without dependency changes.
+- [x] Existing production creation flow: `npm run test:browser:static -- tests/browser/interval.spec.ts -g "typed creation" --output=test-results/circuit-field-order`: **4/4 passed**, root/project subpath and desktop/phone viewports. `git diff --check` passes. No new tests were needed for the presentation-only reorder.
+- Earlier physical-device acceptance and release gates remain open. Next: the existing eight disposable-profile owner checks above. No commit, push or deploy.
+
+### Handoff - Interval execution modes and shared timers (2026-10-07)
+
+- Status: **Implemented; automated verification passed; physical-device acceptance pending**. Earlier phase and owner-refinement acceptance records remain historical.
+- [x] Implemented individual circuits and opt-in Continuous workout, silent preparation, post-circuit/final post-workout rests, additive sequencing and separate fixed timing blocks.
+- [x] Implemented shared timestamp state for clockwise main/sticky/modal displays; Pause/Start/Stop, scoped restart confirmation, recovery and recoverable preparation-only drafts. Timer completion remains separate from explicit Save.
+- [x] Implemented transactional exclusivity with Strength countdown/count-up preparation, paused ownership, revision/owner protection and explicit cross-tab recovery. Stop retains results and notes; invalidation cannot recreate a deleted draft.
+- [x] Implemented local start/warning/end cues, retained local-only active-name speech and one existing triple completion routine only for positive post-workout rest; no Interval rest speech, no old active-warning reference, silent media unlock, sound-off cancellation and no cue backlog.
+- [x] Implemented workout-owned post-workout rest in all shared editors/copies, snapshots, imports, custom saves and backups. Nondestructive v9, strict AI v7/legacy v1-v6 and backup v15/legacy v1-v14; inert restored drafts and unchanged checksum/restore ownership boundaries.
+- [x] Build/typecheck/lint/diff pass; data **273/273**. Affected Edge matrix **192/192**, Firefox **60/60**; after the final audio refinement, timer-only Edge **32/32** and Firefox **16/16**. Final same-origin/same-context release/rebuild persistence **6/6**. Exact commands, earlier failed attempts/fixes, asset evidence and build receipts: [Interval timer verification](docs/interval-timer-verification.md).
+- [x] All four required local MP3s found and decoded in isolated Edge; controlled tests cover event ordering, local-only voice selection, Sound Off and denied media. The two-second cue duration is respected when queuing a still-current start after an end cue.
+- [ ] Physical phone/lock-screen sound, Safari, real screen readers, native file sheets, live Ko-fi and earlier release gates remain unverified. The earlier production disappearance report remains unresolved; local upgrade passes do not diagnose it.
+- Next: perform the nine-step Workout A owner check in that record using a disposable profile. No commit, push, deploy, dependency or hosting changes; no owner data accessed/cleared.
+
+### Handoff - Interval repeat replacement and Create/Train refinements (2026-10-08)
+
+- [x] Centered Plan Type / Workout Type / Exercise Type titles; trailing shared 18px icons; clamped mobile workout names and contained dates without changing mobile card grid/padding; compact desktop cards; neutral Archive borders with retained text/focus.
+- [x] Shared picker/editor anchor retains the originating Add exercise position, focus, expanded form and nested scroll. Browser checks cover single/multiple/cancel, Strength/Interval, AI Workout/repeating/unique Plan editors. Existing edit-return behavior remains covered.
+- [x] Separate Train plan row gap/Add Plan margin; shared Strength/Interval Save then Cancel/Clear footer; wide centered initial Start without stretching compact timer controls.
+- [x] New circuits use additional `repeat` 0-10, default 0. Current UI and AI v8 have no editable Interval sets/rounds/set-rest. Strength sets remain unchanged.
+- [x] Sprint Madness compiles to 480 seconds plus five preparation seconds; circuit-only 245/185; every final recovery and every repeated circuit rest stays separate. Current/Next, ring and visible repeated sequence share compiled phase identities.
+- [x] Stop clears only its scope, retains notes/other circuit progress/history, releases ownership and cancels cues. Natural completion requires explicit Save. Empty/preparation-only/reset drafts leave without an unfinished card; failed writes keep state/errors. Navigation rechecks latest progress after pending writes.
+- [x] Per-tick loading state was the flicker cause. Background checkpoints no longer toggle busy/disabled state; foreground actions wait for the checkpoint and use its revision. Mutation-observer checks retain buttons and keyboard focus through ticks/boundaries.
+- [x] Database v10 converts only editable templates. Legacy 3 x 5 with nonzero set/final rests becomes six circuits; 100 x 100 remains 10,000 activities split into valid sections. Started/finalized/history/schedule snapshots retain old identities and timing via frozen readers; copies/new starts convert explicitly.
+- [x] AI v8 / backup v16 / 40 CSV tables, strict old-version parsing before promotion, source/reference remapping, inert imported ownership and unchanged SHA-256/photo checks. No storage context, service worker, manifest, dependency, hosting or deploy changes.
+- [x] Final build/typecheck/lint/diff pass; data **285/285**. Edge static **211/212** plus unchanged timeout rerun **4/4** and direct layout **4/4**; Firefox **54/54**. Same-context v9 migration/rebuild **3/3** and existing published-release/rebuild **6/6**. The original timeout and earlier fixture corrections are recorded explicitly; no tests skipped.
+- [ ] Physical phone/keyboard/lock-screen audio, Safari/WebKit with working IndexedDB Blob support, screen reader, native file dialogs and live Ko-fi acceptance. Earlier production persistence investigation remains unresolved.
+- Next: perform the nine-step owner check in the verification record before considering release. Automated implementation is complete; physical acceptance and earlier release gates remain open.
+
+
+### Handoff - Workout actions and independent Interval rest (2026-10-08)
+
+- Status: **implemented; automated verification passed; physical acceptance pending**.
+- [x] Shared workout hamburger contains Note then Instructions for Strength/Interval, planned/standalone/existing custom sessions. Notes retain their scope and failure recovery; read-only instructions use the frozen workout snapshot. Exercise Information becomes Instructions without removing video/details or Note/Replace.
+- [x] Bold/centered circuit names, Start Circuit, shared target/primary-rest colors, 1st through 11th repeated-execution labels and one divider between distinct circuits. Removed Edit pending exercises and its exclusive UI. Per the owner's reply, new custom Interval creation is visibly unavailable; existing custom drafts still work.
+- [x] Independent Post-Workout Rest runs five-second preparation plus the configured rest under the shared timer owner/revision guards. Stop/natural completion preserve circuit results and notes; no automatic workout/session completion. Rest-only checkpoints remain resumable but do not satisfy Save.
+- [x] Sticky row uses phase time / scope total excluding preparation, with an ellipsized accessible phase name. Main/modal ring denominators remain per block. Positive ordinary rests now speak Rest once with no start/end beeps; Post-Workout Rest is named consistently. Sound Off/stale/background/pause/owner protections remain.
+- [x] Stable DB11 adds no stores or rewrites; backup17 adds scope/cue enums with frozen v16 readers and 40 unchanged CSV columns/tables. AI8, SHA-256/photo checks and inert restore remain. No navigation/deployment/manifest/configuration/dependency change.
+- [x] Build/typecheck/lint/diff pass; data **294/294**. Edge **224/224**, then final timer/menu/repeat **64/64** at root/project mounts and desktop/phone; Firefox **32/32**, then final timer/menu **22/22**. The focused last runs use the final bundle and cover independent rest below the viewport. All tests use isolated contexts/DBs; mocked audio is separate from real-device acceptance. Actual intermediate failures and fixes are retained in [the verification record](docs/workout-actions-rest-verification.md).
+- [ ] Physical phone/keyboard/lock-screen speech/audio, Safari/WebKit Blob-capable storage, real screen readers, native file sheets and live Ko-fi. Prior release gates and the production persistence report remain unresolved.
+- Next: use a disposable profile for the six-step owner test in the verification record. No commit, push, deploy or owner storage access/clearing occurred.
+
+
+### Handoff - Train runtime, audio, historical results and active ownership (2026-10-09)
+
+- Status: **Implemented; automated verification passed; physical acceptance pending**. Supersedes the prior Train navigation-discard and preparation rules only; prior phase statuses and unrelated work are preserved.
+- [x] Shared document-level Strength/Interval controllers retain input, notes, scroll, checkpoints and audio across popup closure and every Boros tab. Train returns to its active editor. Reload uses the same draft, with explicit paused Interval recovery.
+- [x] Persistent workspace-wide profile/draft ownership is acquired transactionally by starts/resumes and protected across tabs/profiles. Save/Cancel/legitimate removal release it atomically; Clear/Stop/Reset retain it. Failed writes retain input, delayed autosaves cannot resurrect removed drafts, and legacy unfinished records remain stored.
+- [x] Strength countdown/count-up starts immediately; Reset fills the same popup row as Close. New Interval circuit/continuous starts use one ten-second Warm Up; rest-only starts immediately. Existing repetitions, final rests, denominator rules and saved history remain intact.
+- [x] Per-set prior actual hints respect canonical merge identity, stable repeated entries, rep/RIR targets, plan runs, performance ordering, zeros/missing values and unit conversion. Hints never become entered results. Instructions History retains original recorded-set order, actual RIR and appropriate plan/standalone limits without empty explanations.
+- [x] Shared gesture-enabled Web Audio/local media fallback; immediate committed Interval cue delivery; cancellation/deduplication of files/speech; exactly three completion plays; optional nonexclusive transient audio-session handling and visible running-screen wake lock. Audio never controls timing. Read failures display actionable errors while preserving the editor.
+- [x] Nondestructive DB12 store addition; backup18/40 CSVs, frozen v17 validators, original integrity/photo checks and inert restoration. AI8 unchanged. Actual v11 record/Blob upgrade and v17 archive compatibility tests pass.
+- [x] Build/typecheck/lint/diff pass, full data **307/307** and focused runtime **13/13**. Edge broad affected **264/264**, runtime closeout **108/108**; additional recovery/backup **116/124**, then final timer/native/rejected-audio **24/24** including all eight corrected assertions. Final Firefox runtime/menu **40/40** and native/rejected audio **6/6**. Intermediate failures, fixes and exact commands are retained in [Train runtime verification](docs/train-runtime-verification.md).
+- [ ] Physical-device acceptance. Phone emulation and controlled audio/speech/visibility/wake-lock probes do not prove acoustic output, lock-screen reliability, Home Screen behavior, Bluetooth routing or music ducking/resumption. Old standalone snapshots with ambiguous regenerated occurrence IDs remain unchanged and are omitted from incompatible hints rather than guessed.
+- Files: shared Train runtime/controllers/media/history; `src/app/TrainingRuntimeProvider.tsx`; session/ownership/cleanup services and additive database version; current/frozen backup schemas/readers; focused data/browser coverage; README and verification documentation. No deployment, manifest, dependency or hosting changes.
+- Next: perform the seven-step disposable-profile owner check. Prior production persistence investigation and release gates remain open. No commit, push, deploy or owner storage access/clearing occurred.

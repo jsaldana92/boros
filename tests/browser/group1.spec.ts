@@ -1,6 +1,6 @@
 import { confirmDownload } from './settings-actions'
 import { createNamedProfile } from './settings-actions'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true })
 async function settings(page: Page) {

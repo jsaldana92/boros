@@ -1,3 +1,4 @@
+import { classifyStrengthRecords } from '../../src/db/training-migration.ts'
 import 'fake-indexeddb/auto'
 import { weeklyService } from '../../src/db/weekly.ts'
 import { restoreService } from '../../src/db/restores.ts'
@@ -53,7 +54,7 @@ test('workout validation, normalization, isolation, stale edits, independent cop
  const plan = await planService(db).save(id, { name: 'Independent', durationWeeks: 2, days: [first, second] })
  const edited = await service.save(id, { ...workoutToInput(workout), name: 'Changed' }, workout)
  await assert.rejects(service.save(id, raw, workout), /another tab/)
- assert.deepEqual((await db.plans.get([id, plan.id]))!.days, [first, second])
+ assert.deepEqual((await db.plans.get([id, plan.id]))!.days, [first, second].map(d => ({ ...d, publishedWorkoutId: workout.id })))
  const archived = await service.setArchived(id, edited.id, edited.revision, true)
  assert.equal(archived.activeNameKey, undefined)
  await service.setArchived(id, archived.id, archived.revision, false)
@@ -62,12 +63,14 @@ test('workout validation, normalization, isolation, stale edits, independent cop
 
 test('standalone repeats keep independent snapshots and actual results; calendar and Overall never invent plan identities', async t => {
  const { db, id, workout, sessions, exercise, service } = await setup(t)
- const a = await sessions.startStandalone(id, workout.id), b = await sessions.startStandalone(id, workout.id)
- assert.notEqual(a.id, b.id); assert.notEqual(a.day.id, b.day.id); assert.equal(a.sourcePlanId, undefined)
+ const a = await sessions.startStandalone(id, workout.id)
+ assert.equal(a.sourcePlanId, undefined)
  await service.save(id, { ...workoutToInput(workout), name: 'Renamed' }, workout)
  const partial = filled(a); partial.exercises[0].sets[1] = { load: '', reps: '', rir: '', unit: 'kg', skipped: false }
  await assert.rejects(sessions.complete(id, a.id, a.revision, partial, false), /Confirm/)
  const saved = await sessions.complete(id, a.id, a.revision, partial, true)
+ const b = await sessions.startStandalone(id, workout.id)
+ assert.notEqual(a.id,b.id); assert.equal(a.day.id,b.day.id) // Stable definition identity; independent snapshot objects.
  await sessions.complete(id, b.id, b.revision, filled(b), false)
  assert.equal(saved.day.name, 'Upper'); assert.equal(saved.partial, true)
  const events = await calendarActivityService(db).events(id, '2000-01-01', '2099-12-31')
@@ -121,7 +124,7 @@ test('v11 ZIP, all restore choices and repeated merges preserve independent work
  for (let i=0;i<2;i++) { const d=await sessions.startStandalone(id,workout.id); await sessions.complete(id,d.id,d.revision,filled(d),false) }
  await sessions.startStandalone(id)
  const snapshot = await captureProfile(id,db), zip=await generateBackup(snapshot,'workouts'), backup=await readBackup(zip.bytes)
- assert.equal(backup.data.backupSchemaVersion,13); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
+ assert.equal(backup.data.backupSchemaVersion,18); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
  for (const choice of ['new','replace','device','import'] as const) {
   const plan=await buildRestorePlan(backup,choice==='new'?undefined:snapshot,choice,uid(),choice==='new'?'Copy':'Guest',new Date().toISOString())
   assert.equal(plan.result.workouts.length,1); assert.equal(plan.result.sessions.length,2); assert.equal(plan.result.drafts.length,3)
@@ -134,13 +137,13 @@ test('v11 ZIP, all restore choices and repeated merges preserve independent work
 
 test('additive v5 to v6 preserves all stores, assets and active selection; no workout extraction or silent reset', async t => {
  const { db }=await setup(t); await representativeProfile(db)
- const rows=Object.fromEntries(await Promise.all(db.tables.filter(table=>table.name!=='workouts').map(async table=>[table.name,await table.toArray()])))
+ const rows=Object.fromEntries(await Promise.all(db.tables.filter(table=>table.name!=='workouts'&&table.name!=='activeWorkouts').map(async table=>[table.name,await table.toArray()])))
  const name='boros-test-workout-upgrade-'+uid(), old=new Dexie(name)
- const definitions=Object.fromEntries(db.tables.filter(table=>table.name!=='workouts').map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(index=>index.src)].join(',')]))
+ const definitions=Object.fromEntries(db.tables.filter(table=>table.name!=='workouts'&&table.name!=='activeWorkouts').map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(index=>index.src)].join(',')]))
  old.version(5).stores(definitions); await old.open(); for(const [table,values] of Object.entries(rows)) await old.table(table).bulkAdd(values); old.close()
  const upgraded=new BorosDatabase(name);t.after(()=>upgraded.delete());await upgraded.open()
- assert.equal(upgraded.verno,7);assert.equal(await upgraded.workouts.count(),0)
- for(const [table,values] of Object.entries(rows)) assert.deepEqual(await upgraded.table(table).toArray(),values)
+ assert.equal(upgraded.verno,12);assert.equal(await upgraded.workouts.count(),0)
+ for(const [table,values] of Object.entries(rows)) assert.deepEqual(await upgraded.table(table).toArray(),(classifyStrengthRecords(values), values))
  const active=(await upgraded.settings.get('workspace'))!.activeProfileId;await profileService(upgraded).initialize();assert.equal((await upgraded.settings.get('workspace'))!.activeProfileId,active)
 })
 

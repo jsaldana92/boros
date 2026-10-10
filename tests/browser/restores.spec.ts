@@ -1,7 +1,7 @@
 import { runPage } from './calendar-actions'
 import { waitForDraft, closeTimer } from './train-actions'
 import 'fake-indexeddb/auto'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './strength-test'
 import JSZip from 'jszip'
 import { BorosDatabase } from '../../src/db/database'
 import { captureProfile } from '../../src/db/backups'
@@ -67,7 +67,7 @@ test('new profile and rename restore recover photos, null fields, saved drafts/h
   const id = await confirm(page); expect(id).not.toBe(f.id); await expect(page.locator('.avatar img').first()).toBeVisible()
   await expect(page.getByLabel('Age (optional)')).toHaveValue(''); await expect(page.getByLabel('Height (feet)')).toHaveValue('')
   await page.reload(); await expect(page.getByLabel('Active profile')).toHaveValue(id)
-  await button(page, 'Train').click(); await page.getByRole('button', { name: /Resume Plan.*Day 3/ }).click(); await waitForDraft(page)
+  await button(page, 'Train').click(); await expect(page.getByRole('region',{name:'Training session',exact:true})).toBeVisible(); await waitForDraft(page)
   await expect(page.getByRole('textbox', { name: /set 1 Weight/ }).first()).toHaveValue('12.')
   await page.reload(); await button(page, 'Calendar').click(); await runPage(page); await page.getByRole('article', { name: /^Run/ }).first().getByRole('button').click(); await expect(page.getByRole('dialog')).not.toContainText('America/New_York'); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   await button(page, 'Progress').click(); await page.locator('.weight-point').first().click(); await expect(page.getByRole('dialog').getByRole('img')).toBeVisible(); await button(page, 'Close').click()
@@ -116,7 +116,7 @@ test('invalid ZIP and failed image decoding remain recoverable; cancel/navigatio
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'bad.zip', mimeType: 'application/zip', buffer: Buffer.from('not zip') }); await expect(page.getByRole('alert')).toContainText('Invalid ZIP'); expect(await records(page)).toEqual(before)
   const zip = await JSZip.loadAsync(f.bytes), manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = 119; zip.file('manifest.json', JSON.stringify(manifest))
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'future.zip', mimeType: 'application/zip', buffer: await zip.generateAsync({ type: 'nodebuffer' }) }); await expect(page.getByRole('alert')).toContainText('Update Boros')
-  manifest.backupSchemaVersion = 13
+  manifest.backupSchemaVersion = 18
   const data = JSON.parse(await zip.file('data.json')!.async('string')); data.assets[0].width = 2; manifest.assets.find((a) => a.id === data.assets[0].id).width = 2
   const payload = new TextEncoder().encode(JSON.stringify(data)), entry = manifest.inventory.find((i) => i.path === 'data.json'); entry.bytes = payload.length; entry.sha256 = await sha256(payload)
   zip.file('data.json', payload); zip.file('manifest.json', JSON.stringify(manifest))
@@ -130,13 +130,13 @@ test('invalid ZIP and failed image decoding remain recoverable; cancel/navigatio
 })
 
 test('a replaced workspace keeps a second-tab editor input and rejects its delayed autosave', async ({ page, context }) => {
-  const f = await fixture(page), peer = await context.newPage(); await peer.goto(page.url()); await button(peer, 'Train').click(); await peer.getByRole('button', { name: /Resume Plan.*Day 3/ }).click()
+  const f = await fixture(page), peer = await context.newPage(); await peer.goto(page.url()); await button(peer, 'Train').click(); await expect(peer.getByRole('region',{name:'Training session',exact:true})).toBeVisible()
   await closeTimer(peer)
   await peer.evaluate(() => { const native = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (...args) { if (this.name === 'drafts') throw new DOMException('Held autosave', 'QuotaExceededError'); return native.apply(this, args) } })
   const load = peer.getByRole('textbox', { name: /set 1 Weight/ }).first(); await load.fill('999'); await expect(peer.getByRole('alert').filter({ hasText: 'Held autosave' })).toBeVisible()
   await upload(page, f.bytes); await preview(page, 'replace'); const id = await confirm(page)
   await expect(peer.getByText('This workspace is unavailable or was restored/cleared in another tab.', { exact: false })).toBeVisible(); await expect(load).toHaveValue('999')
-  await button(peer, 'Retry draft save').click(); await expect(peer.getByText('This profile is unavailable. Nothing was saved.', { exact: true })).toBeVisible(); await expect(load).toHaveValue('999')
+  await button(peer, 'Retry draft save').click(); await expect(peer.getByText('This workout was saved or removed in another tab. Your input is kept.', { exact: true })).toBeVisible(); await expect(load).toHaveValue('999')
   const after = await records(page); expect(table(after, 'drafts').find((d) => d.profileId === id && d.id === f.savedDraft.id)!.input.exercises[0].sets[0].load).toBe('12.')
   peer.once('dialog', (dialog) => dialog.accept()); await button(peer, 'Reopen workspace').click(); await expect(peer.getByText('This workspace is unavailable', { exact: false })).toHaveCount(0)
   await peer.close()

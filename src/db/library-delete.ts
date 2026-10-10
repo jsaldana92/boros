@@ -1,3 +1,5 @@
+import { releaseWorkout } from './active-workout.ts'
+import { intervalCommand, intervalPhases, partialInterval } from '../schemas/interval-session.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { exerciseResolver } from '../lib/exercise-identity.ts'
 import { exerciseIdentity } from '../lib/progress-analytics.ts'
@@ -7,7 +9,7 @@ import type { DeletedSource } from '../schemas/deleted-source.ts'
 
 export interface DeletePreview { profileId: string; kind: DeletedSource['kind']; id: string; revision: number; active: boolean; fingerprint: string }
 export function libraryDeleteService(database: BorosDatabase) {
-  const tables = [database.profiles, database.exercises, database.workouts, database.plans, database.schedules, database.sessions, database.drafts, database.restTimers, database.deletedSources]
+  const tables = [database.activeWorkouts, database.profiles, database.exercises, database.workouts, database.plans, database.schedules, database.sessions, database.drafts, database.restTimers, database.deletedSources]
   const inspect = async (profileId: string, kind: DeletePreview['kind'], id: string, revision: number) => {
     const profile = await database.profiles.get(profileId)
     if (!profile) throw new Error('This profile is unavailable.')
@@ -30,7 +32,7 @@ export function libraryDeleteService(database: BorosDatabase) {
         const data = await inspect(proposed.profileId, proposed.kind, proposed.id, proposed.revision)
         if (data.preview.fingerprint !== proposed.fingerprint || data.preview.active !== proposed.active) throw new Error('Saved data changed after confirmation opened. Close and reopen Delete; nothing was removed.')
         const { profileId, kind, id } = proposed, now = new Date().toISOString(), affected = new Set<string>()
-        const removePair = async (draft: SessionDraft) => { affected.add(draft.id); await database.drafts.delete([profileId, draft.id]); await database.sessions.delete([profileId, draft.id]) }
+        const removePair = async (draft: SessionDraft) => { affected.add(draft.id); await database.drafts.delete([profileId, draft.id]); await releaseWorkout(database, profileId, [draft.id]); await database.sessions.delete([profileId, draft.id]) }
         if (kind === 'exercise') {
           const resolve = exerciseResolver(profileId, [...data.exercises, ...data.deletedSources.filter(t => t.kind === 'exercise')]), canonical = resolve(id)
           const ids = new Set(data.exercises.filter(e => resolve(e.id) === canonical).map(e => e.id))
@@ -39,11 +41,26 @@ export function libraryDeleteService(database: BorosDatabase) {
               const key = exerciseIdentity(undefined, draft.day.id, e)
               return key.startsWith('library:') && resolve(key.slice(8)) === canonical
             }).map(e => e.id))
-            if (!removed.size) continue
+            const ownsPhase = (p: import('../schemas/interval-session.ts').IntervalPhase) => p.templateId ? resolve(p.templateId) === canonical : !!p.exerciseId && removed.has(p.exerciseId)
+            if (!removed.size && !draft.interval?.phases.some(ownsPhase)) continue
             const next = structuredClone(draft)
             next.day.exercises = next.day.exercises.filter(e => !removed.has(e.id))
             next.input.exercises = next.input.exercises.filter(e => !removed.has(e.id))
-            if (!next.day.exercises.length && !next.input.notes.trim()) { await removePair(draft); continue }
+            if (next.day.circuits) next.day.circuits = next.day.circuits.map(c => ({ ...c, exerciseIds: c.exerciseIds.filter(id => !removed.has(id)) })).filter(c => c.exerciseIds.length)
+            if (next.interval) {
+              const state = intervalCommand(next.interval, 'recover')
+              state.phases = state.phases.filter(p => !ownsPhase(p))
+              state.results = state.results.filter(r => !ownsPhase(r.phase))
+              const circuits = new Set([...(next.day.circuits?.map(c => c.id) ?? []), ...state.phases.filter(p => p.exerciseId).map(p => p.circuitId)])
+              state.phases = state.phases.filter(p => circuits.has(p.circuitId)); state.results = state.results.filter(r => circuits.has(r.phase.circuitId))
+              const pendingIds = new Set(intervalPhases(next.day).map(p => p.id)), completedIds = new Set(state.results.map(r => r.phase.id))
+              state.phases = state.phases.filter(p => completedIds.has(p.id) || pendingIds.has(p.id))
+              if (!state.phases.some(p => p.id === state.phaseId)) { state.phaseId = state.phases.find(p => !state.results.some(r => r.phase.id === p.id))?.id; state.elapsedMs = 0; state.phaseStartedAt = undefined }
+              if (state.engineVersion) { state.execution = undefined; state.phaseId = undefined; state.elapsedMs = 0; state.phaseStartedAt = undefined; state.status = next.finalizedAt ? 'finished' : 'stopped' }
+              else state.status = state.phaseId ? 'paused' : 'finished'
+              state.anchorAt = undefined; next.interval = state
+            }
+            if (!next.day.exercises.length && !next.input.notes.trim() && !next.interval?.results.some(r => r.phase.kind === 'active' && r.elapsedMs > 0)) { await removePair(draft); continue }
             // Dissolve groups with fewer than two remaining members. Other member
             // occurrence/set IDs, actual results and notes remain unchanged.
             if (next.day.groups) {
@@ -57,7 +74,7 @@ export function libraryDeleteService(database: BorosDatabase) {
             const session = data.sessions.find(s => s.draftId === draft.id)
             if (session) {
               const assessed = assessSession(next.input)
-              const saved: CompletedSession = { ...session, day: structuredClone(next.day), structure: structuredClone(next.structure), exercises: session.exercises.filter(e => !removed.has(e.id)), partial: assessed.skipped > 0, prunedAt: now, revision: session.revision + 1 }
+              const saved: CompletedSession = { ...session, day: structuredClone(next.day), structure: structuredClone(next.structure), exercises: session.exercises.filter(e => !removed.has(e.id)), ...(next.interval ? { interval: structuredClone(next.interval) } : {}), partial: next.interval ? partialInterval(next.interval) : assessed.skipped > 0, prunedAt: now, revision: session.revision + 1 }
               await database.sessions.put(saved)
             }
           }

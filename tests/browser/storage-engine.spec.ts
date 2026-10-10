@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './strength-test'
 
 test('native IndexedDB supports a Blob round trip independently of Boros services', async ({ page }) => {
   await page.goto('./')
