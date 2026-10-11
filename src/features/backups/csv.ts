@@ -18,7 +18,7 @@ export function csvTables(data: BackupData) {
   const libraryWorkouts = data.backupSchemaVersion >= 11
   const current = data.backupSchemaVersion >= 2
   const weekly = data.backupSchemaVersion >= 5
-  const snapshotInstructions = data.backupSchemaVersion >= 7 ? ',planInstructions' : ''
+  const snapshotInstructions = (data.backupSchemaVersion >= 7 ? ',planInstructions' : '') + (data.backupSchemaVersion >= 19 ? ',planNotes' : '')
   const tables: Record<string, Table> = {}
   const table = (name: string, fields: string, rows: Row[] = []) => { tables[name] = { fields: fields.split(','), rows }; return tables[name].rows }
   const scope = 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,dayOrder'
@@ -33,7 +33,7 @@ export function csvTables(data: BackupData) {
   if (libraryWorkouts) table('workouts', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt,instructions,notes' + typeColumn + postRest, data.workouts as unknown as Row[])
   const circuits = typed ? table('circuits', `${scope},circuitId,circuitOrder,name,roundsPerSet,sets,restBetweenSetsSeconds,restAfterCircuitSeconds${repeats ? ",repeat" : ""}`) : []
   const members = typed ? table('circuit_exercises', `${scope},circuitId,exerciseOccurrenceId,exerciseOrder`) : []
-  const stateRows = typed ? table('interval_state', 'profileId,ownerKind,ownerId,status,phaseId,elapsedMs,anchorAt,phaseStartedAt' + (timerV2 ? ',engineVersion,mode,executionId,executionMode,circuitId' : '')) : []
+  const stateRows = typed ? table('interval_state', 'profileId,ownerKind,ownerId,status,phaseId,elapsedMs,anchorAt,phaseStartedAt' + (timerV2 ? ',engineVersion,mode,executionId,executionMode,circuitId' : '') + (data.backupSchemaVersion >= 19 ? ',activityJson' : '')) : []
   const executionPhases = timerV2 ? table('interval_execution_phases', 'profileId,ownerKind,ownerId,executionId,phaseId,phaseOrder') : []
   const cues = timerV2 ? table('interval_cues', 'profileId,ownerKind,ownerId,executionId,key,kind,phaseId,at') : []
   const phaseRows = typed ? table('interval_phases', 'profileId,ownerKind,ownerId,phaseId,phaseOrder,kind,circuitId,circuitName,exerciseId,exerciseName,templateId,set,round,durationSeconds' + (repeats ? ',repetition' : '')) : []
@@ -61,13 +61,14 @@ export function csvTables(data: BackupData) {
   const draftResults = table('draft_results', 'profileId,draftId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,loadText,repsText,rirText,unit,skipped')
   const sessions = table('sessions', `profileId,id,draftId,sourcePlanId,sourceDayId,planName,revision,partial,startedAt,completedAt,loggedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}${data.backupSchemaVersion >= 13 ? ',prunedAt' : ''}`)
   const sessionResults = table('session_results', 'profileId,sessionId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,skipped,weightKg,load,unit,reps,rir')
-  const notes = table('notes', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,exerciseOccurrenceId,noteKind,text')
+  const notes = table('notes', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,exerciseOccurrenceId,noteKind,text' + (data.backupSchemaVersion >= 19 ? ',noteOverride,noteEdited,noteInitial,noteInheritedClear' : ''))
   table('progress', 'profileId,id,weightKg,measuredAt,measuredLocal,timeZone,offsetMinutes,loggedAt,updatedAt,revision,photoId,lastMutationId', data.measurements as unknown as Row[])
   table('assets', 'profileId,id,path,mediaType,bytes,width,height,role,createdAt', data.assets as unknown as Row[])
   const assetRefs = table('asset_references', 'profileId,ownerKind,ownerId,photoId')
   const writeSets = (target: Row[], context: Row, sets: ExerciseInput['sets'], ids?: string[]) => sets.forEach((set, i) => target.push({ ...context, setOrder: i + 1, setId: ids?.[i], repsMin: set.reps.min, repsMax: set.reps.max, rirMin: set.rir?.min, rirMax: set.rir?.max }))
   const snapshotDays = (context: Row, list: TrainingDay[]) => list.forEach((day, d) => {
     const parent = { profileId: data.profile.id, ...context, dayId: day.id, dayOrder: d + 1 }
+    if (data.backupSchemaVersion >= 19 && (day.notes !== undefined || day.noteOverride !== undefined)) notes.push({ ...parent, noteKind: 'workout', text: day.notes, noteOverride: day.noteOverride })
     days.push({ ...parent, trainingType: day.trainingType, publishedWorkoutId: day.publishedWorkoutId, name: day.name, postWorkoutRestSeconds: day.postWorkoutRestSeconds, sourceWorkoutId: day.sourceWorkoutId, instructions: day.instructions, notes: day.notes })
     if (typed) day.circuits?.forEach((c, i) => {
       circuits.push({ ...parent, ...c, circuitId: c.id, circuitOrder: i + 1 })
@@ -80,13 +81,13 @@ export function csvTables(data: BackupData) {
       prescriptions.push({ ...link, ...p, templateId: exercise.templateId, groupId: exercise.groupId, sourceLibraryId: source?.kind === 'exercise' ? source.id : source?.libraryId, sourceKind: source?.kind, sourceId: source?.id, sourceDayId: source?.kind === 'plan' ? source.dayId : undefined, sourceOccurrenceId: source?.kind === 'plan' ? source.occurrenceId : undefined })
       writeSets(prescriptionSets, link, p.sets, exercise.setIds)
       p.tagNames.forEach((tagName, t) => prescriptionTags.push({ ...link, tagOrder: t + 1, tagName }))
-      if (p.notes !== undefined) notes.push({ ...link, noteKind: 'prescription', text: p.notes })
+      if (p.notes !== undefined || p.noteOverride !== undefined) notes.push({ ...link, noteKind: 'prescription', text: p.notes, noteOverride: p.noteOverride })
     })
   })
   for (const exercise of data.exercises) {
     libraries.push(exercise as unknown as Row); writeSets(librarySets, { profileId: data.profile.id, libraryExerciseId: exercise.id }, exercise.sets)
     exercise.tagIds.forEach((tagId, i) => tagLinks.push({ profileId: data.profile.id, libraryExerciseId: exercise.id, tagId, tagOrder: i + 1 }))
-    if (exercise.notes !== undefined) notes.push({ profileId: data.profile.id, ownerKind: 'library', ownerId: exercise.id, noteKind: 'prescription', text: exercise.notes })
+    if (exercise.notes !== undefined || exercise.noteOverride !== undefined) notes.push({ profileId: data.profile.id, ownerKind: 'library', ownerId: exercise.id, noteKind: 'prescription', text: exercise.notes, noteOverride: exercise.noteOverride })
   }
   const snapshotWeeks = (context: Row, source: WeeklyStructure) => {
     if (data.backupSchemaVersion >= 10 && source.weeks) planWeeks(source).forEach((week, index) => week.days.forEach((day, d) => definitions.push({ profileId: data.profile.id, ...context, weekId: week.id, weekOrder: index + 1, dayId: day.id, dayOrder: d + 1 })))
@@ -106,15 +107,15 @@ export function csvTables(data: BackupData) {
     const context = { profileId: data.profile.id, ownerKind: kind, ownerId: record.id, sourcePlanId: record.sourcePlanId, dayId: record.day.id }
     snapshotDays(context, [record.day])
     if (typed && record.interval) {
-      stateRows.push({ ...context, ...record.interval, executionId: record.interval.execution?.id, executionMode: record.interval.execution?.mode, circuitId: record.interval.execution?.circuitId })
+      stateRows.push({ ...context, ...record.interval, activityJson: record.interval.activity ? JSON.stringify(record.interval.activity) : undefined, executionId: record.interval.execution?.id, executionMode: record.interval.execution?.mode, circuitId: record.interval.execution?.circuitId })
       if (timerV2 && record.interval.execution) { const e = record.interval.execution; e.phaseIds.forEach((phaseId, i) => executionPhases.push({ ...context, executionId: e.id, phaseId, phaseOrder: i + 1 })); e.cues.forEach(c => cues.push({ ...context, executionId: e.id, ...c })) }
       record.interval.phases.forEach((p, i) => phaseRows.push({ ...context, ...p, phaseId: p.id, phaseOrder: i + 1 }))
       record.interval.results.forEach(r => resultRows.push({ ...context, ...r, phaseId: r.phase.id }))
     }
     const input = 'input' in record ? record.input : record
-    notes.push({ ...context, noteKind: 'session', text: input.notes })
+    notes.push({ ...context, noteKind: 'session', text: input.notes, noteEdited: input.noteEdited, ...('noteInitial' in input ? { noteInitial: input.noteInitial, noteInheritedClear: input.noteInheritedClear } : {}) })
     input.exercises.forEach((exercise, e) => {
-      notes.push({ ...context, exerciseOccurrenceId: exercise.id, noteKind: 'exercise', text: exercise.notes })
+      notes.push({ ...context, exerciseOccurrenceId: exercise.id, noteKind: 'exercise', text: exercise.notes, noteEdited: exercise.noteEdited, ...('noteInitial' in exercise ? { noteInitial: exercise.noteInitial, noteInheritedClear: exercise.noteInheritedClear } : {}) })
       exercise.sets.forEach((set, s) => results.push({ profileId: data.profile.id, [`${kind}Id`]: record.id, sourcePlanId: record.sourcePlanId, dayId: record.day.id, exerciseOccurrenceId: exercise.id, exerciseOrder: e + 1, setOrder: s + 1, ...set, ...('load' in set && typeof set.load === 'string' ? { loadText: set.load, repsText: set.reps, rirText: set.rir } : {}) }))
     })
   }

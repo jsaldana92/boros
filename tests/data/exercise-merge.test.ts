@@ -1,3 +1,4 @@
+import { classifyStrengthRecords } from '../../src/db/training-migration.ts'
 import { stripTrainingFields } from '../fixtures/training-compatibility.ts'
 import 'fake-indexeddb/auto'
 import { weeklyService } from '../../src/db/weekly.ts'
@@ -109,7 +110,7 @@ test('backup v13 round trip, all restore choices, monotonic retirement and Clear
  const {db,id,service,a,b,c,tags}=await setup(t),old=await readBackup((await generateBackup(await captureProfile(id,db),'test')).bytes)
  await service.merge(id,fields(b,tags),a,a.id,uid());const bb=await service.get(id,b.id);await service.merge(id,fields(c,tags),bb,b.id,uid())
  const snapshot=await captureProfile(id,db),zip=await generateBackup(snapshot,'test'),backup=await readBackup(zip.bytes)
- assert.equal(backup.data.backupSchemaVersion,18);assert.equal(backup.manifest.csvRows['csv/library_exercises.csv'],3)
+ assert.equal(backup.data.backupSchemaVersion,19);assert.equal(backup.manifest.csvRows['csv/library_exercises.csv'],3)
  for(const choice of ['new','replace','device','import'] as const){const plan=await buildRestorePlan(backup,choice==='new'?undefined:snapshot,choice,uid(),choice==='new'?'Restored':'Guest',new Date().toISOString());const exported=await readBackup((await generateBackup(plan.result,'test')).bytes);assert.equal(exerciseResolver(plan.result.profile.id,exported.data.exercises)(a.id),c.id);assert.equal(exported.data.sessions.length,1);assert.equal(exported.data.workouts.length,1)}
  for(const choice of ['device','import'] as const){const merged=await buildRestorePlan(old,snapshot,choice,uid(),'Guest',new Date().toISOString());assert.equal(exerciseResolver(merged.result.profile.id,merged.result.exercises)(a.id),c.id)}
  const restores=restoreService(db),owner=await restores.commit(await restores.preview(backup,'new','Copied'),true),copy=await captureProfile(owner,db)
@@ -135,7 +136,7 @@ for (const version of [11, 12]) test(`original v${version} ZIP retains workouts/
  const manifest={...generated.manifest,backupSchemaVersion:version,databaseSchemaVersion:6,counts:recordCounts(data),csvRows:Object.fromEntries(tables.map(t=>[t.path,t.rows])),inventory:await Promise.all(payload.map(async([path,text])=>({path,bytes:new TextEncoder().encode(text).length,sha256:await sha256(new TextEncoder().encode(text)),mediaType:path.endsWith('json')?'application/json':'text/csv; charset=utf-8'})))}
  for(const [path,text]of payload)zip.file(path,text,{createFolders:false});zip.file('manifest.json',JSON.stringify(manifest))
  const bytes=await zip.generateAsync({type:'uint8array'}),before=await sha256(bytes),restored=await readBackup(bytes)
- assert.equal(restored.manifest.backupSchemaVersion,version);assert.equal(restored.data.backupSchemaVersion,18);assert.deepEqual(restored.data.workouts,clone(snapshot.workouts));assert.deepEqual(restored.data.sessions,clone(snapshot.sessions));assert.equal(await sha256(bytes),before)
+ assert.equal(restored.manifest.backupSchemaVersion,version);assert.equal(restored.data.backupSchemaVersion,19);const expected=clone(data);classifyStrengthRecords(expected);assert.deepEqual(restored.data.workouts,expected.workouts);assert.deepEqual(restored.data.sessions,expected.sessions);assert.equal(await sha256(bytes),before)
  assert.deepEqual(restored.data.deletedSources,[]);assert.deepEqual(restored.data.exercises,clone(snapshot.exercises))
  if(version===11){data.exercises[0].mergedIntoId=data.exercises[1].id;assert.throws(()=>validateBackupData(data),/Unrecognized key/)}
  else {data.deletedSources=[];assert.throws(()=>validateBackupData(data),/Unrecognized key/)}

@@ -100,11 +100,11 @@ test('copies include full snapshots; source edits/archive and destination edits 
   const changed = planToInput(first); changed.days[0].exercises[0].prescription.sets[0].reps.min = 6
   const edited = await service.save(id, changed, first)
   assert.equal((await exercises.get(id, source.id)).sets[0].reps.min, 5)
-  assert.deepEqual((await service.get(id, second.id)).days[0].exercises[0].prescription, choice.prescription)
+  assert.deepEqual((await service.get(id, second.id)).days[0].exercises[0].prescription, { ...choice.prescription, noteOverride: false })
   const newSource = await exercises.save(id, { ...prescription(), name: 'Changed', tagNames: ['Other'] }, source)
   await exercises.setArchived(id, newSource.id, newSource.revision, true)
   await service.setArchived(id, edited.id, edited.revision, true)
-  assert.deepEqual((await service.get(id, second.id)).days[0].exercises[0].prescription, choice.prescription)
+  assert.deepEqual((await service.get(id, second.id)).days[0].exercises[0].prescription, { ...choice.prescription, noteOverride: false })
   assert.equal((await service.library(id)).choices.length, 0)
 })
 
@@ -174,7 +174,7 @@ test('v2-to-v3 migration retains all populated stores including photo bytes and 
   const upgraded = new BorosDatabase(name)
   t.after(() => upgraded.delete())
   await upgraded.open()
-  assert.equal(upgraded.verno, 12)
+  assert.equal(upgraded.verno, 13)
   for (const [table, record] of Object.entries(records)) {
     const retained = (await upgraded.table(table).toArray())[0]
     assert.deepEqual(retained, (classifyStrengthRecords(record), record))

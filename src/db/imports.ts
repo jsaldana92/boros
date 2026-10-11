@@ -1,3 +1,4 @@
+import { assertImportInstructions } from '../lib/import-instructions.ts'
 import { workoutService } from './workouts.ts'
 import type { WorkoutInput } from '../schemas/workout.ts'
 import { createId } from '../lib/browser-crypto.ts'
@@ -15,6 +16,7 @@ export function importSession(profileId: string, database: BorosDatabase = db) {
   return {
     saveLibraryWorkout: (input: WorkoutInput) => database.transaction('rw', database.profiles, database.deletedSources, database.workouts, database.exercises, database.tags, async () => {
       const committed = await database.workouts.get([profileId, creationId])
+      if (!committed) assertImportInstructions([input], await database.exercises.where('profileId').equals(profileId).toArray())
       return committed ?? workoutService(database).save(profileId, { ...input, id: creationId }, undefined, true)
     }),
     saveWorkout: (input: ExerciseInput) => exerciseService(database).save(profileId, input, undefined, creationId),
@@ -25,6 +27,7 @@ export function importSession(profileId: string, database: BorosDatabase = db) {
       const at = new Date().toISOString()
       const virtual: Plan = { ...input, id: creationId, profileId, nameKey: '', revision: 1, createdAt: at, updatedAt: at }
       const [exercises, tags] = await Promise.all([database.exercises.where('profileId').equals(profileId).toArray(), database.tags.where('profileId').equals(profileId).toArray()])
+      assertImportInstructions(input.days, exercises)
       const linked = materializeTemplates(profileId, { plans: [virtual], exercises, tags }, at, true)
       if (linked.addedTags.length) await database.tags.bulkAdd(linked.addedTags)
       if (linked.addedExercises.length) await database.exercises.bulkAdd(linked.addedExercises)

@@ -9,7 +9,7 @@ export async function createNamedProfile(page: Page, name: string) {
   await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
 }
 export async function confirmDownload(page: Page) {
-  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  await page.getByRole('button', { name: 'Download profile backup', exact: true }).click()
   await page.getByRole('dialog', { name: 'Downloading data', exact: true }).getByRole('button', { name: 'I understand (Download)', exact: true }).click()
 }
 const zoneClients = new WeakMap<Page, CDPSession>()

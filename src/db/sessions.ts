@@ -1,3 +1,5 @@
+import { currentInstructions, currentPlanInstructions, currentScheduleInstructions } from './instructions.ts'
+import { inheritNotes } from '../lib/note-inheritance.ts'
 import { claimWorkout, releaseWorkout } from './active-workout.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import { assertTimerAvailable, assertIntervalOwner, timerClient } from './timer-coordinator.ts'
@@ -21,10 +23,10 @@ import { db, type BorosDatabase } from './database.ts'
 import { z } from 'zod'
 import { validatedDaySchema as daySchema, trainingBlocks } from '../schemas/plan.ts'
 import { occurrences, occurrenceKey, dateSchema, programWeek } from '../schemas/schedule.ts'
-import { assessSession, blankSession, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
+import { assessSession, blankSession, copiedExerciseInputs, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
 
 export function sessionService(database: BorosDatabase) {
-  const tables = [database.activeWorkouts, database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises, database.tags, database.workouts, database.deletedSources]
+  const tables = [database.plans, database.activeWorkouts, database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises, database.tags, database.workouts, database.deletedSources]
   const owner = async (profileId: string) => { const profile = await database.profiles.get(profileId); if (!profile) throw new Error('This profile is unavailable. Nothing was saved.'); return profile }
   const draft = async (profileId: string, id: string) => { const value = await database.drafts.get([profileId, id]); if (!value) throw new Error('This draft is unavailable in this profile.'); return value }
   const editable = async (value: SessionDraft, revision: number) => {
@@ -34,6 +36,12 @@ export function sessionService(database: BorosDatabase) {
     await claimWorkout(database, value)
   }
   const stopOwned = async (profileId: string, draftId: string) => { const timer = await database.restTimers.get('active'); if (timer?.profileId === profileId && timer.draftId === draftId) await database.restTimers.delete('active') }
+  const initialize = async (value: SessionDraft) => {
+    value.day = await currentInstructions(database, value.profileId, value.day)
+    const plan = value.sourcePlanId ? await database.plans.get([value.profileId, value.sourcePlanId]) : undefined
+    if (plan) { value.planInstructions = plan.instructions ?? ''; value.planNotes = plan.notes ?? '' }
+    inheritNotes(value, await database.sessions.where('profileId').equals(value.profileId).toArray(), await database.exercises.where('profileId').equals(value.profileId).toArray())
+  }
   return {
     async timerSlot() {
       return database.transaction('r', [database.drafts, database.restTimers], async () => {
@@ -61,14 +69,14 @@ export function sessionService(database: BorosDatabase) {
         if (!event) throw new Error('This occurrence changed or needs mapping repair. Refresh Calendar.')
         const now = new Date().toISOString(), day = daySchema.parse(convertIntervalDay(event.day))
         const value: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: event.planId, sourceDayId: dayId, occurrence: event.ref, occurrenceKey: key, activeSourceKey: `scheduled:${key}`, planName: event.planName, ...planInstructionsSnapshot(event.planInstructions), day, ...(day.trainingType === 'interval' ? { interval: initialInterval(day) } : {}), structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
-        await claimWorkout(database, value); await database.drafts.add(value); return { draft: value }
+        await initialize(value); await claimWorkout(database, value); await database.drafts.add(value); return { draft: value }
       })
     },
     async library(profileId: string) {
       return database.transaction('r', [...tables, database.plans, database.schedules], async () => {
         await owner(profileId)
         const timer = await database.restTimers.get('active'), runs = await database.schedules.where('profileId').equals(profileId).toArray()
-        return { schedules: runs, plans: await database.plans.where('profileId').equals(profileId).toArray(), drafts: (await database.drafts.where('profileId').equals(profileId).toArray()).filter((item) => !item.finalizedAt && !runs.some((run) => run.id === item.occurrence?.scheduleId && run.closedAt)), sessions: (await database.sessions.where('profileId').equals(profileId).toArray()).sort((a, b) => b.completedAt.localeCompare(a.completedAt)), timer: timer?.profileId === profileId ? timer : undefined }
+        return { schedules: await Promise.all(runs.map(r => currentScheduleInstructions(database, r))), plans: await Promise.all((await database.plans.where('profileId').equals(profileId).toArray()).map(p => currentPlanInstructions(database, p))), drafts: (await database.drafts.where('profileId').equals(profileId).toArray()).filter((item) => !item.finalizedAt && !runs.some((run) => run.id === item.occurrence?.scheduleId && run.closedAt)), sessions: (await database.sessions.where('profileId').equals(profileId).toArray()).sort((a, b) => b.completedAt.localeCompare(a.completedAt)), timer: timer?.profileId === profileId ? timer : undefined }
       })
     },
     async hints(value: SessionDraft, unit: WeightUnit) {
@@ -93,7 +101,7 @@ export function sessionService(database: BorosDatabase) {
         if (!plan || plan.archivedAt || !source) throw new Error('This saved workout is unavailable. Choose an active plan.')
         const day = daySchema.parse(convertIntervalDay(source)), now = new Date().toISOString()
         const result: SessionDraft = { id: createId(), profileId, revision: 1, sourcePlanId: planId, sourceDayId: dayId, activeSourceKey: key, planName: plan.name, ...planInstructionsSnapshot(plan.instructions), day, ...(day.trainingType === 'interval' ? { interval: initialInterval(day) } : {}), structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
-        await claimWorkout(database, result); await database.drafts.add(result); return result
+        await initialize(result); await claimWorkout(database, result); await database.drafts.add(result); return result
       })
     },
     async startStandalone(profileId: string, workoutId?: string, trainingType: TrainingType = 'strength') {
@@ -102,7 +110,7 @@ export function sessionService(database: BorosDatabase) {
         if (workoutId && (!source || source.archivedAt)) throw new Error('This workout is unavailable. Choose an active workout.')
         const day = source ? { ...structuredClone(workoutToInput(source)), sourceWorkoutId: source.id } : { ...newDay(1, trainingType), name: 'Workout' }, now = new Date().toISOString()
         const value: SessionDraft = { id: createId(), profileId, revision: 1, source: source ? { kind: 'workout', workoutId: source.id } : { kind: 'custom' }, sourceDayId: day.id, timeZone: browserZone(), day, ...(day.trainingType === 'interval' ? { interval: initialInterval(day) } : {}), structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
-        await claimWorkout(database, value); await database.drafts.add(value); return value
+        await initialize(value); await claimWorkout(database, value); await database.drafts.add(value); return value
       })
     },
     async update(profileId: string, id: string, revision: number, raw: SessionInput, snapshot?: SessionSnapshot) {
@@ -147,7 +155,7 @@ export function sessionService(database: BorosDatabase) {
           for (let r = 1; rounds.length < replacement.prescription.sets.length; r++) if (!rounds.includes(r)) rounds.push(r)
           rounds.sort((a,b) => a-b); next.structure.exercises[index].sets.forEach((set, i) => { set.round = rounds[i] })
         }
-        next.input.exercises[index] = blankSession({ ...next.day, exercises: [replacement] }, profile.weightUnit).exercises[0]
+        next.input.exercises[index] = copiedExerciseInputs({ ...next.day, exercises: [replacement] }, profile.weightUnit)[0]
         next.revision++; next.updatedAt = new Date().toISOString()
         validateDraftInput(next.input, next.day)
         await database.drafts.put(next)
@@ -208,7 +216,7 @@ export function sessionService(database: BorosDatabase) {
           }
           savedDay = { ...savedDay, name }
         }
-        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, ...(value.prunedAt ? { prunedAt: value.prunedAt } : {}), ...(source ? { source, timeZone: value.timeZone } : { sourcePlanId: value.sourcePlanId, planName: value.planName }), sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), ...planInstructionsSnapshot(value.planInstructions), day: savedDay, ...(value.structure ? { structure: structuredClone(value.structure) } : {}), notes: input.notes, exercises: interval ? [] : assessed.exercises, ...(interval ? { interval } : {}), partial: interval ? partialInterval(interval) : assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
+        const result: CompletedSession = { id, draftId: id, profileId, revision: 1, ...(value.prunedAt ? { prunedAt: value.prunedAt } : {}), ...(source ? { source, timeZone: value.timeZone } : { sourcePlanId: value.sourcePlanId, planName: value.planName }), sourceDayId: value.sourceDayId, ...(value.occurrence ? { occurrence: structuredClone(value.occurrence), occurrenceKey: value.occurrenceKey } : {}), ...planInstructionsSnapshot(value.planInstructions), day: savedDay, ...(value.structure ? { structure: structuredClone(value.structure) } : {}), notes: input.notes, ...(input.noteEdited === undefined ? {} : { noteEdited: input.noteEdited || !!input.noteInheritedClear && input.notes === '' }), ...(value.planNotes === undefined ? {} : { planNotes: value.planNotes }), exercises: assessed.exercises, ...(interval ? { interval } : {}), partial: interval ? partialInterval(interval) : assessed.skipped > 0, startedAt: value.startedAt, completedAt, loggedAt }
         await database.sessions.add(result)
         await database.drafts.put({ ...value, ...(source ? { source } : {}), day: savedDay, input, ...(interval ? { interval } : {}), finalizedAt: completedAt, activeSourceKey: undefined, updatedAt: loggedAt, revision: value.revision + 1 })
         await stopOwned(profileId, id); await releaseWorkout(database, profileId, [id]); return result
@@ -231,12 +239,13 @@ export function sessionService(database: BorosDatabase) {
           assertSameTrainingType(day, template)
         }
         let interval = initialInterval(day)
-        if (state.results.length || state.elapsedMs) {
+        const retained = new Set([...state.results, ...(state.activity?.legacy ?? []), ...(state.activity?.attempts ?? []).flatMap(a => a.results)].map(r => r.phase.id))
+        if (retained.size || state.elapsedMs) {
           if (state.elapsedMs) throw new Error('Pause and skip the current phase before changing pending exercises. Its recorded time will be preserved.')
           // Completed phases are immutable historical snapshots, even if a later
           // repetition of the same occurrence is replaced with a new prescription.
-          const done = new Set(state.results.map(r => r.phase.id))
-          const generated = intervalPhases(day), oldPending = state.phases.filter(p => p.kind !== 'preparation' && p.durationSeconds > 0 && !state.results.some(r => r.phase.id === p.id))
+          const done = retained
+          const generated = intervalPhases(day), oldPending = state.phases.filter(p => p.kind !== 'preparation' && p.durationSeconds > 0 && !done.has(p.id))
           const pending = generated.filter(p => {
             if (done.has(p.id)) return false
             if (oldPending.some(old => old.id === p.id)) return true
@@ -253,10 +262,11 @@ export function sessionService(database: BorosDatabase) {
           })
           const circuits = value.day.circuits ?? []
           if (circuits.some(c => { const next = day.circuits?.find(n => n.id === c.id); return !next || JSON.stringify({ ...next, exerciseIds: [] }) !== JSON.stringify({ ...c, exerciseIds: [] }) })) throw new Error('Started circuit settings cannot change. Add a separate circuit or replace pending exercise targets.')
-          interval = { ...state, phases: [...initialInterval(day).phases.filter(p => p.kind === 'preparation'), ...state.results.map(r => r.phase), ...pending], phaseId: undefined, status: 'stopped', execution: undefined, elapsedMs: 0, anchorAt: undefined, phaseStartedAt: undefined }
+          interval = { ...state, phases: [...initialInterval(day).phases.filter(p => p.kind === 'preparation'), ...state.phases.filter(p => done.has(p.id)), ...pending], phaseId: undefined, status: 'stopped', execution: undefined, elapsedMs: 0, anchorAt: undefined, phaseStartedAt: undefined }
         }
-        const input = blankSession(day, profile.weightUnit); input.notes = value.input.notes
-        input.exercises.forEach(e => { e.notes = value.input.exercises.find(old => old.id === e.id)?.notes ?? '' })
+        interval.activity = state.activity
+        const input = { ...value.input, exercises: copiedExerciseInputs(day, profile.weightUnit) }
+        input.exercises = input.exercises.map(e => value.input.exercises.find(old => old.id === e.id) ?? e)
         const result = { ...value, day, input, interval: intervalStateSchema.parse(interval), structure: { ...initialStructure(day), amended: true }, revision: value.revision + 1, updatedAt: new Date().toISOString() }
         await database.drafts.put(result); return result
       })

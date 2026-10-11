@@ -24,6 +24,7 @@ export const strengthInputSchema = z.object({
   restBetweenSeconds: integer(0).optional(),
   restAfterSeconds: integer(0).optional(),
   instructions: z.string().max(20000, 'Use at most 20,000 characters.').optional(),
+  noteOverride: z.boolean().optional(),
   notes: z.string().max(20000, 'Use at most 20,000 characters.').optional(),
   tutorialUrl: z.string().trim().refine(isYouTubeUrl, 'Use an HTTPS YouTube video URL (watch, youtu.be, shorts, live, or embed).').optional(),
   tagNames: z.array(tagNameSchema).max(50, 'Use at most 50 tags.'),

@@ -1,3 +1,45 @@
+# Boros profile backup, schema 19 (schemas 1-18 supported)
+
+Current exports pair **backup v19 / database v13**; AI remains **v8**. The stable
+IndexedDB name is `boros`. V13 changes no stores/indexes and rewrites no records.
+Existing IDs, profiles, selection, measurements, photos and historical snapshots
+remain intact. Failures remain errors, never replacement empty databases.
+
+New optional data is authoritative in `data.json`:
+
+- Template `noteOverride` distinguishes copied defaults and deliberate overrides/clears.
+- Session input `noteInitial`, `noteEdited`, `noteInheritedClear` preserve inheritance
+  without treating initial text as entered progress. Completed workout/exercise notes
+  retain clear provenance. New Interval sessions include exercise-note entries with
+  empty Strength set arrays; old sessions without those entries stay valid.
+- `planNotes` captures plan-owned text for new sessions/outcomes/revisions. Legacy
+  absence stays absent; it is never fabricated from current template notes.
+- `interval.activity` version 1 retains stable attempt IDs and per-phase cumulative
+  elapsed milliseconds, status and timestamps. Legacy known timing is separated
+  from new attempts; unknown/previously discarded timing is not reconstructed.
+
+Validators reject duplicate attempts/phases and invalid timing or source snapshots.
+Restore remaps canonical exercise references in phases and every retained attempt,
+keeps independent note branches, pauses imported checkpoints and removes foreign
+runtime ownership. Existing atomic conflict choices, stale-write checks, deleted
+source semantics, photo validation and SHA-256 checks remain mandatory.
+
+There remain **40 backup CSV tables**. V19 adds `planNotes` to existing snapshot
+columns, provenance columns (`noteOverride,noteEdited,noteInitial,noteInheritedClear`)
+to `notes.csv`, workout-note rows there, and `activityJson` to `interval_state.csv`.
+The JSON ledger in that cell uses the same strict data contract. The authoritative
+payload remains JSON plus photos; CSV tables do not reconstruct records.
+
+The separate Settings Data download is a flat analysis CSV, documented in
+[analysis-csv.md](analysis-csv.md). It contains no photo blobs, cannot restore a
+profile, and never replaces Profile Backup. Frozen v18 schema/model copies validate
+original field sets and CSV/checksums before promotion. Original v18 and all supported
+older backups stay accepted without inventing note-clear or timing provenance.
+
+Verification and owner checks: [analysis-verification.md](analysis-verification.md).
+
+## Historical schema 18 contract (superseded by v19 above)
+
 # Boros profile backup, schema 18 (schemas 1-17 supported)
 
 Current exports pair **backup v18 / database v12**; AI remains **v8**. The database

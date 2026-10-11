@@ -6,6 +6,18 @@ complete json fence, useful field paths, plain text, HTTPS tutorial validation,
 preview-only editing and transactional Save remain unchanged. Strength retains
 its existing sets/reps/RIR and superset contract.
 
+Notes and instructions already exist in v8; no public field/version was added for
+analysis export. Imported copied notes remain independent. For a new repeated
+exercise name, the first occurrence in the ordered editable preview seeds the
+library default; differing notes expose that choice in an editable review. Existing
+library defaults are retained. Conflicting shared instructions require an explicit
+preview choice, including acknowledgment of an existing library's authoritative
+value. Saves recheck instructions/type/identity inside the existing atomic transaction;
+conflicts and retries never silently overwrite a library or duplicate publication.
+Internal note provenance fields are not accepted in public AI JSON. Prompts still
+require exactly one complete copyable json fenced object. They now ask for consistent
+shared instructions and reflect the current ten-second timer preparation.
+
 An Interval circuit has `name`, ordered `exercises`, `repeat` (integer 0-10,
 default 0 when omitted), and `restAfterCircuitSeconds` (integer 0-86,400).
 `repeat` means additional executions. Every execution includes each positive

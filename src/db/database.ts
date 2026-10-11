@@ -76,6 +76,8 @@ export class BorosDatabase extends Dexie {
     this.version(11).stores({})
     // Local ownership is not a foreign runtime lock or part of exported profiles.
     this.version(12).stores({ activeWorkouts: 'id' })
+    // Optional note provenance, plan-note snapshots and attempt activity. No rewrites.
+    this.version(13).stores({})
   }
 }
 

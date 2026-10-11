@@ -27,7 +27,7 @@ export function IntervalSession({ initial, onClose, onCompleted }: { initial: Se
   const heading = useRef<HTMLHeadingElement>(null)
   const [now, setNow] = useState(() => Date.now()), [notes, setNotes] = useState(controller.notes)
   const [confirm, setConfirm] = useState<{ title: string; action: () => void; text?: string; label?: string }>(), leaveReply = useRef<((value: boolean) => void) | undefined>(undefined)
-  const [note, setNote] = useState(false), [noteDirty, setNoteDirty] = useState(false)
+  const [note, setNote] = useState<string | undefined>(), [noteDirty, setNoteDirty] = useState(false)
   const [saveCustom, setSaveCustom] = useState(false), [addLibrary, setAddLibrary] = useState(false), [name, setName] = useState('')
   const slot = useLiveQuery(() => sessions.timerSlot().catch(() => ({ profileId: '', draftId: '' })), [])
   const conflict = !!slot && slot.draftId !== initial.id
@@ -52,7 +52,7 @@ export function IntervalSession({ initial, onClose, onCompleted }: { initial: Se
     // Navigation preserves the active controller, timer and committed draft.
     if (noteDirty) return new Promise<boolean>(resolve => {
       leaveReply.current = resolve
-      setConfirm({ title: 'Leave pending edits?', text: 'Discard unapplied note changes?', label: 'Leave', action: () => { setNote(false); setNoteDirty(false); leaveReply.current = undefined; void controller.settle().then(resolve) } })
+      setConfirm({ title: 'Leave pending edits?', text: 'Discard unapplied note changes?', label: 'Leave', action: () => { setNote(undefined); setNoteDirty(false); leaveReply.current = undefined; void controller.settle().then(resolve) } })
     })
     return controller.settle()
   }))
@@ -67,33 +67,33 @@ export function IntervalSession({ initial, onClose, onCompleted }: { initial: Se
     if (!await command('pause')) return
     if (!meaningfulInterval(controller.record.interval)) { setError('Record some active time before saving.'); return }
     const next = () => controller.record.source?.kind === 'custom' ? setSaveCustom(true) : finish()
-    if (partialInterval(controller.record.interval!)) setConfirm({ title: 'Save partial session?', text: 'Unfinished activities retain their actual time or are marked skipped.', action: next }); else next()
+    if (partialInterval(controller.record.interval!)) setConfirm({ title: 'Save partial session?', text: 'Recorded activity is retained. Unstarted phases remain unperformed.', action: next }); else next()
   }
   const active = executionActive(state), mode = (record.day.circuits?.length ?? 0) > 1 ? selectedMode : 'circuit'
   const start = (circuitId?: string, executionMode: 'circuit' | 'continuous' | 'rest' = mode) => {
     const run = (restart = false) => { feedback.update(controller.record.interval ?? initialInterval(controller.record.day), sound, Date.now(), document.visibilityState === 'visible'); feedback.unlock(sound); void work(async () => { const c = controller.record; apply(await sessions.startInterval(c.profileId, c.id, c.revision, executionMode, circuitId, restart, controller.notes)) }) }
-    if (scopeHasProgress(state, executionMode, circuitId)) setConfirm({ title: 'Restart timer?', label: 'Start', text: `Restarting will clear the recorded interval progress for ${mode === 'continuous' ? 'this workout' : 'this circuit'}.`, action: () => run(true) }); else run()
+    if (scopeHasProgress(state, executionMode, circuitId)) setConfirm({ title: 'Restart timer?', label: 'Start', text: 'Earlier activity will be retained. This starts another timer attempt.', action: () => run(true) }); else run()
   }
   const timer = <IntervalTimer state={display} disabled={!ready || busy || !!error} onAction={action => { feedback.cancel(); if (action === 'resume') feedback.unlock(sound); void command(action) }} />
   const closeConfirm = () => { setConfirm(undefined); leaveReply.current?.(false); leaveReply.current = undefined }
-  return <section className="training-session interval-session" aria-label="Interval training session"><div className="training-heading"><h2 ref={heading} tabIndex={-1}>{record.day.name}</h2><WorkoutActions instructions={record.day.instructions} onNote={() => setNote(true)} noteDisabled={!ready || busy || !!record.finalizedAt} /></div>
+  return <section className="training-session interval-session" aria-label="Interval training session"><div className="training-heading"><h2 ref={heading} tabIndex={-1}>{record.day.name}</h2><WorkoutActions instructions={record.day.instructions} onNote={() => setNote('workout')} noteDisabled={!ready || busy || !!record.finalizedAt} /></div>
     {!ready && !error && <p role="status">Loading timer...</p>}
     {(record.day.circuits?.length ?? 0) > 1 && <label className="check-label interval-mode"><input type="checkbox" checked={mode === 'continuous'} disabled={active || busy || !ready || !!error} onChange={event => { const mode = event.target.checked ? 'continuous' : 'circuit'; setSelectedMode(mode); void work(async () => { const c = controller.record; apply(await sessions.intervalMode(c.profileId, c.id, c.revision, mode)) }) }} />Continuous workout</label>}
     {mode === 'continuous' && <div className="interval-start">{active && state.execution?.mode === 'continuous' ? timer : <button disabled={!ready || busy || !!error || active || conflict} onClick={() => start()}>Start</button>}</div>}
     {record.day.circuits?.map((circuit, index) => <section key={circuit.id} className="training-exercise interval-circuit" aria-label={circuit.name}>{index > 0 && <hr className="circuit-divider" />}<h3>{circuit.name}</h3>
       {mode === 'circuit' && <div className="interval-start">{active && state.execution?.circuitId === circuit.id ? timer : <button disabled={!ready || busy || !!error || active || conflict} onClick={() => start(circuit.id)}>Start Circuit</button>}</div>}
-      <IntervalSequence phases={state.phases.filter(p => p.circuitId === circuit.id)} activeId={active ? display.phaseId : undefined} />
+      <IntervalSequence actions={p => <WorkoutActions label={p.exerciseName} instructions={record.day.exercises.find(e => e.id === p.exerciseId)?.prescription.instructions} noteDisabled={!ready || busy || !!record.finalizedAt} onNote={() => setNote(p.exerciseId)} />} phases={state.phases.filter(p => p.circuitId === circuit.id)} activeId={active ? display.phaseId : undefined} />
     </section>)}
     {!!record.day.postWorkoutRestSeconds && <section className="interval-post-rest" aria-label="Post-Workout Rest"><hr /><h3>Post-Workout Rest</h3><p>{formatIntervalTime(record.day.postWorkoutRestSeconds)}</p><div className="interval-start">{active && state.execution?.mode === 'rest' ? timer : <button disabled={!ready || busy || !!error || active || conflict} onClick={() => start(undefined, 'rest')}>Start</button>}</div></section>}
     <p role="status">{error ? 'Timer stopped' : state.status === 'running' ? 'Running' : state.status === 'finished' ? state.execution?.mode === 'rest' ? 'Rest complete' : 'Ready to save' : state.status === 'paused' ? 'Paused' : 'Ready'}</p>
     {active && <button disabled={!ready || busy || !!error} onClick={() => { feedback.cancel(); void command('skip') }}>Skip phase</button>}
     {error && <p role="alert">{error} {!controller.retired && <button onClick={async () => { const ok = await work(async () => { apply(await sessions.getDraft(initial.profileId, initial.id)) }); if (ok) { feedback.reset(); const recovered = await command('recover', true); setReady(recovered) } }}>Reload saved timer</button>}</p>}
     <SessionActions disabled={busy} saveDisabled={busy || !ready || !!error} save={() => void requestSave()} cancel={() => void requestCancel()} clear={() => setConfirm({ title: 'Clear session?', text: 'This resets recorded time and notes.', action: () => void work(async () => { const c = controller.record; const next = await sessions.clear(c.profileId, c.id, c.revision); apply(next); setNotes(''); controller.setNotes(''); feedback.reset() }) })} />
-    {note && <NoteDialog value={notes} title={record.day.name} onDirty={setNoteDirty} busy={busy} error={error} onClose={() => { setNote(false); setNoteDirty(false) }} onApply={value => {
-      setNotes(value); controller.setNotes(value)
+    {note && <NoteDialog value={note === 'workout' ? notes : record.input.exercises.find(e => e.id === note)?.notes ?? ''} title={note === 'workout' ? record.day.name : record.day.exercises.find(e => e.id === note)?.prescription.name ?? 'Exercise note'} onDirty={setNoteDirty} busy={busy} error={error} onClose={() => { setNote(undefined); setNoteDirty(false) }} onApply={value => {
+      if (note === 'workout') { setNotes(value); controller.setNotes(value) }
       // Persist the note without pausing or advancing the timer. Keep the dialog
       // and its text available if the write fails; serialized ticks use this note.
-      void work(async () => { const c = controller.record; apply(await sessions.update(c.profileId, c.id, c.revision, { ...c.input, notes: value })); setNote(false); setNoteDirty(false) }, false, false)
+      void work(async () => { const c = controller.record; apply(await sessions.update(c.profileId, c.id, c.revision, note === 'workout' ? { ...c.input, notes: value, noteEdited: true } : { ...c.input, exercises: c.input.exercises.map(e => e.id === note ? { ...e, notes: value, noteEdited: true } : e) })); setNote(undefined); setNoteDirty(false) }, false, false)
     }} />}
     {saveCustom && <ActionDialog title="Save custom workout" onClose={() => setSaveCustom(false)} actions={<><button onClick={() => setSaveCustom(false)}>Cancel</button><button disabled={busy} onClick={finish}>Save session</button></>}><label className="check-label"><input type="checkbox" checked={addLibrary} onChange={e => setAddLibrary(e.target.checked)} />Save workout to library</label>{addLibrary && <Field label="Workout name" maxLength={120} value={name} onChange={e => setName(e.target.value)} />}{error && <p role="alert">{error}</p>}</ActionDialog>}
     {confirm && <ConfirmDialog title={confirm.title} confirmLabel={confirm.label ?? "Confirm"} busy={busy} onCancel={closeConfirm} onConfirm={() => { const action = confirm.action; setConfirm(undefined); action() }}><p>{confirm.text ?? 'Discard the affected pending input?'}</p></ConfirmDialog>}

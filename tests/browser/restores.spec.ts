@@ -95,7 +95,7 @@ for (const choice of ['device', 'import', 'replace']) test(`${choice} choice sho
 
 test('clear cancellation and confirmation, failure rollback and stale preview recovery are explicit', async ({ page }) => {
   const f = await fixture(page), original = await records(page), other = scoped(original, f.otherId)
-  await button(page, 'Clear data').click(); await expect(page.getByRole('region', { name: 'Restore preview' })).toContainText('Download data above'); await button(page, 'Cancel').click(); expect(await records(page)).toEqual(original)
+  await button(page, 'Clear data').click(); await expect(page.getByRole('region', { name: 'Restore preview' })).toContainText('Profile Backup above'); await button(page, 'Cancel').click(); expect(await records(page)).toEqual(original)
   await upload(page, f.bytes); await preview(page, 'replace')
   await page.evaluate(async (f) => {
     const db = await new Promise<IDBDatabase>((resolve) => { const req = indexedDB.open('boros'); req.onsuccess = () => resolve(req.result) })
@@ -116,7 +116,7 @@ test('invalid ZIP and failed image decoding remain recoverable; cancel/navigatio
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'bad.zip', mimeType: 'application/zip', buffer: Buffer.from('not zip') }); await expect(page.getByRole('alert')).toContainText('Invalid ZIP'); expect(await records(page)).toEqual(before)
   const zip = await JSZip.loadAsync(f.bytes), manifest = JSON.parse(await zip.file('manifest.json')!.async('string')); manifest.backupSchemaVersion = 119; zip.file('manifest.json', JSON.stringify(manifest))
   await page.getByLabel('Backup ZIP').setInputFiles({ name: 'future.zip', mimeType: 'application/zip', buffer: await zip.generateAsync({ type: 'nodebuffer' }) }); await expect(page.getByRole('alert')).toContainText('Update Boros')
-  manifest.backupSchemaVersion = 18
+  manifest.backupSchemaVersion = 19
   const data = JSON.parse(await zip.file('data.json')!.async('string')); data.assets[0].width = 2; manifest.assets.find((a) => a.id === data.assets[0].id).width = 2
   const payload = new TextEncoder().encode(JSON.stringify(data)), entry = manifest.inventory.find((i) => i.path === 'data.json'); entry.bytes = payload.length; entry.sha256 = await sha256(payload)
   zip.file('data.json', payload); zip.file('manifest.json', JSON.stringify(manifest))

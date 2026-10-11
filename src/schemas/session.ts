@@ -5,9 +5,10 @@ import type { TrainingDay } from './plan.ts'
 import type { OccurrenceRef } from './schedule.ts'
 import { displayNumber, fromKg, toKg, weightUnitSchema, type WeightUnit } from './profile.ts'
 
+export const noteInputFields = { noteInheritedClear: z.boolean().optional(), noteInitial: z.string().max(20000).optional(), noteEdited: z.boolean().optional() }
 const text = z.string().max(64)
 export const resultInputSchema = z.object({ load: text, reps: text, rir: text, unit: weightUnitSchema, skipped: z.boolean() }).strict()
-export const sessionInputSchema = z.object({ notes: z.string().max(20000), exercises: z.array(z.object({ id: z.string().uuid(), notes: z.string().max(20000), sets: z.array(resultInputSchema).min(0).max(100) }).strict()).min(0).max(10000) }).strict()
+export const sessionInputSchema = z.object({ ...noteInputFields, notes: z.string().max(20000), exercises: z.array(z.object({ ...noteInputFields, id: z.string().uuid(), notes: z.string().max(20000), sets: z.array(resultInputSchema).min(0).max(100) }).strict()).min(0).max(10000) }).strict()
 export type ResultInput = z.infer<typeof resultInputSchema>
 export type SessionInput = z.infer<typeof sessionInputSchema>
 export type StandaloneSource = { kind: 'workout'; workoutId: string } | { kind: 'custom'; workoutId?: string }
@@ -18,7 +19,7 @@ export interface SessionDraft {
   structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; profileId: string; revision: number; sourcePlanId?: string; sourceDayId: string; activeSourceKey?: string
-  planName?: string; planInstructions?: string; day: TrainingDay; input: SessionInput; startedAt: string; updatedAt: string; finalizedAt?: string
+  planName?: string; planInstructions?: string; planNotes?: string; day: TrainingDay; input: SessionInput; startedAt: string; updatedAt: string; finalizedAt?: string
 }
 export type RecordedSet = { skipped: true } | { skipped: false; weightKg: number; load: number; unit: WeightUnit; reps: number; rir?: number }
 export interface CompletedSession {
@@ -28,14 +29,23 @@ export interface CompletedSession {
   structure?: SessionStructure
   occurrence?: OccurrenceRef; occurrenceKey?: string
   id: string; draftId: string; profileId: string; revision: number; sourcePlanId?: string; sourceDayId: string
-  planName?: string; planInstructions?: string; day: TrainingDay; notes: string; exercises: { id: string; notes: string; sets: RecordedSet[] }[]
+  planName?: string; planInstructions?: string; planNotes?: string; day: TrainingDay; notes: string; noteEdited?: boolean; exercises: { id: string; notes: string; noteEdited?: boolean; sets: RecordedSet[] }[]
   partial: boolean; startedAt: string; completedAt: string; loggedAt: string
 }
 export type RestTimer = { preparationEndAt?: string; pausedAt?: string; id: 'active'; token: string; profileId: string; draftId: string; label: string; position?: string; exerciseId?: string; groupId?: string; alertedAt?: string } & ({ mode?: 'countdown'; durationSeconds: number; endAt: string } | { mode: 'countup'; startedAt: string })
 export const blankSession = (day: TrainingDay, unit: WeightUnit): SessionInput => ({ notes: '', exercises: day.exercises.map((exercise) => ({ id: exercise.id, notes: '', sets: exercise.prescription.sets.map(() => ({ load: '', reps: '', rir: '', unit, skipped: false })) })) })
+// Only newly appended/replaced occurrences take copied defaults. Clear remains
+// deliberately blank, and existing draft notes are never reinitialized.
+export function copiedExerciseInputs(day: TrainingDay, unit: WeightUnit) {
+  return blankSession(day, unit).exercises.map((input, index) => {
+    const source = day.exercises[index].prescription, notes = source.notes ?? ''
+    return notes || source.noteOverride === true ? { ...input, notes, noteInitial: notes, noteEdited: false, noteInheritedClear: !notes && source.noteOverride === true } : input
+  })
+}
 // Deliberate zero and explicit skips count; timer state and visual hints never do.
-export const hasSessionInput = (input: SessionInput) => !!input.notes || input.exercises.some((exercise) => !!exercise.notes || exercise.sets.some((set) => set.load !== '' || set.reps !== '' || set.rir !== '' || set.skipped))
-export const hasDraftProgress = (draft: SessionDraft) => !!draft.structure?.amended || meaningfulInterval(draft.interval) || !!draft.interval?.results.length || hasSessionInput(draft.input)
+export const noteWasEdited = (value: { notes: string; noteInitial?: string; noteEdited?: boolean }) => !!value.noteEdited || value.notes !== (value.noteInitial ?? '')
+export const hasSessionInput = (input: SessionInput) => noteWasEdited(input) || input.exercises.some((exercise) => noteWasEdited(exercise) || exercise.sets.some((set) => set.load !== '' || set.reps !== '' || set.rir !== '' || set.skipped))
+export const hasDraftProgress = (draft: SessionDraft) => !!draft.structure?.amended || meaningfulInterval(draft.interval) || !!draft.interval?.results.length || !!draft.interval?.activity?.attempts.some(a => a.results.some(r => r.elapsedMs > 0 || r.status === 'skipped')) || hasSessionInput(draft.input)
 // A rest checkpoint can be reopened without treating it as performed exercise
 // or changing the empty-session leave/Save rules.
 export const hasResumableDraft = (draft: SessionDraft) => hasDraftProgress(draft) || draft.interval?.execution?.mode === 'rest' && (draft.interval.status === 'running' || draft.interval.status === 'paused')
@@ -43,6 +53,7 @@ export const timerElapsed = (timer: RestTimer, now = Date.now()) => timer.mode =
 export function validateDraftInput(raw: SessionInput, day: TrainingDay) {
   const input = sessionInputSchema.parse(raw)
   if (input.exercises.length !== day.exercises.length || input.exercises.some((exercise, index) => exercise.id !== day.exercises[index].id || exercise.sets.length !== day.exercises[index].prescription.sets.length)) throw new Error('Results must match the saved prescription. Nothing was saved.')
+  for (const note of [input, ...input.exercises]) if (note.noteInitial && note.notes === '') note.noteEdited = true
   return input
 }
 export function numericResult(text: string, integer = false): number | undefined {
@@ -56,7 +67,7 @@ export function displayedLoad(set: ResultInput, unit: WeightUnit) {
 }
 export function assessSession(input: SessionInput) {
   const errors: Record<string, string> = {}; let recorded = 0, skipped = 0
-  const exercises = input.exercises.map((exercise, e) => ({ id: exercise.id, notes: exercise.notes, sets: exercise.sets.map((set, s): RecordedSet => {
+  const exercises = input.exercises.map((exercise, e) => ({ id: exercise.id, notes: exercise.notes, ...(exercise.noteEdited === undefined ? {} : { noteEdited: exercise.noteEdited || !!exercise.noteInheritedClear && exercise.notes === '' }), sets: exercise.sets.map((set, s): RecordedSet => {
     const path = `${e}.${s}`
     if (set.skipped || (!set.load.trim() && !set.reps.trim() && !set.rir.trim())) { skipped++; return { skipped: true } }
     const load = numericResult(set.load), reps = numericResult(set.reps, true), rir = numericResult(set.rir, true)

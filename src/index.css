@@ -55,7 +55,7 @@ small { display: block; color: var(--muted); font-weight: 400; }
 .empty-state { color: var(--muted); }
 .settings-section { border-bottom: 1px solid var(--border); padding: 0 0 28px; margin-bottom: 28px; }
 .settings-section:last-child { border-bottom: 0; }
-.backup-restore { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 24px; }
+.backup-restore { margin-top: 0; }
 .backup-restore h3 { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; margin: 16px 0; }
 .backup-restore label { margin-top: 16px; }
 .backup-restore .table-scroll { max-width: 100%; overflow-x: auto; margin: 20px 0; }

@@ -58,6 +58,7 @@ export function libraryDeleteService(database: BorosDatabase) {
               if (!state.phases.some(p => p.id === state.phaseId)) { state.phaseId = state.phases.find(p => !state.results.some(r => r.phase.id === p.id))?.id; state.elapsedMs = 0; state.phaseStartedAt = undefined }
               if (state.engineVersion) { state.execution = undefined; state.phaseId = undefined; state.elapsedMs = 0; state.phaseStartedAt = undefined; state.status = next.finalizedAt ? 'finished' : 'stopped' }
               else state.status = state.phaseId ? 'paused' : 'finished'
+              if (state.activity) { const keep = (r: import('../schemas/interval-session.ts').IntervalResult) => state.phases.some(p => p.id === r.phase.id); state.activity.legacy = state.activity.legacy?.filter(keep); state.activity.attempts.forEach(a => { a.results = a.results.filter(keep) }) }
               state.anchorAt = undefined; next.interval = state
             }
             if (!next.day.exercises.length && !next.input.notes.trim() && !next.interval?.results.some(r => r.phase.kind === 'active' && r.elapsedMs > 0)) { await removePair(draft); continue }

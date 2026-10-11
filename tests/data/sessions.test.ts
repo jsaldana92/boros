@@ -1,3 +1,4 @@
+import { blankSession } from '../../src/schemas/session.ts'
 import { legacyWorkspace } from '../fixtures/legacy-workspace.ts'
 import { classifyStrengthRecords } from '../../src/db/training-migration.ts'
 import 'fake-indexeddb/auto'
@@ -106,7 +107,7 @@ test('timer timestamps recover elapsed time; replacement, reset, zero and Clear 
   await service.startTimer(id, draft.id, draft.revision, first, 0)
   const input = filled(draft); input.notes = 'Note'; input.exercises[0].notes = 'Exercise note'
   const changed = await service.update(id, draft.id, draft.revision, input), cleared = await service.clear(id, draft.id, changed.revision)
-  assert.deepEqual(cleared.input, draft.input); assert.deepEqual(cleared.day, draft.day); assert.equal((await service.library(id)).timer, undefined)
+  assert.deepEqual(cleared.input, blankSession(draft.day, 'kg')); assert.deepEqual(cleared.day, draft.day); assert.equal((await service.library(id)).timer, undefined)
   await assert.rejects(service.startTimer(id, draft.id, changed.revision, first, 0), /another tab/)
 })
 
@@ -119,7 +120,7 @@ test('controller serializes pending autosaves with Clear/Save and keeps failed i
   db.drafts.hook('updating').unsubscribe(fail); await controller.flush(); assert.equal(controller.status, 'saved')
   controller.change({ ...filled(draft), notes: 'queued' })
   const pending = controller.flush(), clear = controller.clear(); await pending; await clear
-  assert.deepEqual((await service.getDraft(id, draft.id)).input, draft.input)
+  assert.deepEqual((await service.getDraft(id, draft.id)).input, blankSession(draft.day, 'kg'))
   controller.change(filled(draft)); const savePending = controller.flush(), completion = controller.complete(false)
   await savePending; const log = await completion
   assert.equal(log.exercises[0].sets[0].skipped, false); assert.equal(await db.sessions.count(), 1)
@@ -165,7 +166,7 @@ test('v3-to-v4 preserves every populated store and photo bytes; orphaned session
   const records = new Map<string, unknown[]>()
   for (const table of old.tables) { const values = await db.table(table.name).toArray(); records.set(table.name, values); await table.bulkAdd(values) }
   old.close(); const upgraded = new BorosDatabase(name); t.after(() => upgraded.delete()); await upgraded.open()
-  assert.equal(upgraded.verno, 12)
+  assert.equal(upgraded.verno, 13)
   for (const [table, values] of records) assert.deepEqual(await upgraded.table(table).toArray(), (classifyStrengthRecords(values), values))
   assert.equal(await (await upgraded.photos.toArray())[0].blob.text(), 'bytes'); assert.equal(await upgraded.drafts.count(), 0)
   await service.complete(id, draft.id, draft.revision, filled(draft), false)

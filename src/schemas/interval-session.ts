@@ -14,7 +14,14 @@ export const intervalResultSchema = legacy.intervalResultSchema.innerType().exte
 export const cueSchema = z.object({ key: z.string(), kind: z.enum(['start', 'warning', 'end', 'rest', 'complete']), phaseId: z.string(), at: z.string().datetime() }).strict()
 const executionSchema = z.object({ id: z.string().uuid(), mode: z.enum(['circuit', 'continuous', 'rest']), circuitId: z.string().uuid().optional(), phaseIds: z.array(z.string()).min(1).max(40001), owner: z.string().uuid().optional(), cues: z.array(cueSchema).max(80002) }).strict()
 const spokenRest = (p?: IntervalPhase) => !!p && p.durationSeconds > 0 && ['recovery', 'set-rest', 'circuit-rest', 'workout-rest'].includes(p.kind)
+const activitySchema = z.object({
+  version: z.literal(1),
+  // Legacy results are retained once, never reinterpreted as a new attempt.
+  legacy: z.array(intervalResultSchema).optional(), legacyUnknown: z.boolean().optional(),
+  attempts: z.array(z.object({ id: z.string().uuid(), results: z.array(intervalResultSchema) }).strict()),
+}).strict()
 export const intervalStateSchema = legacy.intervalStateSchema.innerType().extend({
+  activity: activitySchema.optional(),
   engineVersion: z.union([z.literal(2), z.literal(3)]).optional(), mode: z.enum(['circuit', 'continuous']).optional(), execution: executionSchema.optional(),
   phases: z.array(intervalPhaseSchema).max(40001), results: z.array(intervalResultSchema).max(40000), status: z.enum(['ready', 'running', 'paused', 'stopped', 'finished']),
 }).strict().superRefine((s, ctx) => {
@@ -31,6 +38,14 @@ export const intervalStateSchema = legacy.intervalStateSchema.innerType().extend
     if (new Set(e.phaseIds).size !== e.phaseIds.length || e.phaseIds.some(id => !ids.includes(id)) || s.phaseId && !e.phaseIds.includes(s.phaseId) || (e.mode === 'circuit') !== !!e.circuitId || e.mode === 'circuit' && e.phaseIds.some(id => { const p = s.phases.find(p => p.id === id)!; return p.kind !== 'preparation' && (p.circuitId !== e.circuitId || p.kind === 'workout-rest') })) fail('Invalid execution scope.')
     if (e.mode === 'rest' && (![1, 2].includes(e.phaseIds.length) || e.phaseIds.length === 2 && s.phases.find(p => p.id === e.phaseIds[0])?.kind !== 'preparation' || s.phases.find(p => p.id === e.phaseIds.at(-1))?.kind !== 'workout-rest' || !s.phases.find(p => p.id === e.phaseIds.at(-1))?.durationSeconds)) fail('Independent rest must contain preparation and a positive workout rest only.')
     if (new Set(e.cues.map(c => c.key)).size !== e.cues.length || e.cues.some(c => !e.phaseIds.includes(c.phaseId) || c.key !== `${e.id}:${c.phaseId}:${c.kind}` || (c.kind === 'rest' ? !spokenRest(s.phases.find(p => p.id === c.phaseId)) : c.kind === 'complete' ? s.phases.find(p => p.id === c.phaseId)?.kind !== 'workout-rest' : s.phases.find(p => p.id === c.phaseId)?.kind !== 'active'))) fail('Invalid cue ledger.')
+  }
+  if (s.activity) {
+    const attempts = s.activity.attempts
+    if (new Set(attempts.map(a => a.id)).size !== attempts.length) fail('Activity attempt identities must be unique.')
+    for (const results of [s.activity.legacy ?? [], ...attempts.map(a => a.results)]) {
+      if (new Set(results.map(r => r.phase.id)).size !== results.length) fail('A phase can be recorded once per attempt.')
+      if (results.some(r => !['active', 'recovery'].includes(r.phase.kind) || !ids.includes(r.phase.id) || JSON.stringify(r.phase) !== JSON.stringify(s.phases.find(p => p.id === r.phase.id)))) fail('Activity must retain its prescribed exercise phase.')
+    }
   }
   if (s.results.some(r => !ids.includes(r.phase.id) || JSON.stringify(r.phase) !== JSON.stringify(s.phases.find(p => p.id === r.phase.id)))) fail('Recorded phase snapshot does not match.')
 })
@@ -68,11 +83,11 @@ export function intervalPhases(day: TrainingDay): IntervalPhase[] {
 }
 const preparation = (day: TrainingDay): IntervalPhase => ({ id: `${day.id}:preparation`, kind: 'preparation', circuitId: day.id, circuitName: day.name, repetition: 0, durationSeconds: 10 })
 export function initialInterval(day: TrainingDay): IntervalState {
-  return { engineVersion: day.circuits?.some(c => !isRepeatCircuit(c)) ? 2 : 3, mode: 'circuit', phases: [preparation(day), ...intervalPhases(day)], status: 'ready', elapsedMs: 0, results: [] }
+  return { engineVersion: day.circuits?.some(c => !isRepeatCircuit(c)) ? 2 : 3, mode: 'circuit', activity: { version: 1, attempts: [] }, phases: [preparation(day), ...intervalPhases(day)], status: 'ready', elapsedMs: 0, results: [] }
 }
 export const executionActive = (s?: IntervalState) => !!s && (s.status === 'running' || s.status === 'paused')
 export function upgradeInterval(s: IntervalState, day: TrainingDay): IntervalState {
-  if (s.engineVersion) return structuredClone(s)
+  if (s.engineVersion) { const copy = structuredClone(s); ensureActivity(copy); return copy }
   const state: IntervalState = { ...structuredClone(s), engineVersion: 2, mode: 'circuit', phases: [preparation(day), ...s.phases, ...intervalPhases(day).filter(p => !s.phases.some(old => old.id === p.id))] }
   // Preserve old performed snapshots and cursor; an old whole-workout execution
   // remains that scope until explicitly stopped, without adding preparation.
@@ -80,11 +95,13 @@ export function upgradeInterval(s: IntervalState, day: TrainingDay): IntervalSta
     const mode = (day.circuits?.length ?? 0) > 1 ? 'continuous' : 'circuit'
     state.execution = { id: day.id, mode, ...(mode === 'circuit' ? { circuitId: day.circuits![0].id } : {}), phaseIds: s.phases.map(p => p.id), cues: [] }; state.mode = mode
   } else { state.phaseId = undefined; state.status = s.status === 'ready' ? 'ready' : 'finished' }
+  ensureActivity(state)
+  checkpoint(state, state.anchorAt ?? state.phaseStartedAt ?? new Date().toISOString())
   return state
 }
 export function scopeHasProgress(s: IntervalState, mode: ExecutionMode, circuitId?: string) {
   if (mode === 'rest') return false
-  return s.results.some(r => mode === 'continuous' || r.phase.circuitId === circuitId) || !!s.elapsedMs && (mode === 'continuous' || s.phases.find(p => p.id === s.phaseId)?.circuitId === circuitId)
+  return s.activity?.attempts.some(a => a.results.some(r => (mode === 'continuous' || r.phase.circuitId === circuitId) && (r.elapsedMs > 0 || r.status === 'skipped'))) || s.results.some(r => mode === 'continuous' || r.phase.circuitId === circuitId) || !!s.elapsedMs && (mode === 'continuous' || s.phases.find(p => p.id === s.phaseId)?.circuitId === circuitId)
 }
 export function startInterval(input: IntervalState, day: TrainingDay, mode: ExecutionMode, circuitId: string | undefined, id: string, owner: string, restart = false, now = Date.now()): IntervalState {
   if (executionActive(input)) throw new Error('Stop the current timer first.')
@@ -92,7 +109,13 @@ export function startInterval(input: IntervalState, day: TrainingDay, mode: Exec
   if (mode === 'circuit' && !day.circuits?.some(c => c.id === circuitId)) throw new Error('Choose a circuit.')
   if (mode === 'rest' && !day.postWorkoutRestSeconds) throw new Error('No post-workout rest is configured.')
   if (!restart && scopeHasProgress(input, mode, circuitId)) throw new Error('Confirm restarting this timer.')
-  const state = upgradeInterval(input, day), fresh = [preparation(day), ...intervalPhases(day)]
+  const state = upgradeInterval(input, day)
+  ensureActivity(state)
+  const recordedIds = new Set([...(state.activity?.legacy ?? []), ...(state.activity?.attempts ?? []).flatMap(a => a.results)].map(r => r.phase.id))
+  // A legacy pending amendment may retain an earlier prescription for an already
+  // performed phase. Restart that same prescribed execution, not a new target
+  // silently sharing its activity identity.
+  const fresh = [preparation(day), ...intervalPhases(day)].map(p => recordedIds.has(p.id) ? state.phases.find(old => old.id === p.id) ?? p : p)
   if (mode === 'rest') {
     // Rest has its own execution/checkpoint, never exercise actuals. Keep every
     // prior result and prescription (including a continuous rest result) intact.
@@ -104,7 +127,7 @@ export function startInterval(input: IntervalState, day: TrainingDay, mode: Exec
     return state
   }
   const affected = (p: IntervalPhase) => mode === 'continuous' || p.kind === 'preparation' || p.circuitId === circuitId
-  state.phases = [...state.phases.filter(p => !affected(p)), ...fresh.filter(affected)]
+  state.phases = [...state.phases.filter(p => !affected(p) || recordedIds.has(p.id) && !fresh.some(next => next.id === p.id)), ...fresh.filter(affected)]
   const phases = fresh.filter(p => affected(p) && p.durationSeconds > 0)
   if (!phases.some(p => p.kind === 'active')) throw new Error('Add an exercise before starting.')
   state.results = state.results.filter(r => !affected(r.phase))
@@ -112,9 +135,32 @@ export function startInterval(input: IntervalState, day: TrainingDay, mode: Exec
   state.phaseId = phases[0].id; state.status = 'running'; state.elapsedMs = 0; state.anchorAt = new Date(now).toISOString(); state.phaseStartedAt = state.anchorAt
   return state
 }
+function ensureActivity(state: IntervalState) {
+  state.activity ??= { version: 1, attempts: [], legacyUnknown: true, legacy: state.results.filter(r => ['active', 'recovery'].includes(r.phase.kind) && r.status !== 'skipped').map(r => structuredClone(r)) }
+}
+function recordActivity(state: IntervalState, result: IntervalResult) {
+  if (!state.activity || !state.execution || !['active', 'recovery'].includes(result.phase.kind) || state.execution.mode === 'rest') return
+  let attempt = state.activity.attempts.find(a => a.id === state.execution!.id)
+  if (!attempt) { attempt = { id: state.execution.id, results: [] }; state.activity.attempts.push(attempt) }
+  const index = attempt.results.findIndex(r => r.phase.id === result.phase.id)
+  if (index < 0) attempt.results.push(structuredClone(result)); else attempt.results[index] = structuredClone(result)
+}
+function checkpoint(state: IntervalState, at: string) {
+  const phase = state.phases.find(p => p.id === state.phaseId)
+  if (phase && state.elapsedMs > 0) recordActivity(state, { phase, elapsedMs: state.elapsedMs, status: 'partial', ...(state.phaseStartedAt ? { startedAt: state.phaseStartedAt } : {}), endedAt: at })
+}
+// Aggregate attempts only within one prescribed phase. Separate repetitions have
+// different phase IDs and remain separate rows. Unknown legacy absence is not 0.
+export function phaseActivity(state: IntervalState, phase: IntervalPhase) {
+  const entries = state.activity ? [...(state.activity.legacy ?? []), ...state.activity.attempts.flatMap(a => a.results)].filter(r => r.phase.id === phase.id) : state.results.filter(r => r.phase.id === phase.id && r.status !== 'skipped')
+  const known = !!state.activity && !state.activity.legacyUnknown || !!entries.length || phase.durationSeconds === 0
+  const elapsedMs = entries.reduce((n,r) => n + r.elapsedMs, 0)
+  return { elapsedMs: known ? elapsedMs : undefined, skipped: !!entries.length && entries.every(r => r.status === 'skipped'), completed: entries.some(r => r.status === 'completed'), startedAt: entries.map(r => r.startedAt).filter((v): v is string => !!v).sort()[0] }
+}
 function record(state: IntervalState, phase: IntervalPhase, elapsedMs: number, status: IntervalResult['status'], at: string, finalizing = false) {
   if (phase.kind === 'preparation' || state.execution?.mode === 'rest' && !finalizing) return
   const result: IntervalResult = { phase: structuredClone(phase), elapsedMs, status, ...(state.phaseStartedAt ? { startedAt: state.phaseStartedAt } : {}), endedAt: at }
+  if (!finalizing) recordActivity(state, result)
   const index = state.results.findIndex(r => r.phase.id === phase.id)
   if (index < 0) state.results.push(result); else state.results[index] = result
 }
@@ -143,12 +189,13 @@ export function advanceInterval(input: IntervalState, now = Date.now()): Interva
   }
   state.phaseId = state.execution.phaseIds[index]; state.elapsedMs = state.phaseId ? elapsed : 0
   state.status = state.phaseId ? 'running' : 'finished'; state.anchorAt = state.phaseId ? new Date(now).toISOString() : undefined
+  checkpoint(state, new Date(now).toISOString())
   return state
 }
 export function intervalCommand(input: IntervalState, action: 'resume' | 'pause' | 'recover' | 'skip' | 'finish' | 'stop', now = Date.now()): IntervalState {
   if (action === 'stop') {
-    const state = structuredClone(input), execution = state.execution
-    if (execution?.mode !== 'rest') state.results = execution ? state.results.filter(r => execution.mode === 'circuit' && r.phase.circuitId !== execution.circuitId) : []
+    const state = advanceInterval(input, now)
+    checkpoint(state, new Date(now).toISOString())
     state.phaseId = undefined; state.execution = undefined; state.status = 'ready'; state.elapsedMs = 0; state.anchorAt = undefined; state.phaseStartedAt = undefined
     return state
   }
@@ -176,8 +223,8 @@ export function intervalCommand(input: IntervalState, action: 'resume' | 'pause'
   if (action === 'finish') for (const p of state.phases) if (p.kind !== 'preparation' && p.durationSeconds > 0 && !state.results.some(r => r.phase.id === p.id)) record(state, p, 0, 'skipped', at, true)
   return state
 }
-export const meaningfulInterval = (s?: IntervalState) => !!s && (s.results.some(r => r.phase.kind === 'active' && r.elapsedMs > 0) || s.phases.find(p => p.id === s.phaseId)?.kind === 'active' && s.elapsedMs > 0)
-export const partialInterval = (s: IntervalState) => !s.engineVersion ? legacy.partialInterval(s as legacy.IntervalState) : s.phases.filter(p => p.kind === 'active').some(p => !s.results.some(r => r.phase.id === p.id && r.status === 'completed'))
+export const meaningfulInterval = (s?: IntervalState) => !!s && (s.activity?.attempts.some(a => a.results.some(r => r.phase.kind === 'active' && r.elapsedMs > 0)) || s.results.some(r => r.phase.kind === 'active' && r.elapsedMs > 0) || s.phases.find(p => p.id === s.phaseId)?.kind === 'active' && s.elapsedMs > 0)
+export const partialInterval = (s: IntervalState) => !s.engineVersion ? legacy.partialInterval(s as legacy.IntervalState) : s.phases.filter(p => p.kind === 'active').some(p => !phaseActivity(s,p).completed)
 export const formatIntervalTime = (seconds: number) => { const value = Math.max(0, Math.ceil(seconds)); return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}` }
 export const phaseTitle = (p?: IntervalPhase) => p?.kind === 'active' ? p.exerciseName! : p?.kind === 'preparation' ? 'Warm Up' : p?.kind === 'workout-rest' ? 'Post-Workout Rest' : 'Rest'
 export function intervalDisplay(s: IntervalState) {

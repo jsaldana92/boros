@@ -42,7 +42,7 @@ export function DownloadData() {
     } catch (error) { fail((error as Error).message) }
   }
   return <div className="backup-export">
-    <div className="actions"><button type="button" className="primary" disabled={busy} onClick={() => { setError(''); setStatus(''); setConfirmation({ id: snapshot.profile.id, name: effectiveProfileName(snapshot.profile) }) }}>{busy ? 'Preparing export…' : 'Download'}</button>{busy && <button type="button" onClick={cancel}>Cancel export</button>}</div>
+    <div className="actions"><button type="button" aria-label="Download profile backup" className="primary" disabled={busy} onClick={() => { setError(''); setStatus(''); setConfirmation({ id: snapshot.profile.id, name: effectiveProfileName(snapshot.profile) }) }}>{busy ? 'Preparing export…' : 'Download'}</button>{busy && <button type="button" onClick={cancel}>Cancel export</button>}</div>
     {confirmation && <ConfirmDialog title="Downloading data" confirmLabel="I understand (Download)" onCancel={() => setConfirmation(undefined)} onConfirm={() => void download()}><p>Warning: this contains all of the information saved in this website for {confirmation.name}, which may be sensitive. The resulting ZIP file is not password protected. Download at your own discretion.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
     <p role="status" aria-live="polite">{status}</p>{!confirmation && error && <p role="alert">{error}</p>}
   </div>

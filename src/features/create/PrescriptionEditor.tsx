@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { blankSet, parseForm, toForm, type SetFields } from './form'
 
-export function PrescriptionEditor({ initial, tags, title, archived, saveLabel = 'Save', initialDirty = false, onDirty, onSubmit, onClose, onMerge, path = ['Create', 'Exercise'] }: { path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void; onMerge?: (input: ExerciseInput) => void }) {
+export function PrescriptionEditor({ sharedInstructions = false, initial, tags, title, archived, saveLabel = 'Save', initialDirty = false, onDirty, onSubmit, onClose, onMerge, path = ['Create', 'Exercise'] }: { sharedInstructions?: boolean; path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void; onMerge?: (input: ExerciseInput) => void }) {
   const [form, setForm] = useState(() => toForm(initial))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
@@ -24,7 +24,7 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
   useEffect(() => { onDirty(dirty) }, [dirty, onDirty])
   const [confirm, setConfirm] = useState<{ title: string; message: string; action: () => void }>()
   const formRef = useRef<HTMLFormElement>(null)
-  const change = (field: 'name' | 'count' | 'instructions' | 'notes' | 'tutorialUrl', value: string) => { setForm((current) => ({ ...current, [field]: value })) }
+  const change = (field: 'name' | 'count' | 'instructions' | 'notes' | 'tutorialUrl', value: string) => { setForm((current) => ({ ...current, [field]: value, ...(field === 'notes' ? { noteOverride: true } : {}) })) }
   const setValue = (index: number, field: keyof SetFields, value: string) => { setForm((current) => ({ ...current, sets: current.sets.map((set, i) => i === index ? { ...set, [field]: value } : set) })) }
   const applyCount = () => {
     const count = Number(form.count)
@@ -71,7 +71,8 @@ export function PrescriptionEditor({ initial, tags, title, archived, saveLabel =
         }}>Apply to All</button>}</fieldset>)}
         <div className="rest-pair">{(['restBetweenSeconds', 'restAfterSeconds'] as const).map((key) => <div key={key}><RestInput label={key === 'restBetweenSeconds' ? 'Rest between sets (optional)' : 'Rest after exercise (optional)'} value={form[key]} errors={{ minutes: errors[`${key}.minutes`], seconds: errors[`${key}.seconds`] }} onChange={(value) => { setForm((current) => ({ ...current, [key]: value })) }} /></div>)}</div>
         <p className="muted">Blank rest is unspecified. 0 means no timed rest.</p></>}
-        <TextareaField label="Instructions (optional)" maxLength={20000} value={form.instructions} error={errors.instructions} onChange={(e) => change('instructions', e.target.value)} />
+        <TextareaField readOnly={sharedInstructions} label="Instructions (optional)" maxLength={20000} value={form.instructions} error={errors.instructions} onChange={(e) => change('instructions', e.target.value)} />
+        {sharedInstructions && <p className="muted">Shared instructions. Edit the source in the exercise library.</p>}
         <TextareaField label="Notes (optional)" maxLength={20000} value={form.notes} error={errors.notes} onChange={(e) => change('notes', e.target.value)} />
         <Field label="YouTube tutorial URL (optional)" type="url" value={form.tutorialUrl} error={errors.tutorialUrl} onChange={(e) => change('tutorialUrl', e.target.value)} />
         <p className="muted">HTTPS YouTube video links only. Videos are never loaded automatically.</p>

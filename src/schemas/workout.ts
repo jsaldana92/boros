@@ -12,4 +12,4 @@ export interface Workout extends WorkoutInput {
   createdAt: string; updatedAt: string; archivedAt?: string
 }
 export const workoutToInput = (value: Workout): WorkoutInput => workoutInputSchema.parse(convertIntervalDay(value))
-export const copyWorkout = (value: Workout): TrainingDay => ({ ...duplicateDay(workoutToInput(value)), sourceWorkoutId: value.id })
+export const copyWorkout = (value: Workout): TrainingDay => { const copy = duplicateDay(workoutToInput(value)); return { ...copy, sourceWorkoutId: value.id, ...(copy.notes === undefined ? {} : { noteOverride: false }), exercises: copy.exercises.map(e => ({ ...e, prescription: { ...e.prescription, ...(e.prescription.notes === undefined ? {} : { noteOverride: false }) } })) } }

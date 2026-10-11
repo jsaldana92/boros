@@ -1,3 +1,5 @@
+import { importInstructionGroups } from '../../lib/import-instructions'
+import { ImportInstructionReview } from './ImportInstructionReview'
 import type { TrainingType } from '../../schemas/training-type'
 import { WorkoutEditor } from './WorkoutEditor'
 import { CreateLeaveGuard } from './CreateLeaveGuard'
@@ -22,7 +24,7 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
   const [clipboard, setClipboard] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const [preview, setPreview] = useState<{ draft: ImportDraft; session: ReturnType<typeof importSession> }>()
+  const [preview, setPreview] = useState<{ draft: ImportDraft; session: ReturnType<typeof importSession>; reviewed?: boolean }>()
   const instructionsRef = useRef<HTMLTextAreaElement>(null)
   const errorsRef = useRef<HTMLDivElement>(null)
   const result = useLiveQuery(async () => {
@@ -49,13 +51,20 @@ export function ImportPanel({ profileId, onClose }: { profileId: string; onClose
       {issues.length > 0 && <div id="import-errors" ref={errorsRef} role="alert" tabIndex={-1}><p>Fix these fields, then validate again:</p><ul>{issues.map((issue, index) => <li key={index}><code>{issue.path}</code>: {issue.message}</li>)}</ul></div>}
       <div className="actions"><button className="primary" type="button" id="validate-import" onClick={() => {
         const parsed = parseInterchange(text); setIssues(parsed.issues)
-        if (parsed.value) setPreview({ draft: toImportDraft(parsed.value), session: importSession(profileId) })
+        if (parsed.value) {
+          const draft = toImportDraft(parsed.value)
+          try {
+            const groups = importInstructionGroups(draft.kind === 'plan' ? draft.input.days : draft.kind === 'workout' ? [draft.input] : [], result?.data?.exercises ?? [])
+            const needsReview = groups.some(g => new Set(g.inputs.map(p => p.instructions ?? '')).size > 1 || g.source && g.inputs.some(p => (p.instructions ?? '') !== (g.source!.instructions ?? '')) || !g.source && new Set(g.inputs.map(p => p.notes ?? '')).size > 1)
+            setPreview({ draft, session: importSession(profileId), reviewed: !!result?.data && !needsReview })
+          } catch (e) { setIssues([{ path: '$', message: (e as Error).message }]) }
+        }
         else requestAnimationFrame(() => errorsRef.current?.focus())
       }}>Validate and preview</button><button type="button" onClick={() => text.trim() ? setConfirm(true) : onClose()}>Close</button></div>
     </> : <>
       <p className="storage-notice">Draft. Nothing is stored until you save. Plans keep every imported prescription. An existing exercise name reuses its library template without changing its defaults. For a new repeated name, the first occurrence becomes the library default. Rename a conflicting plan or standalone exercise before saving.</p>
       {result?.error && <p role="alert">Existing sources could not be loaded. {result.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry sources</button></p>}
-      {preview.draft.kind === 'exercise'
+      {preview.draft.kind !== 'exercise' && !preview.reviewed ? result?.data ? <ImportInstructionReview draft={preview.draft} library={result.data.exercises} onCancel={cancelPreview} onApply={draft => setPreview({ ...preview, draft, reviewed: true })} /> : <p role="status">Loading library...</p> : preview.draft.kind === 'exercise'
         ? <PrescriptionEditor initial={preview.draft.input} title="Review exercise" tags={result?.data?.tags ?? []} initialDirty onDirty={() => setDirty(true)} onClose={cancelPreview} onSubmit={async (input) => { const saved = await preview.session.saveWorkout(input); setDirty(false); onClose(`Saved ${saved.name}.`) }} />
         : preview.draft.kind === 'workout' ? <WorkoutEditor profileId={profileId} initial={preview.draft.input} initialDirty onClose={cancelPreview} onSave={preview.session.saveLibraryWorkout} onSaved={(name) => { setDirty(false); onClose(`Saved ${name}.`) }} /> : <PlanEditor profileId={profileId} initial={preview.draft.input} initialDirty choices={result?.data?.choices ?? []} tags={result?.data?.tags ?? []} onSave={preview.session.savePlan} onClose={cancelPreview} onSaved={(name) => { setDirty(false); onClose(`Saved ${name}.`) }} />}
     </>}

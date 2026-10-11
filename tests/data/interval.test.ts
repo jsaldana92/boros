@@ -114,13 +114,13 @@ test('Interval custom session saves partial actuals/template atomically and idem
   await assert.rejects(f.sessions.intervalAction(f.id, saved.id, saved.revision - 1, 'resume'), /another tab/)
   assert.equal(await f.db.sessions.count(), 0); await assert.rejects(f.sessions.complete(f.id, saved.id, saved.revision, saved.input, false), /partial/)
   const session = await f.sessions.complete(f.id, saved.id, saved.revision, saved.input, true, new Date().toISOString(), { name: 'Timed custom' })
-  assert.equal(session.partial, true); assert.equal(session.exercises.length, 0); assert.equal(session.interval!.results[0].status, 'partial'); assert.ok(session.interval!.results[0].elapsedMs < 20000)
+  assert.equal(session.partial, true); assert.equal(session.exercises.length, 1); assert.deepEqual(session.exercises[0].sets, []); assert.equal(session.interval!.results[0].status, 'partial'); assert.ok(session.interval!.results[0].elapsedMs < 20000)
   assert.equal((await f.sessions.complete(f.id, saved.id, saved.revision, saved.input, true)).id, session.id); assert.equal(await f.db.sessions.count(), 1)
   assert.equal((await f.workouts.library(f.id)).length, 1)
   const analytics = deriveProgress(f.id, [], [e], [session]); assert.equal(analytics.performances.length, 0); assert.equal(analytics.items.length, 0)
   const snapshot = await captureProfile(f.id, f.db); validateBackupData(canonicalSnapshot(snapshot))
   const archive = await readBackup((await generateBackup(snapshot, 'test')).bytes, () => {}, async () => {})
-  assert.equal(archive.data.backupSchemaVersion, 18); assert.equal(archive.manifest.databaseSchemaVersion, 12); assert.ok(archive.manifest.inventory.some(i => i.path === 'csv/interval_results.csv'))
+  assert.equal(archive.data.backupSchemaVersion, 19); assert.equal(archive.manifest.databaseSchemaVersion, 13); assert.ok(archive.manifest.inventory.some(i => i.path === 'csv/interval_results.csv'))
   for (const choice of ['new', 'replace', 'device', 'import'] as const) { const result = await buildRestorePlan(archive, choice === 'new' ? undefined : snapshot, choice, uid(), 'Restored', new Date().toISOString()); validateBackupData(canonicalSnapshot(result.result)); assert.deepEqual(JSON.parse(JSON.stringify(result.result.sessions[0].interval)), JSON.parse(JSON.stringify(session.interval))) }
 })
 test('v6 AI Interval imports use manual circuit schema and publish both libraries; older Strength meanings stay intact', async t => {
@@ -251,7 +251,7 @@ test('original v13 checksums, CSV and schema validate before Strength promotion;
   for (const file of files) { const bytes = encoder.encode(file.text); old.file(file.path, bytes, { createFolders: false }); manifest.inventory.push({ path: file.path, bytes: bytes.length, sha256: await sha256(bytes), mediaType: file.mediaType }) }
   old.file('manifest.json', JSON.stringify(manifest))
   const restored = await readBackup(await old.generateAsync({ type: 'uint8array' }), () => {}, async () => {})
-  assert.equal(restored.data.backupSchemaVersion, 18); assert.equal(restored.data.exercises[0].trainingType, 'strength'); assert.equal(restored.data.exercises[0].id, data.exercises[0].id)
+  assert.equal(restored.data.backupSchemaVersion, 19); assert.equal(restored.data.exercises[0].trainingType, 'strength'); assert.equal(restored.data.exercises[0].id, data.exercises[0].id)
   assert.equal(restored.manifest.backupSchemaVersion, 13)
   const malformed = structuredClone(data); malformed.exercises[0].activeSeconds = 10
   assert.throws(() => validateBackupData(malformed), /Unrecognized|activeSeconds/)

@@ -2,7 +2,7 @@ import { assertSameTrainingType } from './training-type.ts'
 import { z } from 'zod'
 import { createId } from '../lib/browser-crypto.ts'
 import { copyExercise, planInputSchema, trainingBlocks, type PlanExercise, type TrainingDay } from './plan.ts'
-import { blankSession, type SessionInput } from './session.ts'
+import { copiedExerciseInputs, type SessionInput } from './session.ts'
 import type { WeightUnit } from './profile.ts'
 import type { PrescriptionChoice } from '../db/plans.ts'
 
@@ -71,7 +71,7 @@ export function appendSessionExercises(snapshot: SessionSnapshot, input: Session
   const additions = choices.map((choice) => copyExercise(choice.prescription, choice.source))
   day.exercises.push(...additions)
   structure.exercises.push(...initialStructure({ ...day, exercises: additions }).exercises)
-  next.exercises.push(...blankSession({ ...day, exercises: additions }, unit).exercises)
+  next.exercises.push(...copiedExerciseInputs({ ...day, exercises: additions }, unit))
   structure.amended = true
   return { day, structure, input: next }
 }

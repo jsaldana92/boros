@@ -124,7 +124,7 @@ test('v11 ZIP, all restore choices and repeated merges preserve independent work
  for (let i=0;i<2;i++) { const d=await sessions.startStandalone(id,workout.id); await sessions.complete(id,d.id,d.revision,filled(d),false) }
  await sessions.startStandalone(id)
  const snapshot = await captureProfile(id,db), zip=await generateBackup(snapshot,'workouts'), backup=await readBackup(zip.bytes)
- assert.equal(backup.data.backupSchemaVersion,18); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
+ assert.equal(backup.data.backupSchemaVersion,19); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
  for (const choice of ['new','replace','device','import'] as const) {
   const plan=await buildRestorePlan(backup,choice==='new'?undefined:snapshot,choice,uid(),choice==='new'?'Copy':'Guest',new Date().toISOString())
   assert.equal(plan.result.workouts.length,1); assert.equal(plan.result.sessions.length,2); assert.equal(plan.result.drafts.length,3)
@@ -142,7 +142,7 @@ test('additive v5 to v6 preserves all stores, assets and active selection; no wo
  const definitions=Object.fromEntries(db.tables.filter(table=>table.name!=='workouts'&&table.name!=='activeWorkouts').map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(index=>index.src)].join(',')]))
  old.version(5).stores(definitions); await old.open(); for(const [table,values] of Object.entries(rows)) await old.table(table).bulkAdd(values); old.close()
  const upgraded=new BorosDatabase(name);t.after(()=>upgraded.delete());await upgraded.open()
- assert.equal(upgraded.verno,12);assert.equal(await upgraded.workouts.count(),0)
+ assert.equal(upgraded.verno,13);assert.equal(await upgraded.workouts.count(),0)
  for(const [table,values] of Object.entries(rows)) assert.deepEqual(await upgraded.table(table).toArray(),(classifyStrengthRecords(values), values))
  const active=(await upgraded.settings.get('workspace'))!.activeProfileId;await profileService(upgraded).initialize();assert.equal((await upgraded.settings.get('workspace'))!.activeProfileId,active)
 })

@@ -1,3 +1,4 @@
+import { currentInstructions, currentPlanInstructions } from './instructions.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import { classifyStrengthRecords } from './training-migration.ts'
 import { publishWorkouts, workoutPrescription } from './workout-publication.ts'
@@ -33,7 +34,7 @@ export function planService(database: BorosDatabase) {
     if (record && record.id !== ownId) throw new Error('An active plan with this name already exists. Choose a different name; rename an archived plan before restoring it.')
   }
   return {
-    get,
+    get: async (profileId: string, id: string) => database.transaction('r', tables, async () => currentPlanInstructions(database, await get(profileId, id))),
     async library(profileId: string) {
       return database.transaction('r', [...tables, database.exercises], async () => {
         await owner(profileId)
@@ -45,7 +46,7 @@ export function planService(database: BorosDatabase) {
           const prescription = exerciseToInput(exercise, tags)
           choices.push({ id: `exercise:${exercise.id}`, nameKey: exercise.nameKey, createdAt: exercise.createdAt, tagIds: prescription.tagNames.map(nameKey), label: `Library: ${exercise.name}`, prescription, source: { kind: 'exercise', id: exercise.id } })
         }
-        return { plans, choices, tags, exercises: library }
+        return { plans: await Promise.all(plans.map(p => currentPlanInstructions(database, p))), choices, tags, exercises: library }
       })
     },
     async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }, creationId?: string) {
@@ -68,6 +69,7 @@ export function planService(database: BorosDatabase) {
           if (source) assertSameTrainingType(day, source)
           if (ref && !source && (await database.exercises.toArray()).some(e => e.id === ref && e.profileId !== profileId)) throw new Error('A source exercise belongs to another profile.')
         }
+        input.days = await Promise.all(input.days.map(d => currentInstructions(database, profileId, d)))
         input.days = await publishWorkouts(database, profileId, input.days, now, old?.days)
         const result: Plan = { ...input, trainingType: trainingTypeOf(input), profileId, id: old?.id ?? creationId ?? createId(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.plans.put(result)
@@ -87,7 +89,7 @@ export function planService(database: BorosDatabase) {
             const revisions = run.revisions.map((segment) => {
               if (segment.needsRepair || (segment.effectiveUntil && segment.effectiveUntil <= cutoff) || JSON.stringify(segment.weeks) !== JSON.stringify(result.weeks) || segment.days.length !== result.days.length || segment.days.some((day) => !result.days.some((d) => d.id === day.id))) return segment
               const effectiveFrom = segment.effectiveFrom > cutoff ? segment.effectiveFrom : cutoff
-              additions.push({ ...segment, id: createId(), effectiveFrom, createdAt: now, planRevision: result.revision, planName: result.name, planInstructions: result.instructions, days: structuredClone(result.days) })
+              additions.push({ ...segment, id: createId(), effectiveFrom, createdAt: now, planRevision: result.revision, planName: result.name, planInstructions: result.instructions, planNotes: result.notes ?? '', days: structuredClone(result.days) })
               return { ...segment, effectiveUntil: effectiveFrom }
             })
             // Retain every old revision for protected drafts/outcomes and missed weeks.

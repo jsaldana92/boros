@@ -8,7 +8,7 @@ export interface CalendarActivity { id: string; date: string; planId?: string; p
 export function calendarActivityService(database: BorosDatabase) {
   return {
     async events(profileId: string, start: string, end: string): Promise<CalendarActivity[]> {
-      return database.transaction('r', [database.profiles, database.plans, database.schedules, database.drafts, database.sessions], async () => {
+      return database.transaction('r', [database.exercises, database.workouts, database.profiles, database.plans, database.schedules, database.drafts, database.sessions], async () => {
         const profile = await database.profiles.get(profileId)
         if (!profile) throw new Error('This profile is unavailable.')
         const entries = new Map<string, CalendarActivity>()

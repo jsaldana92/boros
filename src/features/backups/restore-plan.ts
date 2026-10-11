@@ -123,7 +123,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   const scheduleIds = await allocate('schedule', importedSchedules, localSchedules), draftIds = await allocate('draft', importedDrafts, [...localDrafts, ...localSessions])
   const remapInterval = (state?: import('../../schemas/interval-session.ts').IntervalState) => {
     if (!state) return
-    for (const phase of [...state.phases, ...state.results.map(r => r.phase)]) if (phase.templateId) phase.templateId = exerciseIds.get(phase.templateId) ?? phase.templateId
+    for (const phase of [...state.phases, ...state.results.map(r => r.phase), ...(state.activity?.legacy ?? []).map(r => r.phase), ...(state.activity?.attempts ?? []).flatMap(a => a.results.map(r => r.phase))]) if (phase.templateId) phase.templateId = exerciseIds.get(phase.templateId) ?? phase.templateId
   }
   for (const item of [...importedDrafts, ...importedSessions]) remapInterval(item.interval)
   // Imported drafts are inert checkpoints, never imported live ownership.

@@ -46,7 +46,7 @@ async function fixture(t) {
 async function roundTrip(db,id) {
  const snapshot=await captureProfile(id,db);validateBackupData(canonicalSnapshot(snapshot))
  const backup=await readBackup((await generateBackup(snapshot,'test')).bytes,()=>{},async()=>{})
- assert.equal(backup.data.backupSchemaVersion,18);assert.equal(backup.manifest.databaseSchemaVersion,12)
+ assert.equal(backup.data.backupSchemaVersion,19);assert.equal(backup.manifest.databaseSchemaVersion,13)
  for(const choice of ['new','replace','device','import'] as const){const result=await buildRestorePlan(backup,choice==='new'?undefined:snapshot,choice,uid(),choice==='new'?'Restored':snapshot.profile.name,new Date().toISOString());validateBackupData(canonicalSnapshot(result.result));assert.equal(result.result.deletedSources.length,snapshot.deletedSources.length);assert.deepEqual(result.result.sessions.map(s=>s.id),snapshot.sessions.map(s=>s.id))}
  return backup
 }

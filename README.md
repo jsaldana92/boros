@@ -16,9 +16,10 @@ have their own blocks. The sticky row shows current phase time / total execution
 time, excluding preparation, followed by the phase name. Repeated sequences show
 1st, 2nd, 3rd, etc., restarting for each distinct circuit.
 
-**Stop resets that execution's timer-derived progress** and releases its timer
-slot, while keeping the workout active. Circuit-only Stop preserves other circuits'
-results. Clear retains the workout. Only successful Save, explicit Cancel, or a
+**Stop resets the timer cursor and retains recorded active/recovery time**,
+releasing its timer slot while keeping the workout active. Restart adds a separate
+attempt; earlier activity remains until explicit Clear or cancellation. Clear
+retains the workout. Only successful Save, explicit Cancel, or a
 confirmed removal releases workspace-wide workout ownership. Failed writes keep
 recoverable input. One profile/draft owns the workspace across profiles and browser
 tabs; another profile can return to it without seeing its records.
@@ -37,8 +38,9 @@ Compatible other workouts in that run may supply hints. Standalone hints conside
 the latest two exercise performances. Instructions shows actual set-by-set History
 when appropriate, with unit conversion; no name-only matches or invented values.
 
-The shared workout hamburger opens Note, then Instructions. Notes remain local
-to the session; read-only instructions come from the started workout snapshot.
+The shared workout hamburger opens Note, then Instructions. Notes start from independent copied defaults or matching saved branch history;
+explicit clears stay empty. Current shared instructions come from library editors,
+then freeze when a session starts. Historical instructions never change.
 Exercise menus now say Instructions and retain their details, video, Note and
 Replace actions. Interval pending-exercise editing is removed. New custom Interval
 creation is unavailable for now; existing custom Interval drafts remain usable.
@@ -64,12 +66,22 @@ slot; Stop/completion preserve all circuit results and notes. Rest alone cannot
 save or complete a workout. Active/paused rest-only checkpoints can be resumed
 after reload; closed time is not counted and no media autoplays.
 
-Current contracts: stable **boros database v12**, **backup v18**, **AI v8**.
-V12 adds only the local active-workout pointer store; existing records are not
-rewritten. Backup v18 accepts ten-second Warm Up and immediate rest scopes,
-preserving frozen v17 and earlier readers and the same 40 CSV tables. The local
-workout pointer is not exported; restore reconciles local drafts without importing
-runtime ownership or starting timers/audio.
+Settings **Data > Download** creates an analysis CSV with one row per Strength
+set or Interval exercise execution. **Profile Backup > Download** creates the
+complete restorable ZIP. **Restore Profile from Backup** accepts ZIP only; Clear
+Data keeps its existing confirmation and transaction safeguards. Exports stay
+profile-bound, include saved history only, and do not claim the browser saved a file.
+
+Current contracts: stable **boros database v13**, **backup v19**, **AI v8**.
+V13 adds no stores or record rewrites; optional note provenance, captured plan notes
+and an Interval attempt ledger persist with new/edited records. Backup v19 validates
+and restores those fields, retains 40 CSV tables (with documented new columns), and
+preserves strict v18 and earlier readers. The separate analysis CSV is not a backup.
+The local workout pointer is not exported; restore does not import runtime ownership
+or start timers/audio. Old discarded timing cannot be recovered; unknown time stays
+`None`, distinct from known zero. See the [analysis contract and ownership rules](docs/analysis-csv.md),
+[backup format](docs/backup-format.md), and [verification/owner checks](docs/analysis-verification.md).
+
 Legacy editable circuits convert to equivalent ordered sections, splitting counts
 and preserving every old rest boundary; e.g. three sets of five rounds with set
 and final rest become six sections. Deterministic occurrence IDs retain source
@@ -1047,7 +1059,7 @@ and Phase 8 results follow.
 
 ## Download complete profile data (Phase 8)
 
-In Settings → Data, choose **Download**, review **Downloading data** for the named
+In Settings > Profile Backup, choose **Download**, review **Downloading data** for the named
 profile, then choose **I understand (Download)**. Cancel performs no export. The ZIP contains personal records/photos and is not encrypted
 or password-protected. The app reports **Download started**; check your browser's
 downloads to confirm the file was saved. Filenames include a sanitized profile
@@ -1104,7 +1116,7 @@ verified at that checkpoint; Phase 9 behavior and verification follow.
 
 ## Upload, merge, replace and clear profile data (Phase 9)
 
-In **Settings → Data → Backup ZIP**, choose an original Boros export. Validation
+In **Settings > Restore Profile from Backup > Backup ZIP**, choose an original Boros export. Validation
 runs locally and reports progress; it checks paths, versions, schemas, counts,
 CRC/SHA-256, required relationships and decoded image assets. User text stays plain
 text; no links are fetched and nothing is sent to a server. AI paste imports are

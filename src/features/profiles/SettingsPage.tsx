@@ -5,7 +5,7 @@ import { useWorkspace } from '../../app/workspace-context'
 import { supportUrl } from '../../app/config'
 import { profiles } from '../../db/profiles'
 import { ProfileEditor } from './ProfileEditor'
-import { StorageExplanation } from './StorageNotice'
+import { DownloadAnalysis } from '../backups/DownloadAnalysis'
 import { effectiveProfileName } from '../../schemas/profile'
 import { DownloadData } from '../backups/DownloadData'
 import { RestoreData } from '../backups/RestoreData'
@@ -40,7 +40,9 @@ export function SettingsPage() {
       }}>{theme === 'dark' ? 'Dark' : 'Light'}</button>)}</div>
     </section>
     <section className="settings-section" aria-labelledby="sound-heading"><h2 id="sound-heading">Sound</h2><div className="segmented" role="group" aria-label="Sound">{([false, true] as const).map((sound) => <button key={String(sound)} disabled={busy} aria-pressed={workspace.sound === sound} onClick={async () => { setBusy(true); setError(''); try { trainingRuntime().setSound(sound); await profiles.setSound(sound) } catch (e) { trainingRuntime().setSound(workspace.sound); setError((e as Error).message) } finally { setBusy(false) } }}>{sound ? 'On' : 'Off'}</button>)}</div><p className="muted">Timer completion: Sound On plays three times; Off attempts one vibration where supported. Device restrictions may prevent feedback, especially in the background.</p></section>
-    <section className="settings-section" aria-labelledby="data-heading"><h2 id="data-heading">Data</h2><StorageExplanation concise /><p role="status">{workspace.dataNotice}</p><DownloadData key={workspace.snapshot.profile.id} /><RestoreData key={`restore:${workspace.snapshot.profile.id}`} /></section>
+    <section className="settings-section" aria-labelledby="data-heading"><h2 id="data-heading">Data</h2><p>Download your personalized data about your plans, workouts, and exercises as a .csv file to perform your own data analysis.</p><DownloadAnalysis key={workspace.snapshot.profile.id} /></section>
+    <section className="settings-section" aria-labelledby="backup-heading"><h2 id="backup-heading">Profile Backup</h2><p>Your information is saved in this browser. Clearing site data removes your profile and logs. Download a backup to keep a copy for migration.</p><DownloadData key={workspace.snapshot.profile.id} /></section>
+    <section className="settings-section" aria-label="Restore and clear"><p role="status">{workspace.dataNotice}</p><RestoreData key={`restore:${workspace.snapshot.profile.id}`} /></section>
     <section className="settings-section" aria-labelledby="support-heading"><h2 id="support-heading">Support</h2>
       {supportUrl ? <a className="support-link" href={supportUrl} target="_blank" rel="noopener noreferrer"><Heart aria-hidden="true" size={20} /><span>Support Boros<small>Ko-fi</small></span><ExternalLink aria-hidden="true" size={18} /><span className="sr-only"> (opens in a new tab)</span></a> : <><button className="support-link" disabled aria-describedby="support-note"><Heart aria-hidden="true" size={20} /><span>Support Boros<small>Ko-fi</small></span><ExternalLink aria-hidden="true" size={18} /></button><p id="support-note" className="muted">Support link unavailable.</p></>}
     </section>

@@ -15,6 +15,10 @@ export function workoutPrescription(day: TrainingDay) {
   }, (_key, value) => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value)
 }
 
+// Notes are independently copied; instructions are shared by source identity.
+// Neither text/provenance difference publishes another variant of an existing workout.
+const publicationPrescription = (day: TrainingDay) => JSON.stringify(JSON.parse(workoutPrescription(day)), (key,value) => ['notes','instructions','noteOverride'].includes(key) ? undefined : value)
+
 // Caller owns a transaction including workouts/deletedSources/plans. Publication
 // marks the plan copy once; later edits remain independent from library defaults.
 export async function publishWorkouts(database: BorosDatabase, profileId: string, days: TrainingDay[], at: string, previous: TrainingDay[] = [], reconciling = false) {
@@ -31,7 +35,7 @@ export async function publishWorkouts(database: BorosDatabase, profileId: string
     const source = day.sourceWorkoutId ? await database.workouts.get([profileId, day.sourceWorkoutId]) : undefined
     if (source) {
       assertSameTrainingType(day, source)
-      if (source.archivedAt && reconciling || workoutPrescription(source) === workoutPrescription(day)) { day.publishedWorkoutId = source.id; continue }
+      if (source.archivedAt && reconciling || publicationPrescription(source) === publicationPrescription(day)) { day.publishedWorkoutId = source.id; continue }
     } else if (day.sourceWorkoutId) {
       // Missing historical reference cannot distinguish deletion from lost data.
       // Never resurrect it, including when pre-v7 deletions lack tombstones.

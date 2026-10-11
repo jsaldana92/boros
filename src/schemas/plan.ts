@@ -14,7 +14,7 @@ export const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_I
 export const groupSchema = z.object({ id: z.string().uuid(), number: positiveInteger, restBetweenRoundsSeconds: strengthInputSchema.shape.restBetweenSeconds, restAfterGroupSeconds: strengthInputSchema.shape.restAfterSeconds }).strict()
 export const occurrenceSchema = z.object({ id: z.string().uuid(), prescription: exerciseInputSchema, source: sourceSchema.optional(), setIds: z.array(z.string().uuid()).min(1).max(100).optional(), templateId: z.string().uuid().optional(), groupId: z.string().uuid().optional() })
 // Optional fields intentionally remain absent in legacy records; no rewrite/default duration.
-export const daySchema = z.object({ postWorkoutRestSeconds: z.number().int().nonnegative().max(86400).optional(), trainingType: trainingTypeSchema.optional(), circuits: z.array(circuitSchema).min(1).max(10000).optional(), publishedWorkoutId: z.string().uuid().optional(), id: z.string().uuid(), name, instructions: z.string().max(20000).optional(), notes: z.string().max(20000).optional(), sourceWorkoutId: z.string().uuid().optional(), groups: z.array(groupSchema).max(50).optional(), exercises: z.array(occurrenceSchema).min(1, 'Add at least one exercise to this workout.').max(10000, 'Use at most 10,000 stored exercise occurrences.') })
+export const daySchema = z.object({ postWorkoutRestSeconds: z.number().int().nonnegative().max(86400).optional(), trainingType: trainingTypeSchema.optional(), circuits: z.array(circuitSchema).min(1).max(10000).optional(), publishedWorkoutId: z.string().uuid().optional(), id: z.string().uuid(), name, instructions: z.string().max(20000).optional(), notes: z.string().max(20000).optional(), noteOverride: z.boolean().optional(), sourceWorkoutId: z.string().uuid().optional(), groups: z.array(groupSchema).max(50).optional(), exercises: z.array(occurrenceSchema).min(1, 'Add at least one exercise to this workout.').max(10000, 'Use at most 10,000 stored exercise occurrences.') })
 export function validateGroups(day: z.infer<typeof daySchema>, context: z.RefinementCtx, prefix: (string | number)[] = []) {
   const issue = (path: (string | number)[], message: string) => context.addIssue({ code: 'custom', path: [...prefix, ...path], message })
   day.exercises.forEach((item, i) => { if (trainingTypeOf(item.prescription) !== trainingTypeOf(day)) issue(['exercises', i, 'prescription', 'trainingType'], 'Every exercise must match the workout training type.') })
@@ -41,7 +41,7 @@ export function validateGroups(day: z.infer<typeof daySchema>, context: z.Refine
   day.exercises.forEach((item, i) => { if (item.groupId && !ids.has(item.groupId)) context.addIssue({ code: 'custom', path: [...prefix, 'exercises', i, 'groupId'], message: 'Superset membership must reference a group in this workout.' }) })
 }
 export const planInstructionsSchema = z.string().max(20000).optional()
-export const planInstructionsSnapshot = (instructions?: string) => instructions === undefined ? {} : { planInstructions: instructions }
+export const planInstructionsSnapshot = (instructions?: string, notes?: string) => ({ ...(instructions === undefined ? {} : { planInstructions: instructions }), ...(notes === undefined ? {} : { planNotes: notes }) })
 export const weekSchema = z.object({ id: z.string().uuid(), dayIds: z.array(z.string().uuid()).min(1).max(7) }).strict()
 export type UniqueWeek = z.infer<typeof weekSchema>
 export interface WeeklyStructure { days: TrainingDay[]; weeks?: UniqueWeek[] }
@@ -61,7 +61,7 @@ export function resolveWeek(source: WeeklyStructure, programWeek: number) {
   const definitions = planWeeks(source)
   return definitions[(programWeek - 1) % definitions.length]
 }
-export const planInputSchema = z.object({ trainingType: trainingTypeSchema.optional(), name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), durationWeeks: positiveInteger.optional(), weeks: z.array(weekSchema).min(2).optional(), days: z.array(daySchema).min(1, 'Add at least one workout.') }).superRefine((plan, context) => {
+export const planInputSchema = z.object({ trainingType: trainingTypeSchema.optional(), name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), noteOverride: z.boolean().optional(), durationWeeks: positiveInteger.optional(), weeks: z.array(weekSchema).min(2).optional(), days: z.array(daySchema).min(1, 'Add at least one workout.') }).superRefine((plan, context) => {
   const issue = (path: (string | number)[], message: string) => context.addIssue({ code: 'custom', path, message })
   if (plan.weeks) {
     if (!plan.durationWeeks || plan.durationWeeks % plan.weeks.length !== 0) issue(['weeks'], 'Choose a unique-week count that divides the duration evenly.')
@@ -92,7 +92,7 @@ export interface Plan extends PlanInput {
   revision: number; createdAt: string; updatedAt: string; archivedAt?: string
 }
 export const newDay = (number: number, trainingType: TrainingType = 'strength'): TrainingDay => ({ trainingType, ...(trainingType === 'interval' ? { circuits: [newCircuit(1)] } : {}), id: createId(), name: `Day ${number}`, exercises: [] })
-export const copyExercise = (prescription: ExerciseInput, source?: ExerciseSource): PlanExercise => ({ id: createId(), prescription: structuredClone(prescription), ...(source ? { source: structuredClone(source) } : {}) })
+export const copyExercise = (prescription: ExerciseInput, source?: ExerciseSource): PlanExercise => ({ id: createId(), prescription: { ...structuredClone(prescription), ...(source && prescription.notes !== undefined ? { noteOverride: false } : {}) }, ...(source ? { source: structuredClone(source) } : {}) })
 export const planToInput = (plan: Plan): PlanInput => ({ trainingType: trainingTypeOf(plan), name: plan.name, ...(plan.instructions === undefined ? {} : { instructions: plan.instructions }), ...(plan.notes === undefined ? {} : { notes: plan.notes }), ...(plan.durationWeeks === undefined ? {} : { durationWeeks: plan.durationWeeks }), ...(plan.weeks ? { weeks: structuredClone(plan.weeks) } : {}), days: structuredClone(plan.days) })
 export type Superset = z.infer<typeof groupSchema>
 export function trainingBlocks(day: TrainingDay) {

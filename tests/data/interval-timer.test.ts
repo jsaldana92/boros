@@ -1,3 +1,4 @@
+import { stripAnalysisFields } from '../fixtures/training-compatibility.ts'
 import { newCircuit as oldCircuit } from '../../src/schemas/circuit-legacy.ts'
 import { convertIntervalDay } from '../../src/schemas/interval-conversion.ts'
 import 'fake-indexeddb/auto'
@@ -120,7 +121,7 @@ test('new and older AI contracts keep separate rest fields; library copies, cust
  assert.ok(parseInterchange(JSON.stringify({...value,schemaVersion:6})).issues.length);delete value.workout.postWorkoutRestSeconds;value.workout.circuits=value.workout.circuits.map(({repeat: _repeat,...c})=>({...c,roundsPerSet:1,sets:_repeat+1,restBetweenSetsSeconds:0}));assert.deepEqual(parseInterchange(JSON.stringify({...value,schemaVersion:6})).issues,[])
  const w=await f.workouts.save(f.id,workoutA()),p=await f.plans.save(f.id,{trainingType:'interval',name:'Plan',durationWeeks:2,days:[copyWorkout(w)]});assert.equal(p.days[0].postWorkoutRestSeconds,60)
  const d=await f.sessions.startStandalone(f.id,w.id),run=await f.sessions.startInterval(f.id,d.id,d.revision,'continuous');const snap=await captureProfile(f.id,f.db)
- const zip=await generateBackup(snap,'timer-test'),read=await readBackup(zip.bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,18);assert.ok(zip.manifest.csvRows['csv/interval_execution_phases.csv']>0)
+ const zip=await generateBackup(snap,'timer-test'),read=await readBackup(zip.bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,19);assert.ok(zip.manifest.csvRows['csv/interval_execution_phases.csv']>0)
  const plan=await buildRestorePlan(read,undefined,'new',uid(),'Restored',new Date().toISOString());const restored=plan.result.drafts[0];assert.equal(restored.interval!.status,'paused');assert.equal(restored.interval!.execution!.owner,undefined);assert.deepEqual(restored.interval!.results,run.interval!.results);assert.equal(restored.day.postWorkoutRestSeconds,60);validateBackupData(canonicalSnapshot(plan.result))
  const second=await readBackup((await generateBackup(plan.result,'roundtrip')).bytes,()=>{},async()=>{});assert.deepEqual(second.data.workouts,read.data.workouts.map(w=>({...w,profileId:plan.result.profile.id})))
 })
@@ -160,15 +161,15 @@ test('v8 to v9 preserves every record and Blob; original v14 archive validates b
  const stores=await Promise.all(f.db.tables.map(async table=>[table.name,await table.toArray()] as const))
  const name='boros-test-v8-'+uid(),old=new Dexie(name);old.version(8).stores(Object.fromEntries(f.db.tables.map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(i=>i.src)].join(',')])));await old.open()
  for(const [store,rows] of stores)await old.table(store).bulkPut(rows)
- old.close();const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,12)
+ old.close();const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,13)
  for(const [store,rows] of stores)assert.deepEqual(await next.table(store).toArray(),store==='workouts'?rows.map(convertIntervalDay):rows)
  assert.deepEqual(new Uint8Array(await (await next.photos.toArray())[0].blob.arrayBuffer()),photoBytes)
- const snapshot=await captureProfile(f.id,f.db),exported=await generateBackup(snapshot,'legacy'),current=await JSZip.loadAsync(exported.bytes),data=canonicalSnapshot(snapshot);data.backupSchemaVersion=14
+ const snapshot=await captureProfile(f.id,f.db),exported=await generateBackup(snapshot,'legacy'),current=await JSZip.loadAsync(exported.bytes),data=canonicalSnapshot(snapshot);data.backupSchemaVersion=14;stripAnalysisFields(data);
  validateBackupData(data);assert.equal(data.sessions[0].partial,saved.partial)
  const payload=[{path:'data.json',bytes:new TextEncoder().encode(JSON.stringify(data)),mediaType:'application/json'},...csvTables(data).map(t=>({path:t.path,bytes:new TextEncoder().encode(t.text),mediaType:'text/csv'})),...await Promise.all(data.assets.map(async a=>({path:a.path,bytes:await current.file(a.path)!.async('uint8array'),mediaType:a.mediaType})))],zip=new JSZip()
  const manifest={...exported.manifest,backupSchemaVersion:14,databaseSchemaVersion:8,counts:recordCounts(data),csvRows:Object.fromEntries(csvTables(data).map(t=>[t.path,t.rows])),inventory:await Promise.all(payload.map(async p=>({path:p.path,bytes:p.bytes.length,sha256:await sha256(p.bytes),mediaType:p.mediaType})))}
  for(const file of payload)zip.file(file.path,file.bytes,{createFolders:false});zip.file('manifest.json',JSON.stringify(manifest))
- const bytes=await zip.generateAsync({type:'uint8array'}),read=await readBackup(bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,18);assert.equal(read.manifest.backupSchemaVersion,14);assert.deepEqual(read.data.sessions,JSON.parse(JSON.stringify(snapshot.sessions)))
+ const bytes=await zip.generateAsync({type:'uint8array'}),read=await readBackup(bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,19);assert.equal(read.manifest.backupSchemaVersion,14);assert.deepEqual(read.data.sessions,JSON.parse(JSON.stringify(data.sessions)))
  const invalid=structuredClone(data);invalid.workouts[0].postWorkoutRestSeconds=30;assert.throws(()=>validateBackupData(invalid),/Unrecognized|postWorkout/)
  zip.file('data.json',JSON.stringify(invalid));await assert.rejects(readBackup(await zip.generateAsync({type:'uint8array'}),()=>{},async()=>{}),/checksum|size/)
 })

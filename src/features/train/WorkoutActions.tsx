@@ -4,11 +4,11 @@ import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { TextareaField } from '../../components/ui/Field'
 
 /** Uses only the started workout snapshot; never resolves a current template. */
-export function WorkoutActions({ instructions, onNote, noteDisabled }: { instructions?: string; onNote: () => void; noteDisabled?: boolean }) {
+export function WorkoutActions({ instructions, onNote, noteDisabled, label = 'Workout' }: { label?: string; instructions?: string; onNote: () => void; noteDisabled?: boolean }) {
   const [view, setView] = useState<'menu' | 'instructions'>()
-  return <><button aria-label="Workout actions" onClick={() => setView('menu')}><Menu aria-hidden="true" size={20} /></button>
-    {view === 'menu' && <ActionDialog title="Workout actions" onClose={() => setView(undefined)}><div className="exercise-action-list"><button disabled={noteDisabled} onClick={() => { setView(undefined); onNote() }}>Note</button><button onClick={() => setView('instructions')}>Instructions</button></div></ActionDialog>}
-    {view === 'instructions' && <ActionDialog title="Workout instructions" onClose={() => setView(undefined)}>{instructions?.trim() ? <p className="plain-text">{instructions}</p> : <p>No instructions.</p>}</ActionDialog>}
+  return <><button aria-label={`${label} actions`} onClick={() => setView('menu')}><Menu aria-hidden="true" size={20} /></button>
+    {view === 'menu' && <ActionDialog title={`${label} actions`} onClose={() => setView(undefined)}><div className="exercise-action-list"><button disabled={noteDisabled} onClick={() => { setView(undefined); onNote() }}>Note</button><button onClick={() => setView('instructions')}>Instructions</button></div></ActionDialog>}
+    {view === 'instructions' && <ActionDialog title={`${label} instructions`} onClose={() => setView(undefined)}>{instructions?.trim() ? <p className="plain-text">{instructions}</p> : <p>No instructions.</p>}</ActionDialog>}
   </>
 }
 

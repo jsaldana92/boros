@@ -1,3 +1,4 @@
+import { currentInstructions } from './instructions.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import { classifyStrengthRecords } from './training-migration.ts'
 import { assertSameTrainingType, trainingTypeOf } from '../schemas/training-type.ts'
@@ -15,8 +16,8 @@ export function workoutService(database: BorosDatabase) {
   const checkName = async (profileId: string, name: string, ownId?: string) => { const other = await database.workouts.where('[profileId+activeNameKey]').equals([profileId, nameKey(name)]).first(); if (other && other.id !== ownId) throw new Error('An active workout with this name already exists. Choose a different name.') }
   const checkRevision = (value: Workout, revision: number) => { if (value.revision !== revision) throw new Error('This workout changed in another tab. Your input is kept. Cancel and reopen after copying any changes you need.') }
   return {
-    get,
-    async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return database.workouts.where('profileId').equals(profileId).toArray() }) },
+    get: async (profileId: string, id: string) => database.transaction('r', tables, async () => currentInstructions(database, profileId, await get(profileId, id), true)),
+    async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return Promise.all((await database.workouts.where('profileId').equals(profileId).toArray()).map(w => currentInstructions(database, profileId, w, true))) }) },
     async save(profileId: string, raw: WorkoutInput, existing?: { id: string; revision: number }, importing = false) {
       const input = workoutInputSchema.parse(convertIntervalDay(raw))
       classifyStrengthRecords(input)
@@ -41,7 +42,8 @@ export function workoutService(database: BorosDatabase) {
             item.source = { kind: 'exercise', id: linked.id }; item.templateId = linked.id
           }
         }
-        const now = new Date().toISOString(), value: Workout = { ...input, trainingType: trainingTypeOf(input), id: old?.id ?? input.id, profileId, nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
+        const resolved = await currentInstructions(database, profileId, input, true)
+        const now = new Date().toISOString(), value: Workout = { ...resolved, trainingType: trainingTypeOf(input), id: old?.id ?? input.id, profileId, nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.workouts.put(value); return value
       })
     },

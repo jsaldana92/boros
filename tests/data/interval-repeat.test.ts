@@ -1,3 +1,4 @@
+import { stripAnalysisFields } from '../fixtures/training-compatibility.ts'
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -55,7 +56,7 @@ test('repeat limits are strict; zero repeats executes once, ten executes eleven 
  const day=sprintMadness();day.circuits.forEach(c=>c.restAfterCircuitSeconds=0);day.exercises.forEach(e=>{e.prescription.recoverySeconds=0});day.postWorkoutRestSeconds=0;const run=begin(day);assert.ok(run.execution!.phaseIds.every(id=>run.phases.find(p=>p.id===id)!.durationSeconds>0))
 })
 
-test('Stop resets only its scope, natural completion retains results, and preparation/mode alone are not entered input',()=>{
+test('Stop resets its cursor and retains activity, natural completion retains results, and preparation/mode alone are not entered input',()=>{
  const day=sprintMadness(),one=advanceInterval(begin(day,'circuit',day.circuits[0].id),250000)
  const two=startInterval(one,day,'circuit',day.circuits[1].id,uid(),uid(),false,300000),reset=intervalCommand(advanceInterval(two,310000),'stop',310000)
  assert.deepEqual(reset.results,one.results);assert.equal(reset.execution,undefined);assert.equal(reset.status,'ready')
@@ -64,7 +65,7 @@ test('Stop resets only its scope, natural completion retains results, and prepar
  const draft={day,input:blankSession(day,'kg'),interval:begin(day)}
  assert.equal(hasDraftProgress(draft),false);assert.equal(hasDraftProgress({...draft,interval:advanceInterval(draft.interval,9999)}),false)
  assert.equal(hasDraftProgress({...draft,interval:advanceInterval(draft.interval,10001)}),true)
- assert.equal(hasDraftProgress({...draft,interval:cleared}),false);assert.equal(hasDraftProgress({...draft,interval:cleared,input:{...draft.input,notes:'Keep me'}}),true)
+ assert.equal(hasDraftProgress({...draft,interval:cleared}),true);assert.equal(hasDraftProgress({...draft,interval:cleared,input:{...draft.input,notes:'Keep me'}}),true)
  assert.equal(hasDraftProgress({...draft,interval:one}),true);assert.equal(hasDraftProgress({...draft,interval:cleared,structure:{amended:true,exercises:[]}}),true)
 })
 
@@ -103,7 +104,7 @@ test('populated v9 upgrades convert only templates, retaining started/finalized 
  const profile=await f.db.profiles.get(f.id);await f.profiles.save(f.id,profile!.revision,{name:'Migration owner',weightUnit:'kg',heightUnit:'cm',weightKg:70},{blob:new Blob([photoBytes],{type:'image/png'}),width:1,height:1})
  const snapshot=Object.fromEntries(await Promise.all(f.db.tables.filter(t => t.name !== 'activeWorkouts').map(async table=>[table.name,await table.toArray()]))),dbName='boros-test-v9-'+uid(),v9=new Dexie(dbName)
  v9.version(9).stores(Object.fromEntries(f.db.tables.filter(t => t.name !== 'activeWorkouts').map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(i=>i.src)].join(',')])));await v9.open();for(const [name,rows]of Object.entries(snapshot))await v9.table(name).bulkPut(rows);v9.close()
- const next=new BorosDatabase(dbName);t.after(()=>next.delete());await next.open();assert.equal(next.verno,12)
+ const next=new BorosDatabase(dbName);t.after(()=>next.delete());await next.open();assert.equal(next.verno,13)
  for(const name of Object.keys(snapshot).filter(n=>n!=='workouts'&&n!=='plans'&&n!=='photos'))assert.deepEqual(await next.table(name).toArray(),snapshot[name],name)
  assert.deepEqual((await next.workouts.toArray())[0],convertIntervalDay(w));assert.deepEqual(new Uint8Array(await (await next.photos.toArray())[0].blob.arrayBuffer()),photoBytes)
  const recovered=await sessionService(next).intervalAction(f.id,d.id,original.revision,'recover',undefined,true);assert.deepEqual(recovered.interval!.results,original.interval.results);assert.equal(recovered.interval!.phaseId,original.interval.phaseId);assert.equal(recovered.interval!.elapsedMs,original.interval.elapsedMs)
@@ -112,7 +113,7 @@ test('populated v9 upgrades convert only templates, retaining started/finalized 
 test('current backup restore/export preserves repeated identities, timings, source links and inert checkpoints',async t=>{
  const f=await fixture(t),w=await f.workouts.save(f.id,sprintMadness()),d=await f.sessions.startStandalone(f.id,w.id),run=await f.sessions.startInterval(f.id,d.id,d.revision,'continuous')
  await f.db.drafts.put({...run,interval:advanceInterval(run.interval!,Date.parse(run.interval!.anchorAt!)+150000)})
- const bundle=await generateBackup(await captureProfile(f.id,f.db),'repeat-test'),read=await readBackup(bundle.bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,18)
+ const bundle=await generateBackup(await captureProfile(f.id,f.db),'repeat-test'),read=await readBackup(bundle.bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,19)
  const plan=await buildRestorePlan(read,undefined,'new',uid(),'Restored',new Date().toISOString()),checkpoint=plan.result.drafts[0];assert.equal(checkpoint.interval!.status,'paused');assert.equal(checkpoint.interval!.execution!.owner,undefined)
  assert.deepEqual(checkpoint.day,JSON.parse(JSON.stringify(run.day)));assert.equal(intervalDisplay(checkpoint.interval!).duration,90)
  const again=await generateBackup(plan.result,'repeat-test'),reread=await readBackup(again.bytes,()=>{},async()=>{});assert.deepEqual(reread.data.workouts,plan.result.workouts);assert.deepEqual(reread.data.drafts,JSON.parse(JSON.stringify(plan.result.drafts)))
@@ -123,12 +124,12 @@ test('strict original v15 archive retains started/completed legacy timing includ
  const saved=await f.workouts.save(f.id,day),w={...saved,...day};await f.db.workouts.put(w)
  const make=async()=>{const d=await f.sessions.startStandalone(f.id,w.id),running=old.startInterval(old.initialInterval(day),day,'continuous',undefined,uid(),uid(),false,Date.now()-160000);const record={...d,day,input:blankSession(day,'kg'),structure:undefined,sourceDayId:day.id,interval:old.intervalCommand(running,'pause')};await f.db.drafts.put(record);return record}
  const first=await make();await f.sessions.complete(f.id,first.id,first.revision,first.input,true);const pending=await make()
- const snapshot=await captureProfile(f.id,f.db),bundle=await generateBackup(snapshot,'compat'),data=canonicalSnapshot(snapshot);data.backupSchemaVersion=15;validateBackupData(data)
+ const snapshot=await captureProfile(f.id,f.db),bundle=await generateBackup(snapshot,'compat'),data=canonicalSnapshot(snapshot);data.backupSchemaVersion=15;;stripAnalysisFields(data);validateBackupData(data)
  const invalid=structuredClone(data);invalid.workouts[0].circuits[0].repeat=1;assert.throws(()=>validateBackupData(invalid),/Unrecognized|repeat/)
  const tables=csvTables(data),payload=[{path:'data.json',bytes:new TextEncoder().encode(JSON.stringify(data)),mediaType:'application/json'},...tables.map(t=>({path:t.path,bytes:new TextEncoder().encode(t.text),mediaType:'text/csv'}))],zip=new JSZip()
  const manifest={...bundle.manifest,backupSchemaVersion:15,databaseSchemaVersion:9,counts:recordCounts(data),csvRows:Object.fromEntries(tables.map(t=>[t.path,t.rows])),inventory:await Promise.all(payload.map(async p=>({path:p.path,bytes:p.bytes.length,sha256:await sha256(p.bytes),mediaType:p.mediaType})))}
  for(const p of payload)zip.file(p.path,p.bytes,{createFolders:false});zip.file('manifest.json',JSON.stringify(manifest))
- const read=await readBackup(await zip.generateAsync({type:'uint8array'}),()=>{},async()=>{});assert.equal(read.manifest.backupSchemaVersion,15);assert.deepEqual(read.data.sessions,JSON.parse(JSON.stringify(snapshot.sessions)));assert.deepEqual(read.data.drafts,JSON.parse(JSON.stringify(snapshot.drafts)));assert.deepEqual(read.data.workouts[0],JSON.parse(JSON.stringify(convertIntervalDay(w))))
+ const read=await readBackup(await zip.generateAsync({type:'uint8array'}),()=>{},async()=>{});assert.equal(read.manifest.backupSchemaVersion,15);assert.deepEqual(read.data.sessions,JSON.parse(JSON.stringify(data.sessions)));assert.deepEqual(read.data.drafts,JSON.parse(JSON.stringify(data.drafts)));assert.deepEqual(read.data.workouts[0],JSON.parse(JSON.stringify(convertIntervalDay(w))))
  const recovered=await f.sessions.intervalAction(f.id,pending.id,pending.revision,'recover',undefined,true);assert.equal(recovered.interval!.phaseId,pending.interval.phaseId);assert.equal(recovered.interval!.elapsedMs,pending.interval.elapsedMs)
 })
 
