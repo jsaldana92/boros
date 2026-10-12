@@ -77,7 +77,12 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     if ([...file[key], ...(merging ? device![key] : [])].some(r => r.id === t.id)) throw new Error('This backup and device disagree about a deleted library item. Restore under a new profile name or use reviewed Replace; merge cannot revive or delete it implicitly.')
   }
   const localPlans = merging ? device!.plans : [], localExercises = merging ? device!.exercises : [], localTags = merging ? device!.tags : []
-  const localWorkouts = merging ? device!.workouts : [], workoutMatches = matches(file.workouts, localWorkouts, 'workout')
+  const localWorkouts = merging ? device!.workouts : []
+  // Preserve ordinary reviewed name matching, but retirement is an identity
+  // relationship. A merge source must never be matched to an unrelated name.
+  const identityOnly = (row: typeof file.workouts[number]) => !!row.mergedIntoId || !!localWorkouts.find(w => w.id === row.id)?.mergedIntoId
+  const workoutMatches = matches(file.workouts.filter(w => !identityOnly(w)), localWorkouts.filter(w => !w.mergedIntoId), 'workout')
+  for (const row of file.workouts.filter(identityOnly)) { const found = localWorkouts.find(w => w.id === row.id); if (found) workoutMatches.set(row.id, found) }
   const workoutIds = new Map(file.workouts.map(w => [w.id, workoutMatches.get(w.id)?.id ?? w.id]))
   const planMatches = matches(file.plans, localPlans, 'plan'), exerciseMatches = new Map(file.exercises.flatMap(row => { const found = localExercises.find(e => e.id === row.id); if (found && !found.mergedIntoId && !row.mergedIntoId && localExercises.some(e => e.id !== found.id && !e.mergedIntoId && nameKey(e.name) === nameKey(row.name))) throw new Error(`Ambiguous exercise "${row.name}": ID and name identify different records. Restore under a new profile name.`); return found ? [[row.id, found] as const] : [] })), tagMatches = matches(file.tags, localTags, 'tag')
   const planIds = new Map(file.plans.map((p) => [p.id, planMatches.get(p.id)?.id ?? p.id])), exerciseIds = new Map(file.exercises.map((e) => [e.id, exerciseMatches.get(e.id)?.id ?? e.id])), tagIds = new Map(file.tags.map((t) => [t.id, tagMatches.get(t.id)?.id ?? t.id]))
@@ -91,6 +96,12 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   }
   const tags = mergeNamed(file.tags, localTags, tagMatches, 'tags'), exercises = mergeNamed(file.exercises, localExercises, exerciseMatches, 'exercises'), plans = mergeNamed(file.plans, localPlans, planMatches, 'plans')
   const workouts = mergeNamed(file.workouts, localWorkouts, workoutMatches, 'workouts'); result.workouts = workouts.all
+  for (const workout of workouts.imported) {
+    if (workout.mergedIntoId) workout.mergedIntoId = workoutIds.get(workout.mergedIntoId) ?? workout.mergedIntoId
+    const previous=localWorkouts.find(w=>w.id===workout.id)
+    if(previous) assertSameTrainingType(previous,workout)
+    if(previous?.mergedIntoId && !workout.mergedIntoId) { workout.mergedIntoId=previous.mergedIntoId;workout.mergedAt=previous.mergedAt;workout.mergeOperationId=previous.mergeOperationId;workout.activeNameKey=undefined;warnings.push(`Retain the existing merge for workout "${previous.name}".`) }
+  }
   result.tags = tags.all; result.exercises = exercises.all; result.plans = plans.all
   if (profile.selectedPlanIds) profile.selectedPlanIds = [...new Set(profile.selectedPlanIds.map((id) => choice === 'device' ? id : planIds.get(id)!).filter((id) => result.plans.some((p) => p.id === id)))]
   for (const exercise of exercises.imported) {

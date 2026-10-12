@@ -7,6 +7,7 @@ import Dexie from 'dexie'
 import { BorosDatabase } from '../../src/db/database.ts'
 import { profileService } from '../../src/db/profiles.ts'
 import { exerciseService, exerciseToInput } from '../../src/db/exercises.ts'
+import { similarityToken, similarWorkouts } from '../../src/lib/workout-comparison.ts'
 import { workoutService } from '../../src/db/workouts.ts'
 import { planService } from '../../src/db/plans.ts'
 import { sessionService } from '../../src/db/sessions.ts'
@@ -97,17 +98,19 @@ test('workout-to-plan copied notes, one-time publication and authoritative instr
   const f=await fixture(t),e=await f.exercises.save(f.id,strength()),w=await f.workouts.save(f.id,{id:uid(),name:'Library',instructions:'Workout old',notes:'Workout default',exercises:[copyExercise(exerciseToInput(e,[]),{kind:'exercise',id:e.id})]})
   const copy=copyWorkout(w);copy.notes='Plan workout';copy.noteOverride=true;copy.exercises[0].prescription.notes='Plan exercise';copy.exercises[0].prescription.noteOverride=true
   const p=await f.plans.save(f.id,{name:'Plan',durationWeeks:2,days:[copy]})
-  assert.equal(await f.db.workouts.count(),1);assert.equal((await f.workouts.get(f.id,w.id)).notes,'Workout default')
+  assert.equal(await f.db.workouts.count(),2);assert.equal((await f.workouts.get(f.id,w.id)).notes,'Workout default')
+  const variant=await f.workouts.get(f.id,p.days[0].publishedWorkoutId!)
   const d=await f.sessions.start(f.id,p.id,p.days[0].id)
   await f.exercises.save(f.id,{...exerciseToInput(e,[]),instructions:'Exercise new',notes:'New default'},e)
-  await f.workouts.save(f.id,{...workoutToInput(w),instructions:'Workout new'},w)
+  const changed={...workoutToInput(variant),instructions:'Workout new'}
+  await f.workouts.save(f.id,changed,variant,false,similarityToken(similarWorkouts(f.id,changed,await f.db.workouts.toArray(),await f.db.exercises.toArray(),variant.id)))
   const current=await f.plans.get(f.id,p.id)
   assert.equal(current.days[0].instructions,'Workout new');assert.equal(current.days[0].exercises[0].prescription.instructions,'Exercise new');assert.equal(current.days[0].exercises[0].prescription.notes,'Plan exercise')
   assert.equal((await f.sessions.getDraft(f.id,d.id)).day.instructions,'Workout old')
   const history=await saved(f,d);assert.equal(history.day.exercises[0].prescription.instructions,'Original instructions')
   const next=await f.sessions.start(f.id,p.id,p.days[0].id);assert.equal(next.day.instructions,'Workout new');await f.sessions.discard(f.id,next.id,next.revision)
-  const updated=await f.plans.save(f.id,planToInput(current),p);assert.equal(await f.db.workouts.count(),1)
-  await f.db.exercises.delete([f.id,e.id]);await f.db.workouts.delete([f.id,w.id])
+  const updated=await f.plans.save(f.id,planToInput(current),p);assert.equal(await f.db.workouts.count(),2)
+  await f.db.exercises.delete([f.id,e.id]);await f.db.workouts.bulkDelete([[f.id,w.id],[f.id,variant.id]])
   assert.equal((await f.plans.get(f.id,updated.id)).days[0].exercises[0].prescription.instructions,'Exercise new')
   assert.equal(await f.db.workouts.count(),0)
 })
@@ -207,7 +210,7 @@ test('Interval CSV keeps four executions separate, preserves fractional stopped 
     const saved=await f.sessions.complete(f.id,d.id,d.revision,d.input,true)
     assert.deepEqual(await f.sessions.complete(f.id,d.id,d.revision,d.input,true),saved,'finalization retry never duplicates activity')
     const rows=analysisRows(await captureAnalysis(f.id,f.db));assert.equal(rows.length,4);assert.equal(new Set(rows.map(r=>r.phase_id)).size,4);assert.deepEqual(rows.map(r=>r.circuit_execution),[1,2,3,4]);assert.equal(rows[0].exercise_time,'7.525, 0');assert.equal(rows[1].exercise_time,'0, 0');assert.equal(rows[0].status,'Partial');assert.equal(rows[0].workout_status,'Completed');assert.equal(rows[0].plan_notes,'NA');assert.equal(rows[0].exercise_notes,'Interval own');assert.equal(rows[0].time_source,'phase_started_at')
-    const archive=await generateBackup(await captureProfile(f.id,f.db),'analysis-test'),read=await readBackup(archive.bytes);assert.equal(read.data.backupSchemaVersion,19)
+    const archive=await generateBackup(await captureProfile(f.id,f.db),'analysis-test'),read=await readBackup(archive.bytes);assert.equal(read.data.backupSchemaVersion,20)
     const restored=await buildRestorePlan(read,undefined,'new',uid(),'Restored',new Date(now).toISOString());assert.deepEqual(restored.result.sessions[0].interval,read.data.sessions[0].interval)
     const invalid=structuredClone(read.data);invalid.sessions[0].interval.activity.attempts.push(invalid.sessions[0].interval.activity.attempts[0]);assert.throws(()=>validateBackupData(invalid),/unique/)
   } finally { Date.now=clock }
@@ -235,7 +238,7 @@ test('original v18 archive validates its frozen contract before v19 promotion, w
   const tables=csvTables(data),files=[{path:'data.json',text:JSON.stringify(data)},...tables.map(t=>({path:t.path,text:t.text}))],zip=new JSZip()
   const manifest={...current.manifest,backupSchemaVersion:18,databaseSchemaVersion:12,counts:recordCounts(data),csvRows:Object.fromEntries(tables.map(t=>[t.path,t.rows])),inventory:await Promise.all(files.map(async file=>{const bytes=new TextEncoder().encode(file.text);return {path:file.path,bytes:bytes.length,sha256:await sha256(bytes),mediaType:file.path.endsWith('json')?'application/json':'text/csv; charset=utf-8'}}))}
   files.forEach(file=>zip.file(file.path,file.text,{createFolders:false}));zip.file('manifest.json',JSON.stringify(manifest))
-  const restored=await readBackup(await zip.generateAsync({type:'uint8array'}));assert.equal(restored.data.backupSchemaVersion,19);assert.equal(restored.manifest.backupSchemaVersion,18);assert.deepEqual(restored.data.sessions,JSON.parse(JSON.stringify(data.sessions)));assert.equal(restored.data.sessions[0].interval.activity,undefined)
+  const restored=await readBackup(await zip.generateAsync({type:'uint8array'}));assert.equal(restored.data.backupSchemaVersion,20);assert.equal(restored.manifest.backupSchemaVersion,18);assert.deepEqual(restored.data.sessions,JSON.parse(JSON.stringify(data.sessions)));assert.equal(restored.data.sessions[0].interval.activity,undefined)
 })
 
 test('AI conflicts roll back atomically, per-copy imported notes survive, and retries reuse one authoritative identity',async t=>{
@@ -258,7 +261,7 @@ test('v12 to v13 upgrade preserves all stores, IDs, active selection and photo b
   for(const table of f.db.tables) if(await table.count()) await old.table(table.name).bulkPut(await table.toArray())
   const photoId=uid(), bytes=new Uint8Array([137,80,78,71,0,1,2,3]);await old.table('photos').put({id:photoId,profileId:f.id,role:'avatar',width:1,height:1,createdAt:new Date().toISOString(),blob:new Blob([bytes],{type:'image/png'})})
   const before=await Promise.all(old.tables.map(async table=>[table.name,await table.toArray()]));old.close()
-  const upgraded=new BorosDatabase(name);t.after(()=>upgraded.delete());await upgraded.open();assert.equal(upgraded.verno,13)
+  const upgraded=new BorosDatabase(name);t.after(()=>upgraded.delete());await upgraded.open();assert.equal(upgraded.verno,14)
   assert.deepEqual(await Promise.all(upgraded.tables.map(async table=>[table.name,await table.toArray()])),before)
   assert.deepEqual(new Uint8Array(await (await upgraded.photos.get([f.id,photoId])).blob.arrayBuffer()),bytes)
 })

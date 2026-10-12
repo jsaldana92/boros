@@ -50,7 +50,7 @@ test('Sprint Madness is one authoritative 490-second sequence, with distinct rec
 })
 
 test('repeat limits are strict; zero repeats executes once, ten executes eleven times, each with its own rest and cue identities',()=>{
- for(const repeat of [0,1,10]){const day=sprintMadness();day.circuits[0].repeat=repeat;const run=begin(day,'circuit',day.circuits[0].id),done=advanceInterval(run,intervalDisplay(run).total*1000);assert.equal(done.results.filter(r=>r.phase.kind==='circuit-rest').length,repeat+1);assert.equal(done.execution!.cues.filter(c=>c.kind==='start').length,3*(repeat+1));assert.equal(done.execution!.cues.filter(c=>c.kind==='warning').length,3*(repeat+1));assert.equal(done.execution!.cues.filter(c=>c.kind==='complete').length,0)}
+ for(const repeat of [0,1,10]){const day=sprintMadness();day.circuits[0].repeat=repeat;const run=begin(day,'circuit',day.circuits[0].id),done=advanceInterval(run,intervalDisplay(run).total*1000);assert.equal(done.results.filter(r=>r.phase.kind==='circuit-rest').length,repeat+1);assert.equal(done.execution!.cues.filter(c=>c.kind==='start').length,3*(repeat+1));assert.equal(done.execution!.cues.filter(c=>c.kind==='warning').length,2*(repeat+1));assert.equal(done.execution!.cues.filter(c=>c.kind==='complete').length,0)}
  for(const repeat of [-1,1.5,11,NaN,Infinity])assert.equal(repeatCircuitSchema.safeParse({...newCircuit(1),exerciseIds:[uid()],repeat}).success,false)
  assert.equal(repeatCircuitSchema.safeParse({...newCircuit(1),exerciseIds:[uid()],sets:1}).success,false)
  const day=sprintMadness();day.circuits.forEach(c=>c.restAfterCircuitSeconds=0);day.exercises.forEach(e=>{e.prescription.recoverySeconds=0});day.postWorkoutRestSeconds=0;const run=begin(day);assert.ok(run.execution!.phaseIds.every(id=>run.phases.find(p=>p.id===id)!.durationSeconds>0))
@@ -104,7 +104,7 @@ test('populated v9 upgrades convert only templates, retaining started/finalized 
  const profile=await f.db.profiles.get(f.id);await f.profiles.save(f.id,profile!.revision,{name:'Migration owner',weightUnit:'kg',heightUnit:'cm',weightKg:70},{blob:new Blob([photoBytes],{type:'image/png'}),width:1,height:1})
  const snapshot=Object.fromEntries(await Promise.all(f.db.tables.filter(t => t.name !== 'activeWorkouts').map(async table=>[table.name,await table.toArray()]))),dbName='boros-test-v9-'+uid(),v9=new Dexie(dbName)
  v9.version(9).stores(Object.fromEntries(f.db.tables.filter(t => t.name !== 'activeWorkouts').map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(i=>i.src)].join(',')])));await v9.open();for(const [name,rows]of Object.entries(snapshot))await v9.table(name).bulkPut(rows);v9.close()
- const next=new BorosDatabase(dbName);t.after(()=>next.delete());await next.open();assert.equal(next.verno,13)
+ const next=new BorosDatabase(dbName);t.after(()=>next.delete());await next.open();assert.equal(next.verno,14)
  for(const name of Object.keys(snapshot).filter(n=>n!=='workouts'&&n!=='plans'&&n!=='photos'))assert.deepEqual(await next.table(name).toArray(),snapshot[name],name)
  assert.deepEqual((await next.workouts.toArray())[0],convertIntervalDay(w));assert.deepEqual(new Uint8Array(await (await next.photos.toArray())[0].blob.arrayBuffer()),photoBytes)
  const recovered=await sessionService(next).intervalAction(f.id,d.id,original.revision,'recover',undefined,true);assert.deepEqual(recovered.interval!.results,original.interval.results);assert.equal(recovered.interval!.phaseId,original.interval.phaseId);assert.equal(recovered.interval!.elapsedMs,original.interval.elapsedMs)
@@ -113,7 +113,7 @@ test('populated v9 upgrades convert only templates, retaining started/finalized 
 test('current backup restore/export preserves repeated identities, timings, source links and inert checkpoints',async t=>{
  const f=await fixture(t),w=await f.workouts.save(f.id,sprintMadness()),d=await f.sessions.startStandalone(f.id,w.id),run=await f.sessions.startInterval(f.id,d.id,d.revision,'continuous')
  await f.db.drafts.put({...run,interval:advanceInterval(run.interval!,Date.parse(run.interval!.anchorAt!)+150000)})
- const bundle=await generateBackup(await captureProfile(f.id,f.db),'repeat-test'),read=await readBackup(bundle.bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,19)
+ const bundle=await generateBackup(await captureProfile(f.id,f.db),'repeat-test'),read=await readBackup(bundle.bytes,()=>{},async()=>{});assert.equal(read.data.backupSchemaVersion,20)
  const plan=await buildRestorePlan(read,undefined,'new',uid(),'Restored',new Date().toISOString()),checkpoint=plan.result.drafts[0];assert.equal(checkpoint.interval!.status,'paused');assert.equal(checkpoint.interval!.execution!.owner,undefined)
  assert.deepEqual(checkpoint.day,JSON.parse(JSON.stringify(run.day)));assert.equal(intervalDisplay(checkpoint.interval!).duration,90)
  const again=await generateBackup(plan.result,'repeat-test'),reread=await readBackup(again.bytes,()=>{},async()=>{});assert.deepEqual(reread.data.workouts,plan.result.workouts);assert.deepEqual(reread.data.drafts,JSON.parse(JSON.stringify(plan.result.drafts)))
@@ -143,7 +143,7 @@ test('pending legacy snapshots can append new circuits without dropping either s
 
 test('actual feedback plays each repeated active start/warning/end once; preparation, rest and Stop stay silent',async()=>{
  const day=sprintMadness(),run=begin(day,'circuit',day.circuits[0].id),played:string[]=[],audio=(name:string)=>({muted:false,volume:1,currentTime:0,onended:null,onerror:null,pause(){},play(){played.push(name);return Promise.resolve()}}),media={start:audio('start'),warning:audio('warning'),end:audio('end'),complete:audio('complete')},feedback=new IntervalFeedback(media),original=Date.now;let now=0;Date.now=()=>now
- try{feedback.update(run,true,now);for(now=1000;now<=245000;now+=1000){const state=advanceInterval(run,now);feedback.update(state,true,now);feedback.update(state,true,now);Object.values(media).forEach(m=>m.onended?.({}));await Promise.resolve()}assert.equal(played.filter(v=>v==='start').length,6);assert.equal(played.filter(v=>v==='warning').length,6);assert.equal(played.filter(v=>v==='end').length,6);assert.equal(played.includes('complete'),false);const count=played.length;feedback.cancel();feedback.update(intervalCommand(run,'stop',now),true,now);assert.equal(played.length,count)}finally{Date.now=original;feedback.cancel()}
+ try{feedback.update(run,true,now);for(now=1000;now<=245000;now+=1000){const state=advanceInterval(run,now);feedback.update(state,true,now);feedback.update(state,true,now);Object.values(media).forEach(m=>m.onended?.({}));await Promise.resolve()}assert.equal(played.filter(v=>v==='start').length,6);assert.equal(played.filter(v=>v==='warning').length,4);assert.equal(played.filter(v=>v==='end').length,6);assert.equal(played.includes('complete'),false);const count=played.length;feedback.cancel();feedback.update(intervalCommand(run,'stop',now),true,now);assert.equal(played.length,count)}finally{Date.now=original;feedback.cancel()}
 })
 
 test('failed v10 conversion rolls the whole upgrade back and retains the original v9 profile and malformed record',async t=>{

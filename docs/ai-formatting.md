@@ -1,6 +1,36 @@
-# Boros AI interchange v8: circuit repetitions
+# Boros AI interchange v9: explicit week-type assignments
 
-The current envelope uses `schemaVersion: 8`, `trainingType`, `kind`, and exactly
+The current formatting prompt emits **schemaVersion 9** for Strength and Interval.
+Exercise/workout fields and repeating-plan fields retain v8 meanings. A unique
+plan uses `mode:"unique"`, positive integer `durationWeeks`, `uniqueWeekCount`
+(1 through duration), and that many ordered `weeks` objects. Every type contains
+`programWeeks`, `trainingDaysPerWeek` (1–7), and its ordered workout `days`.
+`programWeeks` is a nonempty array of positive integers: each program week from 1
+through duration must occur exactly once across the types. Types may have different
+workout counts. There is **no repeating-cycle or divisibility rule** in v9.
+
+For example, a five-week plan can assign `[1,2,4]` to the first type and `[3,5]`
+to the second. The editor labels these Week Type 1 / Week Type 2 and lists the
+assigned actual weeks; Train still displays actual Week 1 through Week 5.
+Transient editor gaps are allowed, but Save validates full coverage and no empty
+types. Imports generate stable local type/workout identities and preserve the map.
+
+Versions 1–8 validate with their original contracts, including their original
+cycle/count rules. After validation, finite editable cyclic plans expand to an
+equivalent explicit map. This never changes historical schedule/session snapshots
+or invents a finite duration for unbounded legacy data. No public payload accepts
+internal IDs or merge metadata.
+
+Within the save transaction, equivalent active workouts can be reused for plan
+publication while retaining independent plan occurrences. Automatic reuse requires
+equivalent authored content as well as prescriptions/canonical exercise identities.
+Standalone workout imports use the same **Similar workout exists** confirmation as
+manual saves; Cancel writes nothing, Save keeps the authored independent record.
+Existing workout redirects are honored; no imported name implicitly merges history.
+
+## Previous v8 contract: circuit repetitions (historical)
+
+The v8 envelope uses `schemaVersion: 8`, `trainingType`, `kind`, and exactly
 one matching `exercise`, `workout` or `plan` payload. Strict raw JSON or a single
 complete json fence, useful field paths, plain text, HTTPS tutorial validation,
 preview-only editing and transactional Save remain unchanged. Strength retains

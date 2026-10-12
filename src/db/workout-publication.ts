@@ -1,3 +1,7 @@
+import { similarWorkouts } from '../lib/workout-comparison.ts'
+import { instructionView } from './instructions.ts'
+import { templateReference } from '../lib/template-ownership.ts'
+import { workoutResolver } from '../lib/workout-identity.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import type { BorosDatabase } from './database.ts'
 import { duplicateDay, type TrainingDay } from '../schemas/plan.ts'
@@ -15,14 +19,16 @@ export function workoutPrescription(day: TrainingDay) {
   }, (_key, value) => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value)
 }
 
-// Notes are independently copied; instructions are shared by source identity.
-// Neither text/provenance difference publishes another variant of an existing workout.
-const publicationPrescription = (day: TrainingDay) => JSON.stringify(JSON.parse(workoutPrescription(day)), (key,value) => ['notes','instructions','noteOverride'].includes(key) ? undefined : value)
-
 // Caller owns a transaction including workouts/deletedSources/plans. Publication
 // marks the plan copy once; later edits remain independent from library defaults.
 export async function publishWorkouts(database: BorosDatabase, profileId: string, days: TrainingDay[], at: string, previous: TrainingDay[] = [], reconciling = false) {
   const result = structuredClone(days)
+  const identities = await database.exercises.where('profileId').equals(profileId).toArray()
+  const stored = await database.workouts.where('profileId').equals(profileId).toArray()
+  const library = stored.map(w => instructionView(w, identities, stored, profileId, true))
+  const deleted = await database.deletedSources.where('profileId').equals(profileId).toArray()
+  const exerciseIdentities = [...identities, ...deleted.filter(t=>t.kind==='exercise')]
+  const resolve = workoutResolver(profileId, [...library, ...deleted.filter(t=>t.kind==='workout')])
   for (const day of result) {
     const old = previous.find(d => d.id === day.id)
     if (old?.publishedWorkoutId) { day.publishedWorkoutId = old.publishedWorkoutId; continue }
@@ -32,10 +38,15 @@ export async function publishWorkouts(database: BorosDatabase, profileId: string
       else if (!await database.deletedSources.get([profileId, 'workout', day.publishedWorkoutId])) throw new Error('A published workout reference is unavailable in this profile.')
       continue
     }
-    const source = day.sourceWorkoutId ? await database.workouts.get([profileId, day.sourceWorkoutId]) : undefined
+    const source = day.sourceWorkoutId ? library.find(w => w.id === resolve(day.sourceWorkoutId!)) : undefined
     if (source) {
       assertSameTrainingType(day, source)
-      if (source.archivedAt && reconciling || publicationPrescription(source) === publicationPrescription(day)) { day.publishedWorkoutId = source.id; continue }
+      // Legacy workouts can predate library exercise ownership. An explicit
+      // source relationship permits comparing their copied, unlinked positions;
+      // it never permits matching unrelated exercises by display name.
+      const comparable = { ...day, exercises: day.exercises.map((e, i) => !templateReference(e) && source.exercises[i] && !templateReference(source.exercises[i]) ? { ...e, id: source.exercises[i].id } : e) }
+      comparable.circuits = day.circuits?.map(c => ({ ...c, exerciseIds: c.exerciseIds.map(id => comparable.exercises[day.exercises.findIndex(e => e.id === id)].id) }))
+      if (source.archivedAt && reconciling || !source.archivedAt && similarWorkouts(profileId,comparable,[source],exerciseIdentities,undefined,true).length > 0) { day.publishedWorkoutId = source.id; continue }
     } else if (day.sourceWorkoutId) {
       // Missing historical reference cannot distinguish deletion from lost data.
       // Never resurrect it, including when pre-v7 deletions lack tombstones.
@@ -44,6 +55,8 @@ export async function publishWorkouts(database: BorosDatabase, profileId: string
       continue
     }
     if (await database.deletedSources.get([profileId, 'workout', day.id])) { day.publishedWorkoutId = day.id; continue }
+    const equivalent = similarWorkouts(profileId,day,library,exerciseIdentities,undefined,true)[0]
+    if (equivalent) { day.publishedWorkoutId = equivalent.id; continue }
     const collision = await database.workouts.get([profileId, day.id])
 
     let name = day.name, n = 0
@@ -57,6 +70,7 @@ export async function publishWorkouts(database: BorosDatabase, profileId: string
     }
     const value: Workout = { ...input, trainingType: trainingTypeOf(day), profileId, nameKey: nameKey(name), activeNameKey: nameKey(name), revision: 1, createdAt: at, updatedAt: at }
     await database.workouts.add(value)
+    library.push(value)
     day.publishedWorkoutId = value.id
   }
   return result

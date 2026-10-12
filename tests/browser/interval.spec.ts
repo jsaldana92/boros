@@ -49,8 +49,8 @@ test('Interval timer pauses, explicitly continues after reload and saves partial
   await button(page, 'Settings').evaluate((node: HTMLButtonElement) => node.click()); await expect(page.getByRole('dialog', { name: 'Leave pending edits?' })).toBeVisible(); await page.getByRole('dialog', { name: 'Leave pending edits?' }).getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.getByLabel('Note',{exact:true})).toHaveValue('Recoverable unapplied note'); page.once('dialog',d=>d.accept()); await page.getByRole('dialog').getByRole('button',{name:'Cancel',exact:true}).click()
   await button(page, 'Settings').click(); await button(page, 'Train').click()
-  await expect(button(page, 'Start Circuit')).toBeEnabled(); await button(page, 'Start Circuit').click(); await page.waitForTimeout(11100); await button(page, 'Pause').click(); await setWorkoutNote(page,'Saved timed note'); await button(page, 'Save').click(); await expect(page.getByRole('dialog', { name: 'Save partial session?' })).toBeVisible(); await button(page, 'Confirm').click()
-  await expect(page.getByRole('region', { name: 'Saved Interval session' })).toBeVisible(); await expect(page.getByRole('region', { name: 'Saved Interval session' })).toContainText('partial'); await expect(page.getByRole('region', { name: 'Saved Interval session' })).toContainText('Saved timed note')
+  await expect(button(page, 'Start Circuit')).toBeEnabled(); await button(page, 'Start Circuit').click(); await page.getByRole('dialog', { name: 'Restart timer?', exact: true }).getByRole('button', { name: 'Start', exact: true }).click(); await page.waitForTimeout(11100); await button(page, 'Pause').click(); await setWorkoutNote(page,'Saved timed note'); await button(page, 'Save').click(); await expect(page.getByRole('dialog', { name: 'Save partial session?' })).toBeVisible(); await button(page, 'Confirm').click()
+  await expect(page.getByRole('region', { name: 'Saved Interval session' })).toBeVisible(); await expect(page.getByRole('region', { name: 'Saved Interval session' })).toContainText('Partial session'); await expect(page.getByRole('region', { name: 'Saved Interval session' })).toContainText('Saved timed note')
   await button(page, 'Calendar').click(); await expect(page.locator('.calendar-event .type-pill', { hasText: 'Interval' }).first()).toBeVisible()
   await page.locator('.calendar-event').filter({ hasText: 'Timed Circuit' }).first().click(); await expect(page.getByRole('dialog')).toContainText('Partial session');
 })
@@ -60,14 +60,18 @@ test('unique-week circuits use typed pickers; library full execution and unavail
   await button(page, 'Create exercise').click(); await button(page, 'Strength').click(); await page.getByLabel('Exercise name', { exact: true }).fill('Strength only'); await page.getByLabel('Set 1 Reps minimum', { exact: true }).fill('5'); await button(page, 'Save').click()
   await button(page, 'Create Plan').click(); await button(page, 'Interval').click()
   await page.getByLabel('Plan name', { exact: true }).fill('Unique intervals'); await page.getByLabel('Duration (weeks)', { exact: true }).fill('4')
-  await page.getByRole('switch', { name: 'Unique training weeks?' }).click(); await page.getByLabel('Number of Unique weeks', { exact: true }).selectOption('2')
+  await page.getByRole('switch', { name: 'Unique training weeks?' }).click(); await page.getByLabel('Number of unique week types', { exact: true }).selectOption('2')
+  for (const week of [2, 4]) {
+    await page.getByRole('region', { name: 'Assign Week Type 1', exact: true }).getByRole('button', { name: `Week ${week}`, exact: true }).click()
+    await page.getByRole('region', { name: 'Assign Week Type 2', exact: true }).getByRole('button', { name: `Week ${week}`, exact: true }).click()
+  }
   for (const week of [1, 2]) {
-    await page.getByRole('region', { name: `Week ${week}`, exact: true }).getByRole('button', { name: 'Add exercise', exact: true }).click()
+    await page.getByRole('region', { name: `Week Type ${week}`, exact: true }).getByRole('button', { name: 'Add exercise', exact: true }).click()
     await expect(button(page, 'Add Strength only')).toHaveCount(0); await button(page, 'Add Quick interval').click()
   }
   await button(page, 'Add workout').first().click(); await expect(button(page, 'New empty workout')).toHaveCount(0); await page.getByRole('dialog', { name: 'Workouts', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click()
   await button(page, 'Save plan').click(); await expect(page.getByRole('article', { name: 'Plan Unique intervals', exact: true })).toBeVisible()
-  await expect(page.getByRole('article', { name: 'Workout Day 1', exact: true })).toBeVisible(); await expect(page.getByRole('article', { name: 'Workout Day 1 (1)', exact: true })).toBeVisible()
+  await expect(page.getByRole('article', { name: 'Workout Day 1', exact: true })).toBeVisible(); await expect(page.getByRole('article', { name: 'Workout Day 1 (1)', exact: true })).toHaveCount(0)
   for (const theme of ['Dark', 'Light']) {
     await button(page, 'Settings').click(); await button(page, theme).click(); await button(page, 'Create').click()
     await page.getByRole('article', { name: 'Plan Unique intervals', exact: true }).getByRole('button').focus(); await page.keyboard.press('Enter')
@@ -91,7 +95,7 @@ test('warning asset resolves below either mount; denied media and a stale second
   await page.addInitScript(() => { Object.defineProperty(window,'AudioContext',{value:undefined,configurable:true}); HTMLMediaElement.prototype.play = () => Promise.reject(new DOMException('Device denied audio', 'NotAllowedError')) })
   await open(page); await createExercise(page, 'Jumping Jacks'); await createExercise(page, 'Push-ups'); await createExercise(page, 'Sprint'); await createWorkout(page)
   await button(page, 'Settings').click(); await page.getByRole('group', { name: 'Sound', exact: true }).getByRole('button', { name: 'On', exact: true }).click()
-  const response = await page.request.get(new URL('circuit-5s-warning.mp3', page.url()).href); expect(response.ok()).toBe(true); expect((await response.body()).length).toBeGreaterThan(1000)
+  const response = await page.request.get(new URL('circuit-10s-warning.mp3', page.url()).href); expect(response.ok()).toBe(true); expect((await response.body()).length).toBeGreaterThan(1000)
   await button(page, 'Train').click(); await button(page, 'Existing Workout').click(); await page.getByRole('article', { name: 'Workout Timed Circuit', exact: true }).getByRole('button').click()
   await expect(button(page, 'Start Circuit')).toBeEnabled(); await button(page, 'Start Circuit').click()
   await page.waitForTimeout(11100); await expect(page.getByRole('timer')).toContainText('/ 00:45'); await expect(button(page, 'Pause')).toBeEnabled(); await button(page, 'Pause').click(); await expect(page.getByRole('status').filter({ hasText: /^Paused$/ })).toBeVisible()

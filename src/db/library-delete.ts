@@ -1,3 +1,4 @@
+import { workoutResolver } from '../lib/workout-identity.ts'
 import { releaseWorkout } from './active-workout.ts'
 import { intervalCommand, intervalPhases, partialInterval } from '../schemas/interval-session.ts'
 import { db, type BorosDatabase } from './database.ts'
@@ -84,15 +85,17 @@ export function libraryDeleteService(database: BorosDatabase) {
             await database.deletedSources.put({ profileId, kind, id: sourceId, deletedAt: now, ...(sourceId === canonical ? {} : { mergedIntoId: canonical }) })
           }
         } else {
-          const owned = data.drafts.filter(d => kind === 'plan' ? d.sourcePlanId === id : !d.sourcePlanId && d.source?.workoutId === id)
+          const resolve = workoutResolver(profileId,[...data.workouts,...data.deletedSources.filter(t=>t.kind==='workout')])
+          const ids = kind==='workout' ? new Set(data.workouts.filter(w=>resolve(w.id)===id).map(w=>w.id)) : new Set([id])
+          const owned = data.drafts.filter(d => kind === 'plan' ? d.sourcePlanId === id : !d.sourcePlanId && !!d.source?.workoutId && ids.has(d.source.workoutId))
           for (const draft of owned) await removePair(draft)
           // Cover legacy records without a retained draft as well.
-          for (const session of data.sessions.filter(s => kind === 'plan' ? s.sourcePlanId === id : !s.sourcePlanId && s.source?.workoutId === id)) { affected.add(session.draftId); await database.sessions.delete([profileId, session.id]) }
+          for (const session of data.sessions.filter(s => kind === 'plan' ? s.sourcePlanId === id : !s.sourcePlanId && !!s.source?.workoutId && ids.has(s.source.workoutId))) { affected.add(session.draftId); await database.sessions.delete([profileId, session.id]) }
           if (kind === 'plan') {
             await database.schedules.bulkDelete(data.runs.filter(r => r.planId === id).map(r => [profileId, r.id]))
             await database.plans.delete([profileId, id])
             if (data.profile.selectedPlanIds?.includes(id)) await database.profiles.put({ ...data.profile, selectedPlanIds: data.profile.selectedPlanIds.filter(p => p !== id), revision: data.profile.revision + 1, updatedAt: now })
-          } else await database.workouts.delete([profileId, id])
+          } else for(const sourceId of ids) { await database.workouts.delete([profileId,sourceId]); await database.deletedSources.put({profileId,kind,id:sourceId,deletedAt:now,...(sourceId!==id?{mergedIntoId:id}:{})}) }
           await database.deletedSources.put({ profileId, kind, id, deletedAt: now })
         }
         if (data.timer && affected.has(data.timer.draftId)) await database.restTimers.delete('active')

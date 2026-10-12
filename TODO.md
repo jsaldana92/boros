@@ -1,8 +1,8 @@
 # Boros — shared implementation plan
 
-Updated: 2026-10-10
-Status: Analysis CSV, revised Settings, independent note inheritance, shared current instructions and retained Interval activity implemented; applicable automated verification passed. Physical-device acceptance, earlier release gates and the production persistence investigation remain open.
-Current scope: separate analysis CSV and complete profile ZIP; copied/branch-owned notes; historical instruction snapshots; per-attempt active/recovery timing retained after Stop. Stable boros database v13, AI v8, backup v19. Existing records and legacy checkpoints preserved. No commit, push, deploy, hosting or dependency changes.
+Updated: 2026-10-11
+Status: CSV seconds, popup focus, foreground alerts, compact workout cards, explicit week types, workout duplicate detection and workout Merge implemented; available automated verification passed. Physical-device acceptance, earlier release gates and the production persistence investigation remain open.
+Current scope: explicit program-week assignments and reviewed schedule repair; transactional workout comparison/publication and durable workout redirects; independent Sound persistence. Stable boros database v14, AI v9, backup v20 / 40 CSV tables. Existing records and historical snapshots preserved. No commit, push, deploy, hosting, navigation, manifest or dependency changes.
 
 This file belongs in the Boros project root, beside `package.json`. It is the shared specification, checklist, and handoff record for the owner, ChatGPT, and Codex. The repository copy is authoritative. When continuing in a chat without repository access, provide the latest copy and the relevant source files or diff.
 
@@ -75,7 +75,7 @@ These defaults make implementation concrete. They are design choices, not additi
 
 ### Prescriptions, drafts, and history
 
-- A repeating plan contains 1-7 ordered workouts. A unique-week plan has ordered definitions with 1-7 workouts each and a finite duration divisible by its definition count (at least two). Rest days are `7 - trainingDaysPerWeek` for that definition; variable compact counts use numeric ranges.
+- A repeating plan contains 1-7 ordered workouts. A finite unique-week plan has 1 through Duration stable week types, each with its own 1-7 workouts and explicit `programWeeks`. Every program week is assigned exactly once and every type is used. No divisibility/cycle rule applies to new plans. Legacy finite cycles expand equivalently; immutable snapshots and unbounded legacy plans retain their compatible representation. Rest days are `7 - trainingDaysPerWeek` for that type; variable compact counts use numeric ranges.
 - An exercise requires a name and at least one prescribed set. Set count and repetition targets are the only mandatory numeric inputs.
 - Each prescribed set has positive integer `reps.min` and `reps.max`; equal values mean a fixed target. Reject reversed ranges.
 - Each set may have an RIR range with nonnegative integer bounds. RIR 0 is valid. Missing RIR is unknown, not 0.
@@ -772,8 +772,9 @@ Build these fixtures as the relevant phase begins, using fictional people and ti
 
 ### Repeating cycles of unique training weeks (2026-10-05)
 
-This request supersedes the former single-lineup-only model. Historical phase
-and hash-routing handoffs remain evidence of their original revisions.
+This historical request superseded the former single-lineup-only model. Its
+divisor/cycle rule is superseded by the 2026-10-11 explicit week-type assignments.
+Historical phase and hash-routing handoffs remain evidence of their original revisions.
 
 - [x] Shared cycle resolver and ordered stable week/day/exercise/set identities; legacy repeating/unbounded records untouched; distinct actual-program-week completion keys.
 - [x] Exact Duration/toggle/count/Note/week labels, independent 1-7-day editors, valid divisors, recoverable invalid-duration input, and confirmed populated reductions/Off.
@@ -998,12 +999,19 @@ These do not block Phase 0 unless the owner changes the scope.
 | 2026-10-10 | Retain Interval activity in an attempt/phase ledger independent of the timer cursor | Supersedes the 2026-10-08 Stop-discard rule; Stop captures activity, restart adds an attempt, explicit Clear/cancel retains destructive scope |
 | 2026-10-10 | DB13 additive empty version, backup19 with frozen18 validation, AI8 unchanged | Preserve existing IDs/Blobs and original backup checks while adding validated timing and note provenance; legacy unknowns are not fabricated |
 
+| 2026-10-11 | Explicit program-week assignments replace new cyclic plans | Types keep stable IDs and independent workouts; 1 through Duration types, complete nonoverlapping coverage, no silent reassignment. Legacy finite templates expand; history does not |
+| 2026-10-11 | DB14 / backup20 / AI9, stable boros name | No stores/indexes changed; strict frozen19 and older ZIP contracts/checksums precede promotion; workout redirects and assignment CSV cells retain relationships |
+| 2026-10-11 | Shared workout comparison separates execution similarity from authored-safe reuse | Plan publication deduplicates atomically; standalone saves confirm independently and allocate names transactionally; canonical exercise identities never match unrelated names |
+| 2026-10-11 | Workout Merge retires a source and keeps destination defaults | Same-type/profile/revision checks, durable chains, no rewritten histories or collapsed occurrences; plan merging remains unavailable |
+| 2026-10-11 | Dialog heading autofocus; browser-wide narrow Sound writes; ten-second warning | Mobile controls >=16px with zoom enabled; visible-document alerts only; Off cancels audio/speech and attempts deduplicated vibration; supplied ten-second asset is present |
+| 2026-10-11 | Compact Train picker at every width; compact Create workouts only <=360px | Preserve existing 390px/tablet/desktop geometry; verify long names, dates, keyboard access and no horizontal overflow |
+
 ## 9. Current checkpoint
 
-- Analysis export, Settings, branch notes, current instructions and retained timing: **implemented; applicable automated verification passed; owner/device acceptance pending**. Phase 10 remains **Verification pending**, Phase 11 **In progress**. Earlier phase statuses and all historical handoffs remain unchanged.
-- Current contracts: stable `boros` v13, AI v8, backup v19 / 40 CSV tables. V13 changes no stores/indexes and rewrites no records. Provenance/timing fields are optional; original v18 and older backup validation/checksums remain strict, imported timers remain inert, and lost legacy timing is unknown.
-- Build/typecheck/lint/diff passed; full data **321/321**; CSV/backup/restore/import Edge static checks **80/80** at root/project mounts and desktop/phone widths. Broader Train/library suite **72/76**, then affected timer follow-up **26/26**, covering all four obsolete restart assertions after updating them to verify retained activity and explicit confirmation. All 156 distinct affected browser checks have passing coverage. Exact commands/results: [Analysis verification](docs/analysis-verification.md). Previous runtime and Firefox evidence remains in [its historical record](docs/train-runtime-verification.md).
-- Next step: perform the five owner checks in the analysis verification record. Physical phone/Home Screen/lock-screen/music/Bluetooth, Safari, real screen readers, native file sheets, spreadsheet opening and live Ko-fi remain unverified. Do not deploy or claim the production persistence issue is fixed from isolated tests.
+- Current owner update: **implemented; available automated verification passed; physical-device acceptance pending**. Phase 10 remains **Verification pending** and Phase 11 **In progress**; earlier phase statuses/handoffs are preserved.
+- Current contracts: stable `boros` v14, AI v9, backup v20 / 40 CSV tables. Only finite editable cyclic plans are expanded. Photos, profile selection, saved sessions, started drafts and old revisions remain unchanged. Frozen legacy contracts and checksums are validated before promotion; database errors never create replacement data.
+- Build/typecheck/lint/diff and full data **337/337** pass. Production Edge broad **240/256**, then final affected **100/100** and additional compatibility **36/36** provide passing coverage for **292 distinct checks**, including every corrected broad-run failure, at root/project mounts on desktop/phone. Exact commands/results and remaining limitations are recorded in [the current verification record](docs/week-types-workout-updates.md).
+- Next step: the five short owner/device checks in that record. Physical iOS zoom/keyboard, real vibration, silent-mode/volume/music/Bluetooth, Home Screen/background lifecycle, Safari/Firefox current-update coverage, real screen readers, native file sheets/spreadsheet opening and live Ko-fi are not claimed passed. The separate production persistence investigation remains unconfirmed; isolated tests are not a production fix.
 
 ## 10. Handoff entry template
 
@@ -2003,3 +2011,18 @@ Fresh verification against the final build (isolated contexts/test databases):
 - Files: Settings/backups/Create/Train UI; database services and optional schema fields; frozen prior backup models; note/instruction/CSV helpers and worker; focused data/browser tests; README, CSV/AI/backup contracts and verification record.
 - Limitations: time already discarded by an older Stop/Reset and absent historical provenance cannot be reconstructed. Legacy unknown timing remains None. Timer activity is not proof of movement. The independent production persistence investigation remains unresolved; isolated tests do not establish its cause or fix.
 - Next action: owner acceptance using a disposable profile and a retained ZIP backup. No commit, push, deploy, dependency, manifest, hosting or owner-data changes were made.
+
+### Handoff - Explicit week types, workout integrity and foreground alerts (2026-10-11)
+
+- Status: **implemented; available automated verification passed; physical acceptance pending**. Earlier phase statuses and historical handoffs remain intact. The current explicit assignment model supersedes the old finite cycle/divisor rule, and workouts now support Merge alongside exercises.
+- [x] CSV uses stored `HH:mm:ss` in its existing captured browser-zone basis, with UTC precision/time-source metadata and unchanged set/execution row counts. Canonical workout identity is appended without changing historical display names.
+- [x] Shared popups focus their noneditable heading before native opening; nested dialogs, trap/Escape/return, scroll locking and intentional editing remain. Mobile inputs/textareas/selects use at least 16px with browser zoom enabled. Train's workout picker is slim at all widths; Create's catalog changes only at **360px and below**, retaining 390/800/1440px geometry.
+- [x] Browser-wide Sound persists through its existing narrow settings update, independently of unsaved profile edits/revisions. Failed writes show errors and restore the latest persisted runtime preference. Off cancels sound/speech and attempts one vibration per logical event; document visibility governs alerts across Boros tabs/popups, with no hidden backlog. Exact requested Sound copy is present.
+- [x] Supplied `public/circuit-10s-warning.mp3` verified present (38,688 bytes). Runtime uses it at ten active seconds remaining only for durations >=15 seconds, once per execution/attempt. Short phases, rests, paused/background recovery, repeat/restart and root/subpath resolution are covered; no new sound was fabricated.
+- [x] Stable week types own explicit `programWeeks`, independent workout IDs/counts and accessible nonwrapping assignment pills. 1 through Duration types, complete/exclusive assignments and nonempty types validate on Save. Growth preserves content; populated reductions/Off require confirmation. Calendar/Train/Progress share the resolver; gaps do not consume program weeks. Reviewed repairs preserve recorded/started snapshots and count additionally protected old-type workouts.
+- [x] Reusable prescription comparison follows canonical exercise identities and preserves order/repetition/RIR/rest/group/timing/missing-versus-zero semantics. Atomic plan publication reuses only authored-safe equivalents while retaining independent plan occurrences. Standalone manual/import/custom saves confirm similarities, preserve canceled input, retain self-edit IDs, revalidate matches and allocate normalized suffixes transactionally.
+- [x] Same-type Workout Merge picker/confirmation/Switch follows the exercise pattern. Atomic profile/revision checks retain destination defaults and durable source redirects; chains/retries, future starts, current instructions, CSV/ZIP, restore and scoped deletion resolve them. Plan copies, histories, started drafts and independent note branches remain intact. Reopened pre-merge drafts can still complete. Plans cannot be merged.
+- [x] Stable DB **13 → 14**, AI **9**, backup **20 / 40 CSV tables**. Finite editable legacy cycles expand equivalently; unbounded plans and immutable snapshots retain their original representation. All-store migration tests preserve profile selection/photo bytes and verify failed upgrades roll back. Frozen19 and older imports validate original contracts/checksums before promotion. No reset fallback or owner data access.
+- [x] Build/typecheck/lint/diff and full data **337/337** pass. Broad production Edge **240/256**, then final affected **100/100** covers all 16 corrected obsolete expectations; additional Create/Interval compatibility **36/36** passes. **292 distinct checks have passing coverage** at root/project mounts and desktop/phone. Exact commands, intermediate failures and owner steps: [verification record](docs/week-types-workout-updates.md).
+- [ ] Physical phone zoom/keyboard, actual sound/vibration/silent-mode/music/Bluetooth, Home Screen lifecycle, Safari/Firefox current-update coverage, real screen readers, native file sheets/spreadsheet opening and live Ko-fi. Emulation and mocked media do not establish physical acceptance. Earlier release gates and the separate production persistence investigation remain open.
+- Next: perform the five short owner checks in the verification record using disposable data. No commit, push, deploy, dependency installation, navigation/manifest/hosting change or owner-data clearing occurred.

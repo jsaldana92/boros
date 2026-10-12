@@ -27,8 +27,13 @@ export function ActionDialog({ title, children, onClose, actions, headerActions,
     if (!dialogs.length) unlockScroll = lockScroll()
     dialogs.push(dialog)
     for (const item of dialogs) item.inert = item !== dialog
+    // Native showModal must choose a non-editable target before it can open the
+    // mobile keyboard. Moving focus afterward is too late on some browsers.
+    const heading = dialog.querySelector<HTMLElement>('h2')!
+    heading.setAttribute('autofocus', '')
     dialog.showModal()
-    initialFocus?.current?.focus({ preventScroll: true })
+    const requested = initialFocus?.current
+    ;(requested && !requested.matches('input, textarea, select, [contenteditable]') ? requested : heading).focus({ preventScroll: true })
     const keepFocus = (event: FocusEvent) => {
       if (dialogs.at(-1) === dialog && !dialog.contains(event.target as Node)) dialog.focus({ preventScroll: true })
     }
@@ -53,9 +58,9 @@ export function ActionDialog({ title, children, onClose, actions, headerActions,
     const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, iframe, [tabindex]')).filter((node) => node.tabIndex >= 0 && !node.matches(':disabled') && !node.closest('[hidden], [inert]') && node.getClientRects().length)
     const first = controls[0], last = controls.at(-1)
     if (!first) { event.preventDefault(); dialog.focus() }
-    else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last?.focus() }
+    else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog || document.activeElement === dialog.querySelector('h2'))) { event.preventDefault(); last?.focus() }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
   }} onCancel={(e) => { e.preventDefault(); if (dialogs.at(-1) === ref.current) onClose() }}>
-    <div className={hideTitle ? 'sr-only' : 'dialog-heading'}><h2 id={id}>{title}</h2>{headerActions}</div><div id={`${id}-body`}>{children}</div><div className="actions">{actions ?? <button type="button" onClick={onClose}>Close</button>}</div>
+    <div className={hideTitle ? 'sr-only' : 'dialog-heading'}><h2 id={id} tabIndex={-1}>{title}</h2>{headerActions}</div><div id={`${id}-body`}>{children}</div><div className="actions">{actions ?? <button type="button" onClick={onClose}>Close</button>}</div>
   </dialog>
 }

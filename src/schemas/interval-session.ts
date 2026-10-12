@@ -176,7 +176,7 @@ export function advanceInterval(input: IntervalState, now = Date.now()): Interva
   while (index < state.execution.phaseIds.length) {
     const phase = state.phases.find(p => p.id === state.execution!.phaseIds[index])!, duration = phase.durationSeconds * 1000
     const began = now - elapsed
-    if (phase.kind === 'active' && duration > 5000 && elapsed >= duration - 5000) cue(state, 'warning', phase, began + duration - 5000)
+    if (phase.kind === 'active' && duration >= 15000 && elapsed >= duration - 10000) cue(state, 'warning', phase, began + duration - 10000)
     if (elapsed < duration) break
     const endedAt = new Date(began + duration).toISOString()
     record(state, phase, duration, 'completed', endedAt)

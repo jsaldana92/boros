@@ -8,7 +8,7 @@ Only a validated Boros ZIP can restore a profile. Neither file is encrypted.
 ## Analysis contract
 
 Export takes one readonly IndexedDB transaction for the selected profile, saved
-sessions/finalized inputs, outcome markers and canonical exercise identities. It
+sessions/finalized inputs, outcome markers and canonical exercise/workout identities. It
 does not load photos, write records, include other profiles, or treat pending
 workouts/templates/unfinished drafts as history. Export cancellation, errors,
 navigation or profile switching cannot retarget the captured owner. Empty history
@@ -42,7 +42,7 @@ username,date,time,type,plan,workout,circuit,exercise,reps_target,reps,weight,ri
 | Column(s) | Meaning |
 | --- | --- |
 | username | Current selected profile name; Guest fallback if unnamed. |
-| date, time | `dd/mm/yyyy`, `HH:mm`, in the exporting browser's time zone captured with the snapshot. Hidden legacy profile-zone preferences are not applied. |
+| date, time | `dd/mm/yyyy`, 24-hour `HH:mm:ss`, in the exporting browser's time zone captured with the snapshot. Seconds come from the stored timestamp, never elapsed exercise time. Hidden legacy profile-zone preferences are not applied. |
 | type | `strength` or `interval`. |
 | plan, workout, circuit, exercise | Saved historical names; plan is `NA` for standalone/custom, circuit is `NA` for Strength. |
 | reps_target, rir_target | Prescribed set targets: `8` or `5-8`. Missing Strength RIR is `None`. Interval is `NA`. |
@@ -74,6 +74,7 @@ These columns follow in this exact order:
 | circuit_id, phase_id | Interval circuit and active-phase identities; Strength `NA`. Together with exercise occurrence and execution, distinguish repeated entries and circuits. |
 | workout_status | `Completed` for saved sessions (including partials) and manual completion; `Skipped` for a skipped workout. |
 | time_zone | IANA display zone for date/time. No time-zone text is added to ordinary app screens. |
+| workout_id | Canonical library workout identity through durable workout redirects, or `None` when unlinked. Appended after `time_zone`; historical names, session/occurrence IDs and row counts stay unchanged. |
 
 For Interval timing with attempts, the earliest recorded start for that prescribed
 active execution supplies the timestamp. Where no phase timestamp exists, use the
@@ -156,7 +157,8 @@ can author instructions before their atomic save. Deleted/missing sources retain
 usable copied instruction snapshot; no item is recreated by name. Started drafts and
 saved history always retain their snapshots.
 
-AI remains strict schema v8: no new public fields are needed. Conflicting shared
+AI now uses strict schema v9 for explicit week assignments; the note/instruction
+fields retain their v8 meanings. Conflicting shared
 instructions require an explicit preview choice; existing library instructions/default
 notes are not overwritten. New repeated exercise names use the first occurrence in
 the ordered editable preview for the library default, with the choice exposed when

@@ -9,18 +9,18 @@ import { LibraryExerciseCard } from './LibraryExerciseCard'
 import { type LibrarySort } from './library'
 import { filterWorkouts } from './workout-filter'
 
-export function WorkoutCards({ records, onChoose }: { records: Workout[]; onChoose: (value: Workout) => void }) {
-  return <div className="workout-library-grid" role="region" aria-label="Workout catalog">{records.map(value => <article aria-label={`Workout ${value.name}`} key={value.id}><LibraryExerciseCard trainingType={value.trainingType} name={value.name} createdAt={value.createdAt} onClick={() => onChoose(value)} />{value.archivedAt && <small>Archived</small>}</article>)}</div>
+export function WorkoutCards({ records, onChoose, compact = false }: { compact?: boolean; records: Workout[]; onChoose: (value: Workout) => void }) {
+  return <div className={compact ? "workout-library-grid workout-picker-list" : "workout-library-grid"} role="region" aria-label="Workout catalog">{records.map(value => <article aria-label={`Workout ${value.name}`} key={value.id}><LibraryExerciseCard trainingType={value.trainingType} name={value.name} createdAt={value.createdAt} onClick={() => onChoose(value)} />{value.archivedAt && <small>Archived</small>}</article>)}</div>
 }
 
-export function WorkoutPicker({ profileId, onChoose, onClose, trainingType }: { profileId: string; onChoose: (value: Workout) => void; onClose: () => void; trainingType?: TrainingType }) {
+export function WorkoutPicker({ profileId, onChoose, onClose, trainingType, excludeId }: { profileId: string; onChoose: (value: Workout) => void; onClose: () => void; trainingType?: TrainingType; excludeId?: string }) {
   const [search, setSearch] = useState(''), [sort, setSort] = useState<LibrarySort>('az')
   const result = useLiveQuery(async () => { try { return { records: await workouts.library(profileId) } } catch (e) { return { error: (e as Error).message } } }, [profileId])
-  const visible = filterWorkouts((result?.records ?? []).filter(w => !trainingType || trainingTypeOf(w) === trainingType), search, sort)
+  const visible = filterWorkouts((result?.records ?? []).filter(w => w.id !== excludeId && (!trainingType || trainingTypeOf(w) === trainingType)), search, sort)
   return <ActionDialog title="Workouts" onClose={onClose} actions={<button type="button" onClick={onClose}>Cancel</button>}>
     <div className="workout-picker-controls"><SearchSort noun="workouts" search={search} sort={sort} onSearch={setSearch} onSort={setSort} /></div>
     {result?.error && <p role="alert">{result.error}</p>}
-    {!result ? <p role="status">Loading workouts...</p> : <WorkoutCards records={visible} onChoose={onChoose} />}
+    {!result ? <p role="status">Loading workouts...</p> : <WorkoutCards compact records={visible} onChoose={onChoose} />}
     {result?.records && !visible.length && <p>{search ? 'No workouts match this search.' : 'No workouts yet.'}</p>}
   </ActionDialog>
 }

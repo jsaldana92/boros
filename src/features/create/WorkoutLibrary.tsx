@@ -1,3 +1,4 @@
+import { MergeWorkoutDialog } from './MergeWorkoutDialog'
 import { trainingTypeName, trainingTypeOf, type TrainingType } from '../../schemas/training-type'
 import { newDay } from '../../schemas/plan'
 import { DeleteLibraryDialog } from './DeleteLibraryDialog'
@@ -20,6 +21,7 @@ export function WorkoutLibrary({ profileId, startNew, trainingType, hidden, onEd
   const result = useLiveQuery(async () => { try { return { records: await workouts.library(profileId) } } catch (e) { return { error: (e as Error).message } } }, [profileId, attempt])
   const [filterTags, setFilterTags] = useState<string[]>([])
   const [search, setSearch] = useState(''), [sort, setSort] = useState<LibrarySort>('az'), [archived, setArchived] = useState(false)
+  const [merging, setMerging] = useState<Workout>()
   const [deleting, setDeleting] = useState<Workout>()
   const [selected, setSelected] = useState<Workout>(), [actions, setActions] = useState(false), [archive, setArchive] = useState<Workout>()
   const [editor, setEditor] = useState<{ key: string; initial?: WorkoutInput; original?: Workout }>()
@@ -37,7 +39,8 @@ export function WorkoutLibrary({ profileId, startNew, trainingType, hidden, onEd
       {result?.records && !filterWorkouts(result.records, search, sort, archived, filterTags).length && <p>{search ? 'No workouts match this search.' : archived ? 'No archived workouts.' : 'No workouts yet.'}</p>}
     </>}
     {selected && <ActionDialog title={selected.name} onClose={() => setSelected(undefined)} headerActions={<DetailsActionsButton label="Workout actions" expanded={actions} onClick={() => setActions(true)} />}><p className="muted">{trainingTypeName(trainingTypeOf(selected))}</p><WorkoutSummary day={selected} /></ActionDialog>}
-    {selected && actions && <DetailsActions onDelete={() => setDeleting(selected)} title="Workout actions" busy={busy} archived={!!selected.archivedAt} error={error} onClose={() => setActions(false)} onEdit={() => open(workoutToInput(selected), selected)} onDuplicate={() => void act(async () => open(await workouts.duplicateDraft(profileId, selected.id)))} onArchive={() => selected.archivedAt ? void toggle(selected) : (setArchive(selected), setActions(false))} />}
+    {selected && actions && <DetailsActions onMerge={selected.archivedAt ? undefined : () => { setMerging(selected); setActions(false) }} onDelete={() => setDeleting(selected)} title="Workout actions" busy={busy} archived={!!selected.archivedAt} error={error} onClose={() => setActions(false)} onEdit={() => open(workoutToInput(selected), selected)} onDuplicate={() => void act(async () => open(await workouts.duplicateDraft(profileId, selected.id)))} onArchive={() => selected.archivedAt ? void toggle(selected) : (setArchive(selected), setActions(false))} />}
+    {merging && <MergeWorkoutDialog profileId={profileId} source={merging} onClose={() => setMerging(undefined)} onSaved={record => { setMerging(undefined); setSelected(record); setActions(false) }} />}
     {deleting && <DeleteLibraryDialog profileId={profileId} kind="workout" record={deleting} onClose={() => setDeleting(undefined)} onDeleted={() => { setDeleting(undefined); setSelected(undefined); setActions(false); requestAnimationFrame(() => document.getElementById('create-workout')?.focus()) }} />}
     {archive && <ConfirmDialog title="Archive workout?" confirmLabel="Archive" busy={busy} onCancel={() => setArchive(undefined)} onConfirm={() => void toggle(archive)}><p>{archive.name} will leave the active library. Its record and saved copies are kept.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
   </section>

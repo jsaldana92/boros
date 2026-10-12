@@ -14,10 +14,10 @@ import { materializeTemplates } from '../lib/template-ownership.ts'
 export function importSession(profileId: string, database: BorosDatabase = db) {
   const creationId = createId()
   return {
-    saveLibraryWorkout: (input: WorkoutInput) => database.transaction('rw', database.profiles, database.deletedSources, database.workouts, database.exercises, database.tags, async () => {
+    saveLibraryWorkout: (input: WorkoutInput, confirmedSimilar?: string) => database.transaction('rw', database.profiles, database.deletedSources, database.workouts, database.exercises, database.tags, async () => {
       const committed = await database.workouts.get([profileId, creationId])
       if (!committed) assertImportInstructions([input], await database.exercises.where('profileId').equals(profileId).toArray())
-      return committed ?? workoutService(database).save(profileId, { ...input, id: creationId }, undefined, true)
+      return committed ?? workoutService(database).save(profileId, { ...input, id: creationId }, undefined, true, confirmedSimilar)
     }),
     saveWorkout: (input: ExerciseInput) => exerciseService(database).save(profileId, input, undefined, creationId),
     savePlan: (input: PlanInput) => database.transaction('rw', [database.workouts, database.profiles, database.deletedSources, database.exercises, database.tags, database.plans, database.schedules], async () => {

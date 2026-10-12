@@ -226,7 +226,7 @@ test('original v17 archive checksums and five-second checkpoints validate before
   async function encode(){const bytes=new TextEncoder().encode(JSON.stringify(data));zip.file('data.json',bytes);const item=manifest.inventory.find((i:any)=>i.path==='data.json');item.bytes=bytes.length;item.sha256=await sha256(bytes);zip.file('manifest.json',JSON.stringify(manifest));return zip.generateAsync({type:'uint8array',compression:'DEFLATE',createFolders:false})}
   await assert.rejects(readBackup(await encode()),/Invalid|preparation|duration|checkpoint/i)
   const interval=data.drafts[0].interval;interval.phases.find((p:any)=>p.kind==='preparation').durationSeconds=5
-  const imported=await readBackup(await encode());assert.equal(imported.manifest.backupSchemaVersion,17);assert.equal(imported.data.backupSchemaVersion,19)
+  const imported=await readBackup(await encode());assert.equal(imported.manifest.backupSchemaVersion,17);assert.equal(imported.data.backupSchemaVersion,20)
   assert.equal(imported.data.drafts[0].interval!.phases.find(p=>p.kind==='preparation')!.durationSeconds,5)
 })
 test('v11 upgrade preserves records/Blobs and chooses a legacy draft without deleting others; backup18 restores inert ownership',async t=>{
@@ -234,11 +234,11 @@ test('v11 upgrade preserves records/Blobs and chooses a legacy draft without del
   await service.update(id,draft.id,draft.revision,entered(draft));await profiles.save(id,1,{name:'Upgrade',weightUnit:'kg',heightUnit:'cm',weightKg:70},{blob:new Blob([photoBytes],{type:'image/png'}),width:1,height:1})
   const rows=await Promise.all(db.tables.filter(t=>t.name!=='activeWorkouts').map(async t=>[t.name,await t.toArray()] as const)),name='boros-test-upgrade12-'+uid(),legacy=new Dexie(name)
   legacy.version(11).stores(Object.fromEntries(db.tables.filter(t=>t.name!=='activeWorkouts').map(t=>[t.name,[t.schema.primKey.src,...t.schema.indexes.map(i=>i.src)].join(',')])));await legacy.open();for(const [name,values]of rows)await legacy.table(name).bulkPut(values);legacy.close()
-  const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,13)
+  const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,14)
   for(const [name,values]of rows)assert.deepEqual(await next.table(name).toArray(),values)
   await profileService(next).initialize();assert.equal((await currentWorkout(next))!.draftId,draft.id);assert.deepEqual(new Uint8Array(await (await next.photos.toArray())[0].blob.arrayBuffer()),photoBytes)
   const backup=await generateBackup(await captureProfile(id,next),'ownership-test'),read=await readBackup(backup.bytes,()=>{},async()=>{})
-  assert.equal(read.manifest.backupSchemaVersion,19);assert.equal(read.manifest.databaseSchemaVersion,13);assert.equal('activeWorkouts' in read.data,false)
+  assert.equal(read.manifest.backupSchemaVersion,20);assert.equal(read.manifest.databaseSchemaVersion,14);assert.equal('activeWorkouts' in read.data,false)
   const restored=await buildRestorePlan(read,undefined,'new',uid(),'Restored','2026-10-09T15:00:00.000Z');assert.equal(restored.result.drafts[0].id,draft.id)
   await next.activeWorkouts.delete('active');await next.transaction('rw',next.tables,()=>reconcileWorkout(next));assert.equal((await currentWorkout(next))!.draftId,draft.id)
 })

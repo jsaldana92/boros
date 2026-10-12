@@ -166,7 +166,7 @@ test('v3-to-v4 preserves every populated store and photo bytes; orphaned session
   const records = new Map<string, unknown[]>()
   for (const table of old.tables) { const values = await db.table(table.name).toArray(); records.set(table.name, values); await table.bulkAdd(values) }
   old.close(); const upgraded = new BorosDatabase(name); t.after(() => upgraded.delete()); await upgraded.open()
-  assert.equal(upgraded.verno, 13)
+  assert.equal(upgraded.verno, 14)
   for (const [table, values] of records) assert.deepEqual(await upgraded.table(table).toArray(), (classifyStrengthRecords(values), values))
   assert.equal(await (await upgraded.photos.toArray())[0].blob.text(), 'bytes'); assert.equal(await upgraded.drafts.count(), 0)
   await service.complete(id, draft.id, draft.revision, filled(draft), false)

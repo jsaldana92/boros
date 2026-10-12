@@ -39,11 +39,11 @@ for (const theme of ['Dark', 'Light']) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     }
     await f(page, 'Duration (weeks)').fill('4'); await toggle.focus(); await page.keyboard.press('Space'); await expect(toggle).toHaveText('Yes')
-    await f(page, 'Number of Unique weeks').selectOption('2'); await f(page, 'Workouts for Week 2').selectOption('3')
-    await expect(page.getByRole('region', { name: 'Week 2', exact: true }).getByRole('button', { name: 'Add workout', exact: true })).toBeVisible()
-    await page.getByRole('region', { name: 'Week 2', exact: true }).getByLabel('Workout 1 name', { exact: true }).fill('Training day - owner text')
+    await f(page, 'Number of unique week types').selectOption('2'); await f(page, 'Workouts for Week Type 2').selectOption('3')
+    await expect(page.getByRole('region', { name: 'Week Type 2', exact: true }).getByRole('button', { name: 'Add workout', exact: true })).toBeVisible()
+    await page.getByRole('region', { name: 'Week Type 2', exact: true }).getByLabel('Workout 1 name', { exact: true }).fill('Training day - owner text')
     await toggle.click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(toggle).toHaveText('Yes')
-    await expect(page.getByRole('region', { name: 'Week 2', exact: true }).getByLabel('Workout 1 name', { exact: true })).toHaveValue('Training day - owner text')
+    await expect(page.getByRole('region', { name: 'Week Type 2', exact: true }).getByLabel('Workout 1 name', { exact: true })).toHaveValue('Training day - owner text')
     await page.screenshot({ path: info.outputPath('plan-fields-' + theme + '.png'), fullPage: true })
   })
 

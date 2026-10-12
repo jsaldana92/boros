@@ -53,6 +53,15 @@ export function prescribedDays(run: Schedule): number | undefined {
       }
     }
   }
+  // A reviewed type-map change can retain a started workout from the previous
+  // type in addition to the new type's lineup. Count that protected occurrence
+  // once; ordinary weekday moves within the same type were already counted.
+  for (const ref of run.occurrenceExceptions ?? []) {
+    const revision = revisionAt(run, ref.scheduledDate), boundary = run.durationChanges?.findLast(c => c.effectiveFrom <= ref.scheduledDate) ?? run
+    if (!revision || ref.scheduledDate < run.startWeek || !boundary.endDate || ref.scheduledDate > boundary.endDate || run.excludedWeeks?.includes(ref.scheduledWeek)) continue
+    const days = resolveWeek(revision, programWeek(run, ref.scheduledWeek)).days
+    if (!days.some(d => d.id === ref.dayId) || !revision.mapping.some(m => m.dayId === ref.dayId)) total++
+  }
   return total
 }
 

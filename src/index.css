@@ -542,3 +542,24 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 
 /* Timer modal secondary controls share the entire two-column action row. */
 .timer-actions .timer-reset { grid-column: 1 / -1; width: 100%; }
+
+/* Text-entry controls stay large enough for intentional editing on mobile. */
+@media (max-width: 800px) { input:not([type='checkbox']):not([type='radio']), textarea, select { font-size: 16px; } }
+.workout-picker-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.workout-picker-list .library-exercise-card { aspect-ratio: auto; height: auto; min-height: 72px; align-items: stretch; padding: 12px 8px; }
+.workout-picker-list small { font-size: 13px; margin-top: 2px; }
+@media (max-width: 360px) {
+  .workout-library-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .workout-library-grid .library-exercise-card { aspect-ratio: auto; height: auto; min-height: 72px; align-items: stretch; padding: 12px 8px; }
+  .workout-library-grid small { font-size: 13px; margin-top: 2px; }
+}
+
+.week-pills { display: flex; gap: 8px; overflow-x: auto; flex-wrap: nowrap; padding: 4px 2px 12px; }
+.week-pills button { flex: 0 0 auto; min-width: 44px; border-radius: 24px; }
+.week-pills button[aria-pressed='true'] { background: var(--text); color: var(--bg); }
+.week-pills button:disabled { opacity: .4; }
+.week-assignment { min-width: 0; }
+
+.similar-workouts { max-height: 40dvh; overflow-y: auto; padding-left: 20px; }
+.similar-workouts li { margin-bottom: 12px; overflow-wrap: anywhere; }
+.similar-workouts small { display: block; margin-top: 4px; }

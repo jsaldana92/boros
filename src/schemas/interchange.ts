@@ -2,7 +2,7 @@ import { intervalInterchangeSchema as v7IntervalInterchangeSchema } from './inte
 export { v7IntervalInterchangeSchema }
 import { intervalInterchangeSchema as v6IntervalInterchangeSchema } from './interval-interchange-v6.ts'
 export { v6IntervalInterchangeSchema }
-import { intervalInterchangeSchema } from './interval-interchange.ts'
+import { publicIntervalWorkout, intervalInterchangeSchema } from './interval-interchange.ts'
 import { z } from 'zod'
 import { strengthInputSchema, range } from './exercise.ts'
 import { daySchema, planInstructionsSchema, positiveInteger } from './plan.ts'
@@ -101,7 +101,34 @@ export const strengthInterchangeSchema = z.discriminatedUnion('kind', [
 ])
 export const v7StrengthInterchangeSchema = z.discriminatedUnion('kind', [strengthInterchangeSchema.options[0].extend({ schemaVersion: z.literal(7) }), strengthInterchangeSchema.options[1].extend({ schemaVersion: z.literal(7) }), strengthInterchangeSchema.options[2].extend({ schemaVersion: z.literal(7) })])
 export const v8StrengthInterchangeSchema = z.discriminatedUnion('kind', [v7StrengthInterchangeSchema.options[0].extend({ schemaVersion: z.literal(8) }), v7StrengthInterchangeSchema.options[1].extend({ schemaVersion: z.literal(8) }), v7StrengthInterchangeSchema.options[2].extend({ schemaVersion: z.literal(8) })])
-export const interchangeSchema = z.union([intervalInterchangeSchema, v7IntervalInterchangeSchema, v8StrengthInterchangeSchema, v6IntervalInterchangeSchema, v7StrengthInterchangeSchema, strengthInterchangeSchema, currentInterchangeSchema, v4InterchangeSchema, v3InterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
+// v9 keeps the public week list but assigns explicit program weeks to each type.
+function assignedPlan(day: typeof interchangeWorkoutSchema | typeof publicIntervalWorkout) {
+  const count = z.number().int().min(1).max(7)
+  const days = z.array(day).min(1).max(7)
+  return z.discriminatedUnion('mode', [
+    z.object({ ...v4PlanBase, mode: z.literal('repeating'), trainingDaysPerWeek: count, days }).strict(),
+    z.object({ ...v4PlanBase, mode: z.literal('unique'), uniqueWeekCount: positiveInteger, weeks: z.array(z.object({ programWeeks: z.array(positiveInteger).min(1), trainingDaysPerWeek: count, days }).strict()).min(1) }).strict(),
+  ]).superRefine((p, ctx) => {
+    if (p.mode === 'repeating') validateDayCount(p,ctx)
+    else {
+      const assigned = p.weeks.flatMap(w => w.programWeeks)
+      if (p.uniqueWeekCount !== p.weeks.length || p.uniqueWeekCount > p.durationWeeks) ctx.addIssue({code:'custom',path:['uniqueWeekCount'],message:'Use 1 through Duration week types and match the weeks count.'})
+      if (assigned.length !== p.durationWeeks || new Set(assigned).size !== assigned.length || assigned.some(n => n > p.durationWeeks)) ctx.addIssue({code:'custom',path:['weeks'],message:'Assign every program week exactly once.'})
+      p.weeks.forEach((w,i) => { if(w.days.length !== w.trainingDaysPerWeek) ctx.addIssue({code:'custom',path:['weeks',i,'days'],message:'Workout count must equal trainingDaysPerWeek.'}) })
+    }
+  })
+}
+export const v9StrengthInterchangeSchema = z.discriminatedUnion('kind', [
+  v8StrengthInterchangeSchema.options[0].extend({schemaVersion:z.literal(9)}),
+  v8StrengthInterchangeSchema.options[1].extend({schemaVersion:z.literal(9)}),
+  v8StrengthInterchangeSchema.options[2].extend({schemaVersion:z.literal(9),plan:assignedPlan(interchangeWorkoutSchema)}),
+])
+export const v9IntervalInterchangeSchema = z.discriminatedUnion('kind', [
+  intervalInterchangeSchema.options[0].extend({schemaVersion:z.literal(9)}),
+  intervalInterchangeSchema.options[1].extend({schemaVersion:z.literal(9)}),
+  intervalInterchangeSchema.options[2].extend({schemaVersion:z.literal(9),plan:assignedPlan(publicIntervalWorkout)}),
+])
+export const interchangeSchema = z.union([v9StrengthInterchangeSchema, v9IntervalInterchangeSchema, intervalInterchangeSchema, v7IntervalInterchangeSchema, v8StrengthInterchangeSchema, v6IntervalInterchangeSchema, v7StrengthInterchangeSchema, strengthInterchangeSchema, currentInterchangeSchema, v4InterchangeSchema, v3InterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
 export type Interchange = z.infer<typeof interchangeSchema>
 export type InterchangeExercise = z.infer<typeof interchangeExerciseSchema>
 export type ImportKind = Interchange['kind']

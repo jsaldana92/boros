@@ -44,7 +44,7 @@ const filled = (draft) => { const input = structuredClone(draft.input); for (con
 test('workout validation, normalization, isolation, stale edits, independent copies, archive/restore', async t => {
  const { db, id, profiles, workout, service, raw } = await setup(t), other = await profiles.create('Other')
  assert.equal(workoutInputSchema.safeParse({ ...raw, exercises: [] }).success, false)
- await assert.rejects(service.save(id, { ...raw, id: uid(), name: '  UPPER ' }), /already exists/)
+ await assert.rejects(service.save(id, { ...raw, id: uid(), name: '  UPPER ' }), /Similar workout exists/)
  await service.save(other.id, { ...raw, exercises: raw.exercises.map(e => ({ ...e, source: undefined, templateId: undefined })) })
  assert.equal((await service.library(other.id)).length, 1)
  await assert.rejects(service.get(other.id, uid()), /unavailable/)
@@ -101,7 +101,9 @@ test('custom Save Yes is atomic, collision-safe, idempotent and excludes actual/
  await assert.rejects(sessions.update(id, saved.id, saved.revision, input), /completed/)
  const next = await custom(); const no = await sessions.complete(id, next.saved.id, next.saved.revision, next.input, false)
  assert.equal(no.day.name, 'Custom Workout'); assert.deepEqual(no.source, { kind: 'custom' }); assert.equal(await db.workouts.count(), 2)
- const third = await custom(); assert.equal((await sessions.complete(id, third.saved.id, third.saved.revision, third.input, false, undefined, { name: '' })).day.name, 'Custom Workout (2)')
+ const third = await custom(); let token: string | undefined
+ await assert.rejects(sessions.complete(id, third.saved.id, third.saved.revision, third.input, false, undefined, { name: '' }), error => { token=error.token; return error.message==='Similar workout exists' })
+ assert.equal((await sessions.complete(id, third.saved.id, third.saved.revision, third.input, false, undefined, { name: '', confirmedSimilar:token })).day.name, 'Custom Workout (2)')
 })
 
 test('AI v5 separates all kinds, legacy workout remains one exercise, invalid hybrids fail, imports resolve defaults atomically', async t => {
@@ -124,7 +126,7 @@ test('v11 ZIP, all restore choices and repeated merges preserve independent work
  for (let i=0;i<2;i++) { const d=await sessions.startStandalone(id,workout.id); await sessions.complete(id,d.id,d.revision,filled(d),false) }
  await sessions.startStandalone(id)
  const snapshot = await captureProfile(id,db), zip=await generateBackup(snapshot,'workouts'), backup=await readBackup(zip.bytes)
- assert.equal(backup.data.backupSchemaVersion,19); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
+ assert.equal(backup.data.backupSchemaVersion,20); assert.equal(zip.manifest.csvRows['csv/workouts.csv'],1)
  for (const choice of ['new','replace','device','import'] as const) {
   const plan=await buildRestorePlan(backup,choice==='new'?undefined:snapshot,choice,uid(),choice==='new'?'Copy':'Guest',new Date().toISOString())
   assert.equal(plan.result.workouts.length,1); assert.equal(plan.result.sessions.length,2); assert.equal(plan.result.drafts.length,3)
@@ -142,7 +144,7 @@ test('additive v5 to v6 preserves all stores, assets and active selection; no wo
  const definitions=Object.fromEntries(db.tables.filter(table=>table.name!=='workouts'&&table.name!=='activeWorkouts').map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(index=>index.src)].join(',')]))
  old.version(5).stores(definitions); await old.open(); for(const [table,values] of Object.entries(rows)) await old.table(table).bulkAdd(values); old.close()
  const upgraded=new BorosDatabase(name);t.after(()=>upgraded.delete());await upgraded.open()
- assert.equal(upgraded.verno,13);assert.equal(await upgraded.workouts.count(),0)
+ assert.equal(upgraded.verno,14);assert.equal(await upgraded.workouts.count(),0)
  for(const [table,values] of Object.entries(rows)) assert.deepEqual(await upgraded.table(table).toArray(),(classifyStrengthRecords(values), values))
  const active=(await upgraded.settings.get('workspace'))!.activeProfileId;await profileService(upgraded).initialize();assert.equal((await upgraded.settings.get('workspace'))!.activeProfileId,active)
 })

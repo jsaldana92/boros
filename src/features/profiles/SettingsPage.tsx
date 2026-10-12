@@ -39,7 +39,16 @@ export function SettingsPage() {
         try { await profiles.setTheme(theme) } catch { setError('Appearance could not be saved. Your previous setting is unchanged.') } finally { setBusy(false) }
       }}>{theme === 'dark' ? 'Dark' : 'Light'}</button>)}</div>
     </section>
-    <section className="settings-section" aria-labelledby="sound-heading"><h2 id="sound-heading">Sound</h2><div className="segmented" role="group" aria-label="Sound">{([false, true] as const).map((sound) => <button key={String(sound)} disabled={busy} aria-pressed={workspace.sound === sound} onClick={async () => { setBusy(true); setError(''); try { trainingRuntime().setSound(sound); await profiles.setSound(sound) } catch (e) { trainingRuntime().setSound(workspace.sound); setError((e as Error).message) } finally { setBusy(false) } }}>{sound ? 'On' : 'Off'}</button>)}</div><p className="muted">Timer completion: Sound On plays three times; Off attempts one vibration where supported. Device restrictions may prevent feedback, especially in the background.</p></section>
+    <section className="settings-section" aria-labelledby="sound-heading"><h2 id="sound-heading">Sound</h2><div className="segmented" role="group" aria-label="Sound">{([false, true] as const).map((sound) => <button key={String(sound)} disabled={busy} aria-pressed={workspace.sound === sound} onClick={async () => {
+      setBusy(true); setError('')
+      try { trainingRuntime().setSound(sound); await profiles.setSound(sound) }
+      catch (e) {
+        // Another tab may have saved a different preference while this write
+        // failed. Restore the persisted value, not this handler's old snapshot.
+        try { trainingRuntime().setSound((await profiles.settings())?.sound ?? false) } catch { trainingRuntime().setSound(false) }
+        setError((e as Error).message)
+      } finally { setBusy(false) }
+    }}>{sound ? 'On' : 'Off'}</button>)}</div><p className="muted">Keep Boros open and visible for sound or vibration. Vibration depends on your device.</p></section>
     <section className="settings-section" aria-labelledby="data-heading"><h2 id="data-heading">Data</h2><p>Download your personalized data about your plans, workouts, and exercises as a .csv file to perform your own data analysis.</p><DownloadAnalysis key={workspace.snapshot.profile.id} /></section>
     <section className="settings-section" aria-labelledby="backup-heading"><h2 id="backup-heading">Profile Backup</h2><p>Your information is saved in this browser. Clearing site data removes your profile and logs. Download a backup to keep a copy for migration.</p><DownloadData key={workspace.snapshot.profile.id} /></section>
     <section className="settings-section" aria-label="Restore and clear"><p role="status">{workspace.dataNotice}</p><RestoreData key={`restore:${workspace.snapshot.profile.id}`} /></section>

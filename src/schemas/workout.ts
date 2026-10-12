@@ -8,6 +8,7 @@ export const workoutInputSchema = daySchema.omit({ sourceWorkoutId: true, publis
 })
 export type WorkoutInput = z.infer<typeof workoutInputSchema>
 export interface Workout extends WorkoutInput {
+  mergedIntoId?: string; mergedAt?: string; mergeOperationId?: string
   profileId: string; nameKey: string; activeNameKey?: string; revision: number
   createdAt: string; updatedAt: string; archivedAt?: string
 }

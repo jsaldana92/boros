@@ -42,29 +42,41 @@ export function validateGroups(day: z.infer<typeof daySchema>, context: z.Refine
 }
 export const planInstructionsSchema = z.string().max(20000).optional()
 export const planInstructionsSnapshot = (instructions?: string, notes?: string) => ({ ...(instructions === undefined ? {} : { planInstructions: instructions }), ...(notes === undefined ? {} : { planNotes: notes }) })
-export const weekSchema = z.object({ id: z.string().uuid(), dayIds: z.array(z.string().uuid()).min(1).max(7) }).strict()
+export const weekSchema = z.object({ programWeeks: z.array(positiveInteger).optional(), id: z.string().uuid(), dayIds: z.array(z.string().uuid()).min(1).max(7) }).strict()
 export type UniqueWeek = z.infer<typeof weekSchema>
 export interface WeeklyStructure { days: TrainingDay[]; weeks?: UniqueWeek[] }
 export function uniqueWeekCounts(duration: number): number[] {
-  if (!Number.isSafeInteger(duration) || duration < 2) return []
-  const values = new Set([duration])
-  for (let n = 2; n <= Math.sqrt(duration); n++) if (duration % n === 0) { values.add(n); values.add(duration / n) }
-  return [...values].sort((a, b) => a - b)
+  return Number.isSafeInteger(duration) && duration > 0 ? Array.from({ length: duration }, (_, i) => i + 1) : []
 }
+// Only editable finite legacy templates are expanded. Saved revisions/snapshots
+// retain their legacy resolver until explicitly replaced through schedule review.
+export function explicitWeeks<T extends WeeklyStructure & { durationWeeks?: number }>(source: T): T {
+  if (!source.weeks || source.weeks.some(w => w.programWeeks !== undefined) || !source.durationWeeks) return source
+  if (source.durationWeeks % source.weeks.length) throw new Error('Invalid legacy week cycle. Existing data was not changed.')
+  return { ...source, weeks: source.weeks.map((w, i) => ({ ...w, programWeeks: Array.from({ length: source.durationWeeks! / source.weeks!.length }, (_, n) => i + 1 + n * source.weeks!.length) })) }
+}
+export const assignedWeeksLabel = (weeks?: number[]) => weeks === undefined ? 'Legacy repeating cycle' : weeks.length ? `${weeks.length === 1 ? 'Week' : 'Weeks'} ${[...weeks].sort((a,b) => a-b).join(', ')}` : 'No weeks assigned'
 // Flattened snapshots retain existing day/source references. Definitions own an
 // ordered partition of those days; no duplicated Week 1/global day-count value.
 export function planWeeks(source: WeeklyStructure) {
-  return source.weeks ? source.weeks.map((week) => ({ id: week.id, days: week.dayIds.map((id) => source.days.find((day) => day.id === id)!) })) : [{ id: undefined, days: source.days }]
+  return source.weeks ? source.weeks.map((week) => ({ id: week.id, programWeeks: week.programWeeks, days: week.dayIds.map((id) => source.days.find((day) => day.id === id)!) })) : [{ id: undefined, programWeeks: undefined, days: source.days }]
 }
 export function resolveWeek(source: WeeklyStructure, programWeek: number) {
   if (!Number.isSafeInteger(programWeek) || programWeek < 1) throw new Error('Choose a positive program week.')
   const definitions = planWeeks(source)
-  return definitions[(programWeek - 1) % definitions.length]
+  if (source.weeks?.some(w => w.programWeeks !== undefined)) return definitions.find(w => w.programWeeks?.includes(programWeek)) ?? { id: undefined, programWeeks: undefined, days: [] }
+  return definitions[(programWeek - 1) % definitions.length] // Original cyclic snapshots only.
 }
-export const planInputSchema = z.object({ trainingType: trainingTypeSchema.optional(), name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), noteOverride: z.boolean().optional(), durationWeeks: positiveInteger.optional(), weeks: z.array(weekSchema).min(2).optional(), days: z.array(daySchema).min(1, 'Add at least one workout.') }).superRefine((plan, context) => {
+export const planInputSchema = z.object({ trainingType: trainingTypeSchema.optional(), name, instructions: planInstructionsSchema, notes: z.string().max(20000).optional(), noteOverride: z.boolean().optional(), durationWeeks: positiveInteger.optional(), weeks: z.array(weekSchema).min(1).optional(), days: z.array(daySchema).min(1, 'Add at least one workout.') }).superRefine((plan, context) => {
   const issue = (path: (string | number)[], message: string) => context.addIssue({ code: 'custom', path, message })
   if (plan.weeks) {
-    if (!plan.durationWeeks || plan.durationWeeks % plan.weeks.length !== 0) issue(['weeks'], 'Choose a unique-week count that divides the duration evenly.')
+    if (plan.weeks.some(w => w.programWeeks !== undefined)) {
+      const assigned = plan.weeks.flatMap(w => w.programWeeks ?? [])
+      if (!plan.durationWeeks || plan.weeks.length > plan.durationWeeks) issue(['weeks'], 'Use 1 through Duration week types.')
+      if (plan.weeks.some(w => !w.programWeeks?.length)) issue(['weeks'], 'Assign at least one week to each type.')
+      if (new Set(assigned).size !== assigned.length) issue(['weeks'], 'Assign each program week only once.')
+      if (assigned.length !== plan.durationWeeks || assigned.some(n => n > (plan.durationWeeks ?? 0))) issue(['weeks'], 'Assign every program week exactly once.')
+    } else if (plan.durationWeeks && plan.durationWeeks % plan.weeks.length) issue(['weeks'], 'Invalid legacy week cycle.')
     if (plan.weeks.map((week) => week.dayIds).flat().join() !== plan.days.map((day) => day.id).join()) issue(['weeks'], 'Every workout must belong to exactly one ordered week.')
   } else if (plan.days.length > 7) issue(['days'], 'Use at most 7 workouts.')
   const ids = new Set<string>()
@@ -148,6 +160,6 @@ export function identifySets(days: TrainingDay[]): TrainingDay[] {
 }
 export function duplicateStructure(source: WeeklyStructure): WeeklyStructure {
   const days = source.days.map(duplicateDay), ids = new Map(source.days.map((day, index) => [day.id, days[index].id]))
-  return { days, ...(source.weeks ? { weeks: source.weeks.map((week) => ({ id: createId(), dayIds: week.dayIds.map((id) => ids.get(id)!) })) } : {}) }
+  return { days, ...(source.weeks ? { weeks: source.weeks.map((week) => ({ ...week, id: createId(), dayIds: week.dayIds.map((id) => ids.get(id)!) })) } : {}) }
 }
 export const weekSnapshot = (source: WeeklyStructure) => source.weeks ? { weeks: structuredClone(source.weeks) } : {}

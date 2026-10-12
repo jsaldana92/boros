@@ -1,3 +1,4 @@
+import { useSimilarWorkout } from '../create/use-similar-workout'
 import { useTrainingScroll } from './use-training-scroll'
 import { SessionActions } from './SessionActions'
 import { WorkoutActions, NoteDialog } from './WorkoutActions'
@@ -116,6 +117,7 @@ function TrainWorkspace({ profileId, unit }: { profileId: string; unit: WeightUn
 }
 function TypedSessionEditor(props: Parameters<typeof SessionEditor>[0]) { return props.initial.day.trainingType === 'interval' ? <IntervalSession {...props} /> : <SessionEditor {...props} /> }
 function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial: SessionDraft; unit: WeightUnit; timer?: RestTimer; onClose: () => void; onCompleted: (session: CompletedSession) => void }) {
+  const similarity=useSimilarWorkout()
   useTrainingScroll(initial.profileId, initial.id)
   const { setDirty, sound, registerLeaveGuard, snapshot } = useWorkspace()
   const { rememberTraining } = useScreenNavigation()
@@ -175,7 +177,7 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     if (assessed.skipped) setConfirm('partial'); else requestFinish(false)
   }
   const requestFinish = (partial: boolean) => { if (initial.source?.kind === 'custom') { setAddToLibrary(false); setSavingCustom({ partial }) } else void finish(partial) }
-  const finish = (partial: boolean, library?: { name: string }) => act(async () => { const result = await controller.complete(partial, library); rememberTraining(); setDirty(false); onCompleted(result) })
+  const finish = (partial: boolean, library?: { name: string }) => act(async () => { const result = await similarity.save(token => controller.complete(partial,library ? {...library,confirmedSimilar:token} : undefined)); rememberTraining(); setDirty(false); onCompleted(result) })
   const memberLabel = (exercise: PlanExercise) => day.exercises.filter((item) => item.prescription.name === exercise.prescription.name).length > 1 ? `${exercise.prescription.name} occurrence ${day.exercises.findIndex((item) => item.id === exercise.id) + 1}` : exercise.prescription.name
   const memberHeading = (exercise: PlanExercise) => {
     const e = day.exercises.findIndex((item) => item.id === exercise.id), label = memberLabel(exercise)
@@ -237,6 +239,7 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
     </ActionDialog>}
     {confirmSwap && <ConfirmDialog title="Replace Exercise?" confirmLabel="Swap" busy={controller.busy} onCancel={() => setConfirmSwap(false)} onConfirm={() => void swap()}><p>This will clear the results and notes entered for this exercise.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
     {info && <ExerciseInformation exercise={info.prescription} history={history?.[info.id]} unit={unit} returnFocus={exerciseMenuTrigger} onClose={() => setInfo(undefined)} />}
+    {similarity.dialog}
     {savingCustom && <ActionDialog title="Saving Completed Workout" onClose={() => { if (!controller.busy) setSavingCustom(undefined) }} actions={<><button disabled={controller.busy} onClick={() => setSavingCustom(undefined)}>Cancel</button><button className="primary" disabled={controller.busy} onClick={() => void finish(savingCustom.partial, addToLibrary ? { name: workoutName } : undefined)}>Save</button></>}><p>Do you wish to add this workout to your workout library?</p><div className="segmented" aria-label="Add to workout library"><button aria-pressed={addToLibrary} onClick={() => setAddToLibrary(true)}>Yes</button><button aria-pressed={!addToLibrary} onClick={() => setAddToLibrary(false)}>No</button></div>{addToLibrary && <Field label="Workout name:" maxLength={120} value={workoutName} onChange={(event) => setWorkoutName(event.target.value)} />}{error && <p role="alert">{error}</p>}</ActionDialog>}
     {confirm && <ConfirmDialog title={confirm === 'noteLeave' ? 'Leave pending edits?' : confirm === 'clear' ? 'Clear entered results?' : confirm === 'leave' ? `Leaving ${day.name}` : confirm === 'partial' ? 'Save partial session?' : 'Reload saved draft?'} confirmLabel={confirm === 'noteLeave' ? 'Leave' : confirm === 'clear' ? 'Clear' : confirm === 'leave' ? 'Leave' : confirm === 'partial' ? 'Save partial session' : 'Reload draft'} busy={leaving || controller.busy} destructive={confirm === 'clear' || confirm === 'leave'} cancelLabel="Cancel" onCancel={() => { if (confirm === 'leave' || confirm === 'noteLeave') { leaveReply.current?.(false); leaveReply.current = undefined } setConfirm(undefined) }} onConfirm={() => {
       const action = confirm; setConfirm(undefined)

@@ -99,7 +99,7 @@ export class DraftController {
       this.disposed = true; this.discarded = true; clearTimeout(this.timeout); this.persisted = this.sequence; this.status = 'saved'
     })
   }
-  complete(allowPartial: boolean, library?: { name: string }) {
+  complete(allowPartial: boolean, library?: { name: string; confirmedSimilar?: string }) {
     const completedAt = new Date().toISOString()
     return this.command(async () => {
       await this.persist()

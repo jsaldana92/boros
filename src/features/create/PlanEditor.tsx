@@ -10,7 +10,7 @@ import { CreateLeaveGuard } from './CreateLeaveGuard'
 import { EditorTitle } from './EditorTitle'
 import { useWorkspace } from '../../app/workspace-context'
 import { plans, type PrescriptionChoice } from '../../db/plans'
-import { identifySets, planWeeks, uniqueWeekCounts, compactGroups, copyExercise, dissolveGroup, joinGroup, moveOccurrence, newDay, planInputSchema, positiveInteger, trainingBlocks, type Plan, type PlanExercise, type PlanInput, type TrainingDay } from '../../schemas/plan'
+import { identifySets, planWeeks, explicitWeeks, assignedWeeksLabel, uniqueWeekCounts, compactGroups, copyExercise, dissolveGroup, joinGroup, moveOccurrence, newDay, planInputSchema, positiveInteger, trainingBlocks, type Plan, type PlanExercise, type PlanInput, type TrainingDay } from '../../schemas/plan'
 import type { Tag } from '../../schemas/exercise'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -26,7 +26,7 @@ function reorder<T>(items: T[], index: number, offset: number) {
 }
 export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false, workoutMode = false }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput) => Promise<{ name: string }>; initialDirty?: boolean; workoutMode?: boolean }) {
   const { setDirty, dirty } = useWorkspace()
-  const [form, setForm] = useState<PlanInput>(() => initial ? { ...structuredClone(initial), days: initial.days.map(convertIntervalDay) } : { name: '', days: [newDay(1)] })
+  const [form, setForm] = useState<PlanInput>(() => initial ? explicitWeeks({ ...structuredClone(initial), days: initial.days.map(convertIntervalDay) }) : { name: '', days: [newDay(1)] })
   const [baseline] = useState(() => JSON.stringify(form))
   const [nestedDirty, setNestedDirty] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -58,7 +58,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
   const days = (update: (current: TrainingDay[]) => TrainingDay[], weekId?: string) => change((current) => {
     if (!weekId) return { ...current, days: update(current.days) }
     const definitions = planWeeks(current), updated = definitions.map((week) => week.id === weekId ? { ...week, days: update(week.days) } : week)
-    return { ...current, days: updated.flatMap((week) => week.days), weeks: updated.map((week) => ({ id: week.id!, dayIds: week.days.map((day) => day.id) })) }
+    return { ...current, days: updated.flatMap((week) => week.days), weeks: updated.map((week) => ({ id: week.id!, programWeeks: week.programWeeks, dayIds: week.days.map((day) => day.id) })) }
   })
   const updateDay = (dayId: string, update: (day: TrainingDay) => TrainingDay) => days((items) => items.map((day) => day.id === dayId ? update(day) : day))
   const exerciseList = (dayId: string, update: (items: PlanExercise[]) => PlanExercise[]) => updateDay(dayId, (day) => compactGroups({ ...day, exercises: update(day.exercises) }))
@@ -68,21 +68,22 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
     const apply = () => days((items) => Array.from({ length: value }, (_, index) => items[index] ?? newDay(index + 1, trainingTypeOf(form))), weekId)
     if (value < current.length) setConfirm({ title: `Reduce to ${value} ${value === 1 ? 'workout' : 'workouts'}?`, action: apply }); else apply()
   }
-  const populated = (list: TrainingDay[]) => list.some((day, index) => day.exercises.length || day.name !== `Day ${index + 1}`)
+  const populated = (list: TrainingDay[]) => list.some((day, index) => day.exercises.length || day.name !== `Day ${index + 1}` || day.notes || day.instructions)
   const weekCount = (value: number) => {
     const existing = planWeeks(form)
     const apply = () => change((current) => {
-      const definitions = planWeeks(current), weeks = Array.from({ length: value }, (_, index) => definitions[index] ?? { id: createId(), days: [newDay(1, trainingTypeOf(form))] })
-      return { ...current, days: weeks.flatMap((week) => week.days), weeks: weeks.map((week) => ({ id: week.id ?? createId(), dayIds: week.days.map((day) => day.id) })) }
+      const definitions = planWeeks(current), weeks = Array.from({ length: value }, (_, index) => definitions[index] ?? { id: createId(), programWeeks: [], days: [newDay(1, trainingTypeOf(form))] })
+      return { ...current, days: weeks.flatMap((week) => week.days), weeks: weeks.map((week) => ({ id: week.id ?? createId(), programWeeks: week.programWeeks ?? [], dayIds: week.days.map((day) => day.id) })) }
     })
-    if (existing.slice(value).some((week) => populated(week.days))) setConfirm({ title: `Reduce to ${value} unique weeks?`, action: apply }); else apply()
+    if (existing.slice(value).some((week) => populated(week.days))) setConfirm({ title: `Reduce to ${value} week types?`, action: apply }); else apply()
   }
   const toggleUnique = () => {
-    if (!unique) { setUnique(true); return }
+    if (!unique) { setUnique(true); change(current => ({ ...current, weeks: [{ id: createId(), dayIds: current.days.map(d => d.id), programWeeks: uniqueWeekCounts(Number(duration)) }] })); return }
     const apply = () => { setUnique(false); change((current) => ({ ...current, weeks: undefined, days: planWeeks(current)[0].days })) }
     if (planWeeks(form).slice(1).some((week) => populated(week.days))) setConfirm({ title: 'Turn off unique training weeks?', action: apply }); else apply()
   }
-  const divisors = uniqueWeekCounts(Number(duration))
+  const programWeeks = uniqueWeekCounts(Number(duration))
+  const legacyUnbounded = !!original?.weeks && original.durationWeeks === undefined && !duration.trim() && form.weeks?.every(w => w.programWeeks === undefined)
   return <section className="plan-editor" aria-label={workoutMode ? "Workout editor" : "Plan editor"}><CreateLeaveGuard kind={workoutMode ? "workout" : "plan"} />
     <div hidden={!!picker || !!editing}><EditorTitle path={['Create', workoutMode ? 'Workout' : 'Plan']} headingRef={heading} /></div>
     {!picker && !editing && original?.archivedAt && <p className="muted">Archived {workoutMode ? "workout" : "plan"}. Rename here to resolve a conflict, then restore from the library.</p>}
@@ -93,7 +94,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       const durationWeeks = duration.trim() ? Number(duration) : undefined
       const badGroups = form.days.flatMap((day) => day.exercises.filter((item) => item.groupId && groupNumbers[item.id] !== undefined && !positiveInteger.safeParse(Number(groupNumbers[item.id])).success))
       if (badGroups.length) { setError('Enter a positive whole superset number for each enabled occurrence.'); return }
-      if (unique && (!form.weeks || !divisors.includes(form.weeks.length))) { setErrors({ weeks: 'Choose a unique-week count that divides the duration evenly.' }); return }
+      if (unique && !legacyUnbounded && (!form.weeks || !programWeeks.includes(form.weeks.length))) { setErrors({ weeks: 'Use 1 through Duration week types.' }); return }
       const prepared = { ...form, durationWeeks, ...(unique ? { days: identifySets(form.days) } : {}), ...(workoutMode ? { days: [{ ...form.days[0], name: form.name, instructions: form.instructions, notes: form.notes, noteOverride: form.noteOverride }] } : {}) }
       setForm(prepared)
       const parsed = planInputSchema.safeParse(prepared)
@@ -109,16 +110,17 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       <legend className="sr-only">{workoutMode ? "Workout details" : "Plan details"}</legend>
       <div className="plan-top-fields">
       <Field label={workoutMode ? "Workout name" : "Plan name"} required maxLength={120} value={form.name} error={errors.name} onChange={(e) => change((current) => ({ ...current, name: e.target.value }))} />
-      {!workoutMode && <div className="duration-row"><Field label="Duration (weeks)" required={!original || original.durationWeeks !== undefined} inputMode="numeric" value={duration} error={errors.durationWeeks} onChange={(e) => { setDuration(e.target.value); setErrors({}) }} /><div className="unique-toggle"><span id="unique-weeks-label">Unique training weeks?</span><button type="button" role="switch" aria-labelledby="unique-weeks-label" aria-checked={unique} disabled={!workoutMode && !unique && Number(duration) === 1} onClick={toggleUnique}>{unique ? 'Yes' : 'No'}</button></div></div>}
-      {unique && <label>Number of Unique weeks<select aria-label="Number of Unique weeks" aria-invalid={!!errors.weeks} value={form.weeks?.length ?? ''} onChange={(e) => weekCount(Number(e.target.value))}><option value="" disabled>Choose</option>{form.weeks && !divisors.includes(form.weeks.length) && <option value={form.weeks.length} disabled>{form.weeks.length}</option>}{divisors.map((value) => <option key={value} value={value}>{value}</option>)}</select>{errors.weeks && <span role="alert">{errors.weeks}</span>}</label>}
+      {!workoutMode && <div className="duration-row"><Field label="Duration (weeks)" required={!original || original.durationWeeks !== undefined} inputMode="numeric" value={duration} error={errors.durationWeeks} onChange={(e) => { setDuration(e.target.value); setErrors({}) }} onBlur={() => { const n = Number(duration); if (Number.isSafeInteger(n) && n > 0 && form.weeks?.every(w => w.programWeeks === undefined)) change(current => ({ ...current, weeks: current.weeks?.map((w,i) => ({ ...w, programWeeks: n % current.weeks!.length === 0 ? programWeeks.filter(p => (p - 1) % current.weeks!.length === i) : [] })) })); if (Number.isSafeInteger(n) && n > 0 && form.weeks?.some(w => w.programWeeks?.some(p => p > n))) setConfirm({ title: 'Reduce duration?', message: 'Assignments after the new duration will be removed. Week type content is kept.', action: () => change(current => ({ ...current, durationWeeks: n, weeks: current.weeks?.map(w => ({ ...w, programWeeks: w.programWeeks?.filter(p => p <= n) })) })) }) }} /><div className="unique-toggle"><span id="unique-weeks-label">Unique training weeks?</span><button type="button" role="switch" aria-labelledby="unique-weeks-label" aria-checked={unique} onClick={toggleUnique}>{unique ? 'Yes' : 'No'}</button></div></div>}
+      {unique && !legacyUnbounded && <label>Number of unique week types<select aria-label="Number of unique week types" aria-invalid={!!errors.weeks} value={form.weeks?.length ?? ''} onChange={(e) => weekCount(Number(e.target.value))}><option value="" disabled>Choose</option>{form.weeks && !programWeeks.includes(form.weeks.length) && <option value={form.weeks.length} disabled>{form.weeks.length}</option>}{programWeeks.map((value) => <option key={value} value={value}>{value}</option>)}</select>{errors.weeks && <span role="alert">{errors.weeks}</span>}</label>}
+      {unique && !legacyUnbounded && form.weeks?.map((week, index) => <section className="week-assignment" key={week.id} aria-label={`Assign Week Type ${index + 1}`}><h3>Week Type {index + 1}</h3><div className="week-pills" aria-label="Program weeks">{programWeeks.map(n => <button type="button" key={n} aria-label={`Week ${n}`} aria-pressed={week.programWeeks?.includes(n) ?? false} disabled={form.weeks!.some(w => w.id !== week.id && w.programWeeks?.includes(n))} onClick={() => change(current => ({ ...current, weeks: current.weeks!.map(w => w.id !== week.id ? w : { ...w, programWeeks: w.programWeeks?.includes(n) ? w.programWeeks.filter(x => x !== n) : [...w.programWeeks ?? [], n].sort((a,b) => a-b) }) }))}>{n}</button>)}</div></section>)}
       {!workoutMode && original?.durationWeeks === undefined && original && <p className="muted">Legacy plan: blank keeps its unbounded duration. Enter weeks to set a duration for new schedules. Existing schedules change only through their duration preview.</p>}
       {!workoutMode && !unique && <label>Workouts per week<select aria-label="Workouts per week" value={form.days.length} onChange={(e) => count(Number(e.target.value))}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>}
       <TextareaField label="Instructions" maxLength={20000} value={form.instructions ?? ''} error={errors.instructions} onChange={(e) => change((current) => ({ ...current, instructions: e.target.value }))} />
       <TextareaField label="Note (optional):" maxLength={20000} value={form.notes ?? ''} onChange={(e) => change((current) => ({ ...current, notes: e.target.value, noteOverride: true }))} />
       </div>
       {!workoutMode && !unique && <p role="status">{form.days.length} {form.days.length === 1 ? 'workout' : 'workouts'} · {7 - form.days.length} rest days</p>}
-      {planWeeks(form).map((week, weekIndex) => <section key={week.id ?? 'repeating'} aria-label={unique ? `Week ${weekIndex + 1}` : undefined}>
-      {unique && <><hr /><h3 className="unique-week-heading">Week {weekIndex + 1}</h3><label>Workouts for Week {weekIndex + 1}<select aria-label={`Workouts for Week ${weekIndex + 1}`} value={week.days.length} onChange={(e) => count(Number(e.target.value), week.id)}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></>}
+      {planWeeks(form).map((week, weekIndex) => <section key={week.id ?? 'repeating'} aria-label={unique ? `Week Type ${weekIndex + 1}` : undefined}>
+      {unique && <><hr /><h3 className="unique-week-heading">Week Type {weekIndex + 1}</h3><p>{assignedWeeksLabel(week.programWeeks)}</p><label>Workouts for Week Type {weekIndex + 1}<select aria-label={`Workouts for Week Type ${weekIndex + 1}`} value={week.days.length} onChange={(e) => count(Number(e.target.value), week.id)}>{[1, 2, 3, 4, 5, 6, 7].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></>}
       {week.days.map((day, index) => <section className={workoutMode ? "standalone-workout-builder" : "plan-day"} key={day.id} aria-label={`Workout ${index + 1}: ${day.name}`} data-day-id={day.id}>
         {!workoutMode && <><h3>Workout {index + 1}</h3>
         <Field label={`Workout ${index + 1} name`} required maxLength={120} value={day.name} error={errors[`days.${form.days.indexOf(day)}.name`]} onChange={(e) => updateDay(day.id, (item) => ({ ...item, name: e.target.value }))} />

@@ -1,4 +1,5 @@
-import { validateBackupData as validateLegacyBackup } from './backup-v18.ts'
+import { workoutResolver } from '../lib/workout-identity.ts'
+import { validateBackupData as validateLegacyBackup } from './backup-v19.ts'
 import { intervalStateSchema as v14IntervalStateSchema, intervalPhases as legacyIntervalPhases } from './interval-legacy.ts'
 import { repeatCircuitSchema, legacyCircuitSchema } from './circuit.ts'
 import { trainingTypeSchema, assertSameTrainingType } from './training-type.ts'
@@ -19,7 +20,7 @@ import { assessSession, sessionInputSchema, validateDraftInput, type CompletedSe
 import { monday, validZone } from '../lib/calendar-dates.ts'
 import { validateTimeContext } from '../lib/measurement-dates.ts'
 
-export const BACKUP_VERSION = 19
+export const BACKUP_VERSION = 20
 const LEGACY_SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Wait for Draft saved locally in every training tab before exporting.'
 export const SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Apply notes and wait until Saving disappears without an error in every training tab before exporting.'
 export interface ProfileSnapshot {
@@ -38,7 +39,7 @@ const number = z.number().finite().nonnegative(), integer = number.int().max(Num
 const recorded = z.discriminatedUnion('skipped', [z.object({ skipped: z.literal(true) }).strict(), z.object({ skipped: z.literal(false), weightKg: number, load: number, unit: weightUnitSchema, reps: integer, rir: integer.optional() }).strict()])
 export const assetSchema = z.object({ ...owned, createdAt: time, role: z.enum(['avatar', 'progress']), width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), bytes: z.number().int().positive().max(5 * 1024 * 1024), path: z.string().regex(/^photos\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/i) }).strict()
 export type BackupAsset = z.infer<typeof assetSchema>
-export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19; assets: BackupAsset[] }
+export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20; assets: BackupAsset[] }
 // Validation never replaces the original records with Zod's parsed/transformed output.
 // The JSON payload retains saved text, optional-field presence, array order and snapshots.
 export const v4BackupDataSchema = z.object({
@@ -114,7 +115,7 @@ export const v9BackupDataSchema = v8BackupDataSchema.extend({
   sessions: z.array(v8BackupDataSchema.shape.sessions.element.extend({ structure: sessionStructureSchema.extend({ exercises: sessionStructureSchema.shape.exercises.min(1) }).optional() })),
 })
 const cycleDay = daySchema.extend({ exercises: z.array(daySchema.shape.exercises.element.extend({ setIds: z.array(id).min(1).max(100).optional() })).min(1).max(100) })
-const cycleStructure = { days: z.array(cycleDay).min(1), weeks: z.array(weekSchema).min(2).optional() }
+const cycleStructure = { days: z.array(cycleDay).min(1), weeks: z.array(weekSchema).min(1).optional() }
 export const v10BackupDataSchema = v9BackupDataSchema.extend({
   backupSchemaVersion: z.literal(10),
   plans: z.array(v9BackupDataSchema.shape.plans.element.extend(cycleStructure)),
@@ -177,7 +178,7 @@ export const backupDataSchema = v13BackupDataSchema.extend({
     intervalInputSchema.omit({ tagNames: true }).extend({ ...archived, tagIds: z.array(id), mergedIntoId: id.optional(), mergedAt: time.optional(), mergeOperationId: id.optional() }).strict(),
   ])),
   plans: z.array(v13BackupDataSchema.shape.plans.element.extend({ noteOverride: z.boolean().optional(), trainingType: trainingTypeSchema.optional(), days: z.array(typedDay).min(1) })),
-  workouts: z.array(typedDay.omit({ sourceWorkoutId: true, publishedWorkoutId: true }).extend(archived)),
+  workouts: z.array(typedDay.omit({ sourceWorkoutId: true, publishedWorkoutId: true }).extend({ ...archived, mergedIntoId: id.optional(), mergedAt: time.optional(), mergeOperationId: id.optional() })),
   schedules: z.array(v13BackupDataSchema.shape.schedules.element.extend({
     revisions: z.array(v13BackupDataSchema.shape.schedules.element.shape.revisions.element.extend({ planNotes: planInstructionsSchema, days: z.array(typedDay).min(1) })).min(1),
     outcomes: z.array(v13BackupDataSchema.shape.schedules.element.shape.outcomes.unwrap().element.extend({ planNotes: planInstructionsSchema, day: typedDay })).optional(),
@@ -187,7 +188,7 @@ export const backupDataSchema = v13BackupDataSchema.extend({
 })
 export const inventorySchema = z.object({ path: z.string(), bytes: z.number().int().nonnegative(), sha256: z.string().regex(/^[0-9a-f]{64}$/), mediaType: z.string() }).strict()
 export const manifestSchema = z.object({
-  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13), z.literal(14), z.literal(15), z.literal(16), z.literal(17), z.literal(18), z.literal(19)]), databaseSchemaVersion: z.union([z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13)]),
+  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13), z.literal(14), z.literal(15), z.literal(16), z.literal(17), z.literal(18), z.literal(19), z.literal(20)]), databaseSchemaVersion: z.union([z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13), z.literal(14)]),
   app: z.object({ name: z.literal('boros'), version: z.string().min(1) }).strict(), exportedAt: time, snapshotAt: time,
   profile: z.object({ id, name: z.string(), kind: z.enum(['guest', 'named']) }).strict(), snapshotPolicy: z.union([z.literal(LEGACY_SNAPSHOT_POLICY), z.literal(SNAPSHOT_POLICY)]),
   counts: z.record(z.number().int().nonnegative()), csvRows: z.record(z.number().int().nonnegative()),
@@ -208,7 +209,7 @@ function equalRecord(a: unknown, b: unknown): boolean {
   return keys.length === other.length && keys.every((key, index) => key === other[index] && equalRecord(left[key], right[key]))
 }
 export function validateBackupData(data: BackupData) {
-  if (data.backupSchemaVersion <= 18) return validateLegacyBackup(data as import('./backup-v18.ts').BackupData)
+  if (data.backupSchemaVersion <= 19) return validateLegacyBackup(data as import('./backup-v19.ts').BackupData)
   const fail = (message: string): never => { throw new Error(`Backup cannot be completed: ${message}. Reopen the affected record and repair it before retrying; source data was not changed.`) }
   const validation = (data.backupSchemaVersion === 1 ? legacyBackupDataSchema : data.backupSchemaVersion === 2 ? v2BackupDataSchema : data.backupSchemaVersion === 3 ? v3BackupDataSchema : data.backupSchemaVersion === 4 ? v4BackupDataSchema : data.backupSchemaVersion === 5 ? v5BackupDataSchema : data.backupSchemaVersion === 6 ? v6BackupDataSchema : data.backupSchemaVersion === 7 ? v7BackupDataSchema : data.backupSchemaVersion === 8 ? v8BackupDataSchema : data.backupSchemaVersion === 9 ? v9BackupDataSchema : data.backupSchemaVersion === 10 ? v10BackupDataSchema : data.backupSchemaVersion === 11 ? v11BackupDataSchema : data.backupSchemaVersion === 12 ? v12BackupDataSchema : data.backupSchemaVersion === 13 ? v13BackupDataSchema : data.backupSchemaVersion === 14 ? v14BackupDataSchema : backupDataSchema).safeParse(data)
   if (!validation.success) { const issue = validation.error.issues[0]; fail(`invalid saved ${issue.path.join('.')}: ${issue.message}`) }
@@ -223,13 +224,22 @@ export function validateBackupData(data: BackupData) {
   const deleted = data.deletedSources ?? [], deletedKeys = new Set<string>()
   for (const item of deleted) {
     const key = `${item.kind}:${item.id}`
-    if (item.profileId !== data.profile.id || deletedKeys.has(key) || (item.kind === 'exercise' ? templates : item.kind === 'workout' ? workouts : plans).has(item.id) || item.kind !== 'exercise' && item.mergedIntoId) fail('invalid deleted source identity')
+    if (item.profileId !== data.profile.id || deletedKeys.has(key) || (item.kind === 'exercise' ? templates : item.kind === 'workout' ? workouts : plans).has(item.id) || item.kind === 'plan' && item.mergedIntoId) fail('invalid deleted source identity')
     deletedKeys.add(key)
   }
   const resolve = exerciseResolver(data.profile.id, [...data.exercises, ...deleted.filter(t => t.kind === 'exercise')])
   for (const item of deleted.filter(t => t.kind === 'exercise')) resolve(item.id)
   const hasExercise = (id: string) => templates.has(id) || deletedKeys.has(`exercise:${id}`)
   const hasWorkout = (id: string) => workouts.has(id) || deletedKeys.has(`workout:${id}`)
+  const resolveWorkout=workoutResolver(data.profile.id,[...data.workouts,...deleted.filter(t=>t.kind==='workout')])
+  for(const item of [...data.workouts,...deleted.filter(t=>t.kind==='workout')]) resolveWorkout(item.id)
+  for(const item of data.workouts) {
+    if(item.mergedIntoId) {
+      if(!item.mergedAt || !item.mergeOperationId || item.activeNameKey!==undefined) fail('invalid retired workout metadata')
+      const target=workouts.get(resolveWorkout(item.id));if(target) assertSameTrainingType(item,target)
+    } else if(item.mergedAt || item.mergeOperationId) fail('incomplete workout merge metadata')
+  }
+
   for (const exercise of data.exercises) {
     if (exercise.mergedIntoId) {
       if (!exercise.mergedAt || !exercise.mergeOperationId || exercise.activeNameKey !== undefined) fail('invalid retired exercise metadata')
@@ -273,7 +283,7 @@ export function validateBackupData(data: BackupData) {
       changeIds.add(change.id)
     })
     const ids = new Set<string>()
-    for (const item of schedule.revisions) { if (ids.has(item.id)) fail(`schedule ${schedule.id} has duplicate revision ${item.id}`); ids.add(item.id); validateMapping(item.mapping, item.days, item.weeks); planInputSchema.parse({ trainingType: item.days[0]?.trainingType, name: item.planName, days: item.days, weeks: item.weeks, durationWeeks: (schedule.durationChanges?.findLast((c) => c.effectiveFrom <= item.effectiveFrom) ?? schedule).durationWeeks }); if (item.effectiveUntil && item.effectiveUntil < item.effectiveFrom) fail(`schedule ${schedule.id} has reversed revision dates`) }
+    for (const item of schedule.revisions) { if (ids.has(item.id)) fail(`schedule ${schedule.id} has duplicate revision ${item.id}`); ids.add(item.id); validateMapping(item.mapping, item.days, item.weeks); planInputSchema.parse({ trainingType: item.days[0]?.trainingType, name: item.planName, days: item.days, weeks: item.weeks, durationWeeks: item.weeks?.some(w=>w.programWeeks) ? Math.max(...item.weeks.flatMap(w=>w.programWeeks ?? [])) : (schedule.durationChanges?.findLast((c) => c.effectiveFrom <= item.effectiveFrom) ?? schedule).durationWeeks }); if (item.effectiveUntil && item.effectiveUntil < item.effectiveFrom) fail(`schedule ${schedule.id} has reversed revision dates`) }
     const exceptions = new Set<string>()
     for (const ref of schedule.occurrenceExceptions ?? []) {
       const segment = schedule.revisions.find((r) => r.id === ref.scheduleRevisionId), key = `${ref.scheduledWeek}/${ref.dayId}`

@@ -1,3 +1,4 @@
+import { useSimilarWorkout } from '../create/use-similar-workout'
 import { useTrainingScroll } from './use-training-scroll'
 import { SessionActions } from './SessionActions'
 import { IntervalSequence } from './IntervalSequence'
@@ -17,6 +18,7 @@ import { formatIntervalTime } from '../../schemas/interval-session'
 import { trainingRuntime } from './training-runtime'
 
 export function IntervalSession({ initial, onClose, onCompleted }: { initial: SessionDraft; onClose: () => void; onCompleted: (value: CompletedSession) => void }) {
+  const similarity=useSimilarWorkout()
   useTrainingScroll(initial.profileId, initial.id)
   const { sound, setDirty, registerLeaveGuard } = useWorkspace(), { rememberTraining } = useScreenNavigation()
   const [selectedMode, setSelectedMode] = useState(initial.interval?.mode ?? 'circuit')
@@ -62,7 +64,7 @@ export function IntervalSession({ initial, onClose, onCompleted }: { initial: Se
     if (hasCurrentInput() || error) setConfirm({ title: 'Leave workout?', text: 'This discards this unfinished session.', action: () => void discard() })
     else await discard()
   }
-  const finish = () => void work(async () => { const c = controller.record; const saved = await sessions.complete(c.profileId, c.id, c.revision, { ...c.input, notes }, true, new Date().toISOString(), addLibrary ? { name } : undefined); feedback.cancel(); rememberTraining(); setDirty(false); onCompleted(saved) })
+  const finish = () => void work(async () => { const c = controller.record; const saved = await similarity.save(token => sessions.complete(c.profileId, c.id, c.revision, { ...c.input, notes }, true, new Date().toISOString(), addLibrary ? { name, confirmedSimilar:token } : undefined)); feedback.cancel(); rememberTraining(); setDirty(false); onCompleted(saved) })
   const requestSave = async () => {
     if (!await command('pause')) return
     if (!meaningfulInterval(controller.record.interval)) { setError('Record some active time before saving.'); return }
@@ -95,6 +97,7 @@ export function IntervalSession({ initial, onClose, onCompleted }: { initial: Se
       // and its text available if the write fails; serialized ticks use this note.
       void work(async () => { const c = controller.record; apply(await sessions.update(c.profileId, c.id, c.revision, note === 'workout' ? { ...c.input, notes: value, noteEdited: true } : { ...c.input, exercises: c.input.exercises.map(e => e.id === note ? { ...e, notes: value, noteEdited: true } : e) })); setNote(undefined); setNoteDirty(false) }, false, false)
     }} />}
+    {similarity.dialog}
     {saveCustom && <ActionDialog title="Save custom workout" onClose={() => setSaveCustom(false)} actions={<><button onClick={() => setSaveCustom(false)}>Cancel</button><button disabled={busy} onClick={finish}>Save session</button></>}><label className="check-label"><input type="checkbox" checked={addLibrary} onChange={e => setAddLibrary(e.target.checked)} />Save workout to library</label>{addLibrary && <Field label="Workout name" maxLength={120} value={name} onChange={e => setName(e.target.value)} />}{error && <p role="alert">{error}</p>}</ActionDialog>}
     {confirm && <ConfirmDialog title={confirm.title} confirmLabel={confirm.label ?? "Confirm"} busy={busy} onCancel={closeConfirm} onConfirm={() => { const action = confirm.action; setConfirm(undefined); action() }}><p>{confirm.text ?? 'Discard the affected pending input?'}</p></ConfirmDialog>}
   </section>

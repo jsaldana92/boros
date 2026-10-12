@@ -4,7 +4,7 @@ import { trainingTypeName, trainingTypeOf } from '../../schemas/training-type'
 import { planSubtitle } from './plan-subtitle'
 import { useState } from 'react'
 import { ActionDialog } from '../../components/ui/ConfirmDialog'
-import { planWeeks, trainingBlocks, type Plan, type PlanExercise, type TrainingDay } from '../../schemas/plan'
+import { assignedWeeksLabel, planWeeks, trainingBlocks, type Plan, type PlanExercise, type TrainingDay } from '../../schemas/plan'
 import { DetailsActions, DetailsActionsButton } from './DetailsActions'
 import { prescriptionSummary } from './prescription-summary'
 
@@ -29,7 +29,7 @@ export function PlanDetails({ plan, busy, error, onClose, onEdit, onDuplicate, o
     <ActionDialog title={plan.name} className="plan-details" onClose={onClose}
       headerActions={<DetailsActionsButton label="Plan actions" expanded={actions} onClick={() => setActions(true)} />}>
       <div className="plan-details-meta"><p>{planSubtitle(plan)}</p><p>{trainingTypeName(trainingTypeOf(plan))}</p></div>
-      {planWeeks(plan).map((week, index) => <div key={week.id ?? index}>{plan.weeks && <><hr /><h3 className="unique-week-heading">Week {index + 1}</h3></>}{week.days.map((day) => <section className="plan-details-day" key={day.id} aria-label={day.name}>
+      {planWeeks(plan).map((week, index) => <div key={week.id ?? index}>{plan.weeks && <><hr /><h3 className="unique-week-heading">Week Type {index + 1}</h3>{week.programWeeks && <p>{assignedWeeksLabel(week.programWeeks)}</p>}</>}{week.days.map((day) => <section className="plan-details-day" key={day.id} aria-label={day.name}>
         <hr /><h3>{day.name}</h3>
         <WorkoutSummary day={day} />
       </section>)}</div>)}

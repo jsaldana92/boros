@@ -1,3 +1,4 @@
+import { workoutResolver } from '../lib/workout-identity.ts'
 import { currentInstructions, currentPlanInstructions, currentScheduleInstructions } from './instructions.ts'
 import { inheritNotes } from '../lib/note-inheritance.ts'
 import { claimWorkout, releaseWorkout } from './active-workout.ts'
@@ -106,7 +107,7 @@ export function sessionService(database: BorosDatabase) {
     },
     async startStandalone(profileId: string, workoutId?: string, trainingType: TrainingType = 'strength') {
       return database.transaction('rw', tables, async () => {
-        const profile = await owner(profileId), source = workoutId ? await database.workouts.get([profileId, workoutId]) : undefined
+        const profile = await owner(profileId), all = await database.workouts.where('profileId').equals(profileId).toArray(), source = workoutId ? all.find(w => w.id === workoutResolver(profileId,all)(workoutId)) : undefined
         if (workoutId && (!source || source.archivedAt)) throw new Error('This workout is unavailable. Choose an active workout.')
         const day = source ? { ...structuredClone(workoutToInput(source)), sourceWorkoutId: source.id } : { ...newDay(1, trainingType), name: 'Workout' }, now = new Date().toISOString()
         const value: SessionDraft = { id: createId(), profileId, revision: 1, source: source ? { kind: 'workout', workoutId: source.id } : { kind: 'custom' }, sourceDayId: day.id, timeZone: browserZone(), day, ...(day.trainingType === 'interval' ? { interval: initialInterval(day) } : {}), structure: initialStructure(day), input: blankSession(day, profile.weightUnit), startedAt: now, updatedAt: now }
@@ -181,7 +182,7 @@ export function sessionService(database: BorosDatabase) {
         await stopOwned(profileId, id); await database.drafts.put(result); return result
       })
     },
-    async complete(profileId: string, id: string, revision: number, raw: SessionInput, allowPartial: boolean, completedAt = new Date().toISOString(), library?: { name: string }) {
+    async complete(profileId: string, id: string, revision: number, raw: SessionInput, allowPartial: boolean, completedAt = new Date().toISOString(), library?: { name: string; confirmedSimilar?: string }) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
         const committed = await database.sessions.get([profileId, id]); if (committed) return committed
@@ -211,8 +212,8 @@ export function sessionService(database: BorosDatabase) {
               while (await database.workouts.where('[profileId+activeNameKey]').equals([profileId, nameKey(`Custom Workout (${number})`)]).first()) number++
               name = `Custom Workout (${number})`
             }
-            const template = await workoutService(database).save(profileId, { ...duplicateDay(value.day), name })
-            source = { kind: 'custom', workoutId: template.id }
+            const template = await workoutService(database).save(profileId, { ...duplicateDay(value.day), name }, undefined, false, library.confirmedSimilar)
+            source = { kind: 'custom', workoutId: template.id }; name = template.name
           }
           savedDay = { ...savedDay, name }
         }

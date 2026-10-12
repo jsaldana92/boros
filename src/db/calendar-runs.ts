@@ -1,15 +1,16 @@
+import { weekSnapshot, planInstructionsSnapshot } from '../schemas/plan.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { scheduleService } from './schedules.ts'
 import { assertCalendarAssignment } from './calendar-assignment.ts'
 import { runLifecycle } from '../lib/run-progress.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { localToday, monday } from '../lib/calendar-dates.ts'
-import { appendRevision, revisionAt, scheduleInputSchema, validateMapping, type Mapping, type OccurrenceRef, type ScheduleInput } from '../schemas/schedule.ts'
+import { appendRevision, programEnd, revisionAt, scheduleInputSchema, validateMapping, type Mapping, type OccurrenceRef, type ScheduleInput, type ScheduleRevision } from '../schemas/schedule.ts'
 import { z } from 'zod'
 import { linkActivePlan } from './active-plans.ts'
 
 export interface StagedPlan { id: string; input: ScheduleInput }
-export interface Reassignment { profileId: string; runId: string; revision: number; mapping: Mapping; effectiveFrom: string; fingerprint: string; protectedCount: number }
+export interface Reassignment { profileId: string; runId: string; revision: number; mapping: Mapping; effectiveFrom: string; fingerprint: string; protectedCount: number; source: ScheduleRevision; durationWeeks?: number }
 export function calendarRunService(database: BorosDatabase) {
   const tables = [database.profiles, database.plans, database.schedules, database.drafts, database.sessions]
   const inspect = async (profileId: string, runId: string, revision: number, mapping?: Mapping) => {
@@ -19,8 +20,13 @@ export function calendarRunService(database: BorosDatabase) {
     const sessions = (await database.sessions.where('profileId').equals(profileId).toArray()).filter((s) => s.occurrence?.scheduleId === runId)
     const drafts = (await database.drafts.where('profileId').equals(profileId).toArray()).filter((d) => d.occurrence?.scheduleId === runId)
     if (runLifecycle(run, sessions).previous) throw new Error('This run has ended. Add the plan as a new run to continue.')
-    const effectiveFrom = [run.startWeek, monday(localToday(run.timeZone))].sort().at(-1)!
-    const source = revisionAt(run, effectiveFrom) ?? run.revisions.at(-1)!
+    const plan = await database.plans.get([profileId, run.planId])
+    const repair = run.revisions.findLast(r => r.needsRepair && (!r.effectiveUntil || r.effectiveUntil > localToday(run.timeZone)))
+    if (repair && !plan) throw new Error('The source plan is unavailable. Restore it before repairing assignments.')
+    const effectiveFrom = [run.startWeek, monday(localToday(run.timeZone)), repair?.effectiveFrom ?? run.startWeek].sort().at(-1)!
+    const previous = revisionAt(run, effectiveFrom) ?? run.revisions.at(-1)!
+    const source = repair && plan ? { ...previous, planRevision: plan.revision, planName: plan.name, ...planInstructionsSnapshot(plan.instructions, plan.notes), days: structuredClone(plan.days), weeks: undefined, ...weekSnapshot(plan) } : previous
+    const durationWeeks = repair ? plan!.durationWeeks : (run.durationChanges?.at(-1) ?? run).durationWeeks
     if (mapping) validateMapping(mapping, source.days, source.weeks)
     // Persist references, not reconstructed dates. An opened draft is protected
     // even before its first input, and future recorded work is retained too.
@@ -28,7 +34,7 @@ export function calendarRunService(database: BorosDatabase) {
     for (const ref of [...(run.occurrenceExceptions ?? []), ...sessions.map((s) => s.occurrence!), ...drafts.map((d) => d.occurrence!), ...(run.outcomes ?? []).filter((o) => o.status !== 'pending').map((o) => o.ref)]) {
       if (ref.scheduledWeek >= effectiveFrom) protectedRefs.set(`${ref.scheduledWeek}/${ref.dayId}`, ref)
     }
-    const proposal: Reassignment = { profileId, runId, revision, mapping: structuredClone(mapping ?? source.mapping), effectiveFrom, fingerprint: JSON.stringify([run, sessions, drafts]), protectedCount: protectedRefs.size }
+    const proposal: Reassignment = { profileId, runId, revision, mapping: structuredClone(mapping ?? source.mapping), effectiveFrom, fingerprint: JSON.stringify([run, plan, sessions, drafts]), protectedCount: protectedRefs.size, source, durationWeeks }
     return { run, source, protectedRefs, proposal }
   }
   return {
@@ -70,6 +76,7 @@ export function calendarRunService(database: BorosDatabase) {
         const base = { ...run, revisions: run.revisions.map((r) => run.kind === 'unscheduled' ? { ...r, unscheduled: true as const } : r) }
         const { unscheduled: _oldKind, effectiveUntil: _oldEnd, ...snapshot } = source
         const next = { ...base, kind: undefined, revision: run.revision + 1, updatedAt: now,
+          ...(proposal.durationWeeks !== (run.durationChanges?.at(-1) ?? run).durationWeeks ? { durationChanges: [...(run.durationChanges ?? []).filter(c => c.effectiveFrom < proposal.effectiveFrom), { id: createId(), effectiveFrom: proposal.effectiveFrom, durationWeeks: proposal.durationWeeks, endDate: programEnd(run.startWeek, proposal.durationWeeks, run.excludedWeeks) }] } : {}),
           occurrenceExceptions: [...(run.occurrenceExceptions ?? []).filter((ref) => ref.scheduledWeek < proposal.effectiveFrom), ...protectedRefs.values()],
           revisions: appendRevision(base, { ...snapshot, id: createId(), createdAt: now, effectiveFrom: proposal.effectiveFrom, mapping: proposal.mapping, needsRepair: false }),
         }

@@ -1,3 +1,4 @@
+import { workoutResolver } from '../../lib/workout-identity.ts'
 import Papa from 'papaparse'
 import type { AnalysisSnapshot } from '../../db/analysis.ts'
 import type { CompletedSession } from '../../schemas/session.ts'
@@ -9,24 +10,25 @@ import { fromKg, displayNumber, effectiveProfileName } from '../../schemas/profi
 import { spreadsheetCell } from './csv.ts'
 
 export const ANALYSIS_COLUMNS = ('username,date,time,type,plan,workout,circuit,exercise,reps_target,reps,weight,rir_target,rir,exercise_time_target,exercise_time,plan_instructions,plan_notes,workout_instructions,workout_notes,exercise_instructions,exercise_notes,youtube_link,' +
-  'session_id,plan_instance_id,workout_occurrence_id,exercise_id,exercise_occurrence_id,set_number,circuit_execution,weight_unit,status,performed_at_utc,time_source,circuit_id,phase_id,workout_status,time_zone').split(',')
+  'session_id,plan_instance_id,workout_occurrence_id,exercise_id,exercise_occurrence_id,set_number,circuit_execution,weight_unit,status,performed_at_utc,time_source,circuit_id,phase_id,workout_status,time_zone,workout_id').split(',')
 export type AnalysisRow = Record<string, string | number>
 const optional = (text?: string) => text === undefined || text === '' ? 'None' : text
 const target = (range?: { min: number; max: number }) => range ? range.min === range.max ? String(range.min) : `${range.min}-${range.max}` : 'None'
 const seconds = (ms?: number) => ms === undefined ? 'None' : String(ms / 1000)
 
 export function analysisRows(snapshot: AnalysisSnapshot): AnalysisRow[] {
-  const { profile, timeZone } = snapshot, resolve = exerciseResolver(profile.id, snapshot.identities)
-  const rows: AnalysisRow[] = [], format = new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  const { profile, timeZone } = snapshot, resolve = exerciseResolver(profile.id, snapshot.identities), resolveWorkout = workoutResolver(profile.id,snapshot.workoutIdentities)
+  const rows: AnalysisRow[] = [], format = new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
   const dateFields = (at: string, basis: string) => {
     const parts = Object.fromEntries(format.formatToParts(new Date(at)).map(p => [p.type,p.value]))
-    return { date: `${parts.day}/${parts.month}/${parts.year}`, time: `${parts.hour}:${parts.minute}`, performed_at_utc: new Date(at).toISOString(), time_source: basis, time_zone: timeZone }
+    return { date: `${parts.day}/${parts.month}/${parts.year}`, time: `${parts.hour}:${parts.minute}:${parts.second}`, performed_at_utc: new Date(at).toISOString(), time_source: basis, time_zone: timeZone }
   }
   const append = (record: CompletedSession | OccurrenceOutcome, schedule?: Schedule) => {
     const saved = 'completedAt' in record ? record : undefined, marker = saved ? undefined : record as OccurrenceOutcome
     const day = record.day, planned = !!(saved?.sourcePlanId ?? schedule?.planId), at = saved?.completedAt ?? marker!.recordedAt
     const draft = saved && snapshot.drafts.find(d => d.id === saved.draftId && d.profileId === profile.id)
-    const common: AnalysisRow = {
+    const workoutId = saved?.source?.workoutId ?? day.publishedWorkoutId ?? day.sourceWorkoutId
+    const common: AnalysisRow = { workout_id: workoutId ? resolveWorkout(workoutId) : 'None',
       ...dateFields(at, saved ? 'session_completed_at' : 'outcome_recorded_at'), username: effectiveProfileName(profile), type: day.trainingType ?? 'strength',
       plan: planned ? record.planName ?? 'None' : 'NA', workout: day.name,
       plan_instructions: planned ? optional(record.planInstructions) : 'NA', plan_notes: planned ? optional(record.planNotes) : 'NA',

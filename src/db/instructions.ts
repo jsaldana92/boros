@@ -1,3 +1,4 @@
+import { workoutResolver } from '../lib/workout-identity.ts'
 import type { BorosDatabase } from './database.ts'
 import type { TrainingDay, Plan } from '../schemas/plan.ts'
 import type { Exercise } from '../schemas/exercise.ts'
@@ -10,7 +11,8 @@ import { templateReference } from '../lib/template-ownership.ts'
 // existing drafts. Missing sources retain the copy's last usable snapshot.
 export function instructionView<T extends TrainingDay>(day: T, exercises: Exercise[], workouts: Workout[], profileId: string, baseWorkout = false): T {
   const resolve = exerciseResolver(profileId, exercises), next = structuredClone(day)
-  const source = !baseWorkout && workouts.find(w => w.profileId === profileId && w.id === (day.publishedWorkoutId ?? day.sourceWorkoutId))
+  const workoutId = day.publishedWorkoutId ?? day.sourceWorkoutId
+  const source = !baseWorkout && workoutId && workouts.find(w => w.profileId === profileId && w.id === workoutResolver(profileId,workouts)(workoutId))
   if (source) { if (source.instructions === undefined) delete next.instructions; else next.instructions = source.instructions }
   next.exercises.forEach(e => {
     const id = templateReference(e), source = id && exercises.find(x => x.profileId === profileId && x.id === resolve(id))

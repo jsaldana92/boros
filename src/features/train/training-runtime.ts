@@ -46,7 +46,7 @@ class TrainingRuntime {
   intervalFor(initial: SessionDraft) {
     if (this.interval?.record.id !== initial.id || this.interval.record.profileId !== initial.profileId) {
       this.interval?.dispose()
-      this.interval = new IntervalController(initial, new IntervalFeedback({ start: alertAudio('circuit-start.mp3'), warning: alertAudio('circuit-5s-warning.mp3'), end: alertAudio('circuit-end.mp3'), complete: alertAudio('rest-complete.mp3') }, window.speechSynthesis))
+      this.interval = new IntervalController(initial, new IntervalFeedback({ start: alertAudio('circuit-start.mp3'), warning: alertAudio('circuit-10s-warning.mp3'), end: alertAudio('circuit-end.mp3'), complete: alertAudio('rest-complete.mp3') }, window.speechSynthesis))
       this.interval.setEnvironment(this.sound, this.visible)
       void this.interval.recover()
     }

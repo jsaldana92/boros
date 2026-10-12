@@ -1,3 +1,6 @@
+import { z } from 'zod'
+import { workoutResolver } from '../lib/workout-identity.ts'
+import { SimilarWorkoutError, similarWorkouts, similarityToken } from '../lib/workout-comparison.ts'
 import { currentInstructions } from './instructions.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import { classifyStrengthRecords } from './training-migration.ts'
@@ -14,18 +17,17 @@ export function workoutService(database: BorosDatabase) {
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => { const value = await database.workouts.get([profileId, id]); if (!value) throw new Error('This workout is unavailable in this profile.'); return value }
   const checkName = async (profileId: string, name: string, ownId?: string) => { const other = await database.workouts.where('[profileId+activeNameKey]').equals([profileId, nameKey(name)]).first(); if (other && other.id !== ownId) throw new Error('An active workout with this name already exists. Choose a different name.') }
-  const checkRevision = (value: Workout, revision: number) => { if (value.revision !== revision) throw new Error('This workout changed in another tab. Your input is kept. Cancel and reopen after copying any changes you need.') }
+  const checkRevision = (value: Workout, revision: number) => { if (value.mergedIntoId) throw new Error('This workout was merged. Reopen the surviving workout.'); if (value.revision !== revision) throw new Error('This workout changed in another tab. Your input is kept. Cancel and reopen after copying any changes you need.') }
   return {
     get: async (profileId: string, id: string) => database.transaction('r', tables, async () => currentInstructions(database, profileId, await get(profileId, id), true)),
-    async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return Promise.all((await database.workouts.where('profileId').equals(profileId).toArray()).map(w => currentInstructions(database, profileId, w, true))) }) },
-    async save(profileId: string, raw: WorkoutInput, existing?: { id: string; revision: number }, importing = false) {
+    async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return Promise.all((await database.workouts.where('profileId').equals(profileId).toArray()).filter(w => !w.mergedIntoId).map(w => currentInstructions(database, profileId, w, true))) }) },
+    async save(profileId: string, raw: WorkoutInput, existing?: { id: string; revision: number }, importing = false, confirmedSimilar?: string) {
       const input = workoutInputSchema.parse(convertIntervalDay(raw))
       classifyStrengthRecords(input)
       return database.transaction('rw', tables, async () => {
         await owner(profileId)
         const old = existing ? await get(profileId, existing.id) : undefined
         if (old) { checkRevision(old, existing!.revision); assertSameTrainingType(old, input) }
-        if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
         if (await database.deletedSources.get([profileId, 'workout', input.id])) throw new Error('This workout was deleted. Your input is kept; create a new workout to save a separate copy.')
         if (!old && await database.workouts.get([profileId, input.id])) throw new Error('This workout was already saved. Reopen it before editing.')
         // Imported snapshots resolve explicit exercise ownership transactionally;
@@ -42,9 +44,40 @@ export function workoutService(database: BorosDatabase) {
             item.source = { kind: 'exercise', id: linked.id }; item.templateId = linked.id
           }
         }
+        const all = await database.workouts.where('profileId').equals(profileId).toArray()
+        const identities = [...await database.exercises.where('profileId').equals(profileId).toArray(), ...(await database.deletedSources.where('profileId').equals(profileId).toArray()).filter(t=>t.kind==='exercise')]
+        const matches = similarWorkouts(profileId,input,all,identities,old?.id)
+        if (matches.length && confirmedSimilar !== similarityToken(matches)) throw new SimilarWorkoutError(matches)
+        if (!old?.archivedAt) {
+          if (confirmedSimilar) {
+            const keys=new Set(all.filter(w=>!w.archivedAt&&!w.mergedIntoId&&w.id!==old?.id).map(w=>w.nameKey))
+            const base=input.name.replace(/(?: \(\d+\))+$/, '')
+            let n=0,name=input.name
+            while(keys.has(nameKey(name))) { const suffix=` (${++n})`;name=base.slice(0,120-suffix.length).trimEnd()+suffix }
+            input.name=name
+          } else await checkName(profileId,input.name,old?.id)
+        }
         const resolved = await currentInstructions(database, profileId, input, true)
         const now = new Date().toISOString(), value: Workout = { ...resolved, trainingType: trainingTypeOf(input), id: old?.id ?? input.id, profileId, nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }
         await database.workouts.put(value); return value
+      })
+    },
+    async merge(profileId: string, from: { id: string; revision: number }, into: { id: string; revision: number }, operationId: string) {
+      z.string().uuid().parse(operationId)
+      if(from.id===into.id) throw new Error('Choose two different workouts.')
+      return database.transaction('rw',tables,async()=>{
+        await owner(profileId)
+        const source=await get(profileId,from.id),destination=await get(profileId,into.id)
+        const all=await database.workouts.where('profileId').equals(profileId).toArray(), resolve=workoutResolver(profileId,all)
+        if(source.mergeOperationId===operationId && source.mergedIntoId===destination.id) return get(profileId,resolve(destination.id))
+        checkRevision(source,from.revision);checkRevision(destination,into.revision);assertSameTrainingType(source,destination)
+        if(source.archivedAt||destination.archivedAt) throw new Error('A workout was archived. Reopen Merge.')
+        all.forEach(w=>resolve(w.id))
+        const now=new Date().toISOString()
+        await database.workouts.put({...source,mergedIntoId:destination.id,mergedAt:now,mergeOperationId:operationId,activeNameKey:undefined,revision:source.revision+1,updatedAt:now})
+        const saved={...destination,revision:destination.revision+1,updatedAt:now}
+        await database.workouts.put(saved)
+        return saved
       })
     },
     async setArchived(profileId: string, id: string, revision: number, archived: boolean) {

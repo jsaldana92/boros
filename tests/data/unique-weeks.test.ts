@@ -43,13 +43,14 @@ async function setup(t: TestContext) {
   const run = await schedules.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: '2026-10-05', timeZone: 'America/New_York', mapping })
   return { db, id, profiles, plans, plan, mapping, schedules, weekly, sessions, calendar, run }
 }
-test('cycle divisors, ordered ownership, set identities and legacy/unbounded compatibility', () => {
-  assert.deepEqual(uniqueWeekCounts(4), [2,4]); assert.deepEqual(uniqueWeekCounts(6), [2,3,6]); assert.deepEqual(uniqueWeekCounts(12), [2,3,4,6,12])
-  for (const n of [0,1,-2,1.5,Infinity,NaN]) assert.deepEqual(uniqueWeekCounts(n), [])
+test('all finite type counts, ordered ownership, set identities and legacy/unbounded compatibility', () => {
+  assert.deepEqual(uniqueWeekCounts(4), [1,2,3,4]); assert.deepEqual(uniqueWeekCounts(6), [1,2,3,4,5,6]); assert.deepEqual(uniqueWeekCounts(12), Array.from({length:12},(_,i)=>i+1))
+  for (const n of [0,-2,1.5,Infinity,NaN]) assert.deepEqual(uniqueWeekCounts(n), [])
   const four = cycleInput([1,2,3,4],12);assert.equal(resolveWeek(four,5).id,four.weeks![0].id);assert.equal(resolveWeek(four,6).id,four.weeks![1].id)
   const input = cycleInput(); assert.equal(planInputSchema.safeParse(input).success,true)
   assert.equal(resolveWeek(input, 3).days[0].id, input.days[0].id)
-  for (const update of [{durationWeeks:3},{durationWeeks:undefined},{weeks:input.weeks!.slice(1)},{weeks:[input.weeks![0],input.weeks![0]]},{days:input.days.slice(1)}]) assert.equal(planInputSchema.safeParse({...input,...update}).success,false)
+  for (const update of [{durationWeeks:3},{weeks:input.weeks!.slice(1)},{weeks:[input.weeks![0],input.weeks![0]]},{days:input.days.slice(1)}]) assert.equal(planInputSchema.safeParse({...input,...update}).success,false)
+  assert.equal(planInputSchema.safeParse({...input,durationWeeks:undefined}).success,true)
   const repeated = {...input,weeks:undefined,days:input.days.slice(0,4),durationWeeks:undefined}; assert.equal(planInputSchema.safeParse(repeated).success,true)
   assert.deepEqual(resolveWeek(repeated,400).days,repeated.days)
   const invalid=structuredClone(input);invalid.days[0].exercises[0].setIds=undefined;assert.equal(planInputSchema.safeParse(invalid).success,false)
@@ -139,7 +140,7 @@ test('populated v5 storage reopens unchanged; v10 backup and both whole-family m
   await legacyWorkspace(db)
   const plan=await planService(db).save(id,cycleInput()),[run]=await weeklyService(db).activate(id,plan.id),e=occurrences(run,run.startWeek,addDays(run.startWeek,6))[0];await sessionService(db).openOccurrence(id,run.id,e.day.id,e.ref.scheduledDate)
   const snapshot=await captureProfile(id,db),backup=await generateBackup(snapshot,'cycles'),read=await readBackup(backup.bytes,()=>{},async()=>{})
-  assert.equal(read.data.backupSchemaVersion, 19);assert.equal(csvTables(read.data).length,40);assert.deepEqual(read.data.plans,JSON.parse(JSON.stringify(snapshot.plans)));assert.equal(backup.manifest.csvRows['csv/unique_weeks.csv'],14)
+  assert.equal(read.data.backupSchemaVersion, 20);assert.equal(csvTables(read.data).length,40);assert.deepEqual(read.data.plans,JSON.parse(JSON.stringify(snapshot.plans)));assert.equal(backup.manifest.csvRows['csv/unique_weeks.csv'],14)
   assert.equal(v9BackupDataSchema.safeParse({...read.data,backupSchemaVersion:9}).success,false)
   for(const action of ['new','import','device'] as const) {
     const restored=await buildRestorePlan(read,action==='new'?undefined:snapshot,action,uid(),'Restored',new Date().toISOString());validateBackupData(canonicalSnapshot(restored.result));const cycle=restored.result.plans.find(p=>p.name==='Alternating')!;assert.deepEqual(cycle.weeks,plan.weeks);assert.deepEqual(cycle.days.map(d=>({...d,exercises:d.exercises.map(({templateId:_template,...e})=>e)})),plan.days);assert.ok(cycle.days.every(d=>d.exercises.every(e=>restored.result.exercises.some(x=>x.id===e.templateId))))

@@ -32,7 +32,7 @@ export class IntervalController {
     this.record = next
     // Deliver a committed boundary immediately. Waiting for the next poll can
     // make a cue stale behind a busy IndexedDB/UI task even in the foreground.
-    if (next.interval) this.feedback.update(next.interval, this.sound && !this.error && !this.mute && !this.suppress, Date.now(), this.visible)
+    if (next.interval) this.feedback.update(next.interval, this.sound, Date.now(), this.visible && !this.error && !this.mute && !this.suppress)
     this.emit()
   }
   work(callback: () => Promise<void>, background = false, clearError = true): Promise<boolean> {
@@ -70,7 +70,7 @@ export class IntervalController {
     if (this.ready && !this.error && this.record.interval?.status === 'running') void this.command('tick').then(ok => {
       if (ok && this.suppress && this.record.interval) { this.feedback.update(this.record.interval, false, Date.now(), visible); this.suppress = false }
     })
-    if (this.record.interval) this.feedback.update(this.record.interval, sound && !this.error && !this.mute && !this.suppress, Date.now(), visible)
+    if (this.record.interval) this.feedback.update(this.record.interval, sound, Date.now(), visible && !this.error && !this.mute && !this.suppress)
   }
   dispose() { this.disposed = true; this.feedback.cancel(); this.emit() }
   retire() { this.retired = true; this.error = 'This workout was saved or removed in another tab. Your input is kept.'; this.dispose() }

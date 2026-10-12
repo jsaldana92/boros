@@ -51,14 +51,36 @@ choosers, trailing 18px type icons, two-line mobile workout names with contained
 dates, compact desktop cards, and picker return anchors that retain builder
 position. Archive retains colored text and keyboard focus with a neutral border.
 
-Saving a plan atomically publishes unpublished workouts to the Workout library.
-Copies stay independent; archived/deleted templates are not silently revived.
+Saving a plan atomically reuses an equivalent active library workout or publishes
+one new template. Each plan occurrence stays independent, including its name,
+notes and prescription. Differing authored content is never discarded to reuse a
+template. Standalone saves show **Similar workout exists**; Cancel keeps input,
+and Save keeps a separate workout with the next available name suffix if needed.
+Workout previews now offer **Merge** for two workouts of the same training type.
+The destination retains its defaults; the source becomes a durable redirect.
+Plan copies, started drafts, historical snapshots and note branches remain intact.
+Archived/deleted templates are not silently revived. Plans cannot be merged.
 Sound still uses the local start/warning/end MP3s and the existing triple
 rest-complete routine only after post-workout rest. Positive ordinary rests now
 speak Rest once at entry, without gaining start/end beeps. Post-workout rest
 speaks Post-Workout Rest. Preparation and zero rests stay silent. Repeated
 activities/rests have distinct cue IDs; Stop produces no end cue.
 Media availability cannot affect timing; speech uses available local voices only.
+
+The supplied `circuit-10s-warning.mp3` plays once at ten seconds remaining in
+each active exercise lasting at least 15 seconds. Shorter exercises, Warm Up and
+rests have no exercise warning. Sound is a browser-wide preference that applies
+and persists independently of Save profile. Off cancels Boros audio/speech and
+attempts one vibration per timer event, where supported. All alerts require a
+visible document; changing Boros tabs or closing a popup keeps the timer running.
+Background return never replays missed cues. This does not override system mute,
+zero volume, browser playback restrictions, or independently controlled YouTube.
+
+Dialogs initially focus a noneditable heading, retain keyboard trapping/Escape
+and focus restoration, and leave intentional editing focused. Mobile text-entry
+controls use at least 16px without restricting zoom. The Existing Workout picker
+uses horizontal cards. Create uses that variant only at **360px and below**;
+ordinary mobile, tablet and desktop arrangements retain their existing geometry.
 
 A positive Post-Workout Rest also has an independent Start. It starts that rest
 immediately, under the same single-timer ownership rule. Pause retains the
@@ -72,15 +94,19 @@ complete restorable ZIP. **Restore Profile from Backup** accepts ZIP only; Clear
 Data keeps its existing confirmation and transaction safeguards. Exports stay
 profile-bound, include saved history only, and do not claim the browser saved a file.
 
-Current contracts: stable **boros database v13**, **backup v19**, **AI v8**.
-V13 adds no stores or record rewrites; optional note provenance, captured plan notes
-and an Interval attempt ledger persist with new/edited records. Backup v19 validates
-and restores those fields, retains 40 CSV tables (with documented new columns), and
-preserves strict v18 and earlier readers. The separate analysis CSV is not a backup.
+Current contracts: stable **boros database v14**, **backup v20**, **AI v9**.
+V14 expands finite editable cyclic plans into explicit program-week assignments,
+preserving week/workout IDs and all historical snapshots. Unbounded legacy plans
+remain compatible until explicitly given a finite duration. Backup v20 preserves
+the assignments and workout merge redirects in JSON and the existing 40 CSV tables.
+Strict v19 and earlier contracts/checksums are validated before promotion. Analysis
+CSV now uses browser-zone `HH:mm:ss`, retaining the stored seconds and separate
+UTC timestamp/time-source metadata, and adds canonical `workout_id` without
+collapsing any set or execution rows. The separate analysis CSV is not a backup.
 The local workout pointer is not exported; restore does not import runtime ownership
 or start timers/audio. Old discarded timing cannot be recovered; unknown time stays
 `None`, distinct from known zero. See the [analysis contract and ownership rules](docs/analysis-csv.md),
-[backup format](docs/backup-format.md), and [verification/owner checks](docs/analysis-verification.md).
+[backup format](docs/backup-format.md), and [current verification/owner checks](docs/week-types-workout-updates.md).
 
 Legacy editable circuits convert to equivalent ordered sections, splitting counts
 and preserving every old rest boundary; e.g. three sets of five rounds with set
@@ -96,8 +122,9 @@ mixing uses feature-detected audio-session support. A visible running timer requ
 an optional screen wake lock. Neither API guarantees locked/background alerts,
 external music ducking/resumption or physical-device playback.
 
-See [Train runtime verification](docs/train-runtime-verification.md) for current
-checks and the seven-step owner test. [Workout actions and rest verification](docs/workout-actions-rest-verification.md)
+See [current verification and owner checks](docs/week-types-workout-updates.md).
+[Train runtime verification](docs/train-runtime-verification.md) records the prior
+runtime checks. [Workout actions and rest verification](docs/workout-actions-rest-verification.md)
 records the preceding design. [Interval repeat verification](docs/interval-repeat-verification.md)
 records the preceding repeat migration. Earlier
 [Strength/Interval](docs/strength-interval-verification.md) and
@@ -117,19 +144,20 @@ same compact, scrollable pills as library browsing; selections and new tags stay
 in the draft until saved. Source names and text stay in their plan copies; newly published library variants use a suffix only to resolve a library-name conflict.
 See [Create verification](docs/create-terminology-verification.md).
 
-Plans now support ordered unique-week cycles as well as the existing repeating
-lineup. Each unique week has 1-7 workouts; its count must divide the finite
-plan duration. Create preserves input during mode/count changes and confirms
-populated reductions. Calendar assigns weekdays separately for each definition.
-Train uses actual program week numbers; postponed weeks do not advance the cycle.
-Progress counts actual prescribed workouts (four weeks alternating four/three workouts
-have 14). Library edits leave existing copies independent. Editing the plan itself
+Plans support **1 through Duration unique week types** as well as the existing
+repeating lineup. Each type has 1-7 workouts and an explicit list of program weeks.
+Every program week belongs to exactly one nonempty type; there is no divisibility
+or repeating-cycle rule for new plans. Create preserves content during duration
+increases and leaves new weeks unassigned; populated reductions require confirmation.
+Calendar assigns weekdays separately for each type. Train uses actual program
+week numbers; gap weeks do not consume a program week. Progress sums the assigned
+workouts for every program week. Library edits leave existing copies independent. Editing the plan itself
 updates eligible unstarted workouts in active runs; started and historical snapshots
 stay protected. Structural and duration changes retain their schedule-review rules. Dirty Create forms use an in-app Cancel/Leave warning, including Settings
 navigation; genuine browser reload/close retains native unload protection.
 
 Create now has **Plan / Workout / Exercise** and a full-width **Import** action.
-The independent Workout library supports editing, duplication, archive/restore and scoped deletion.
+The independent Workout library supports editing, duplication, same-type merging, archive/restore and scoped deletion.
 Add workout in a plan copies a library template into the selected week with fresh
 execution IDs. Editing any copy leaves its template and other copies unchanged.
 
@@ -209,7 +237,7 @@ stays muted; only the atomically claimed countdown completion can play three tim
 Count-up has no percentage/alarm. Sound Off attempts supported vibration; browser
 API availability does not prove a device vibrates, especially in the background.
 
-Create preview menus add Delete (and exercise-only Merge); Show archived adds
+That revision added Delete (and then exercise-only Merge; workouts now also support Merge); Show archived adds
 archived records to the active list. Delete uses stable ownership: exercise and
 workout deletion preserve plan copies/history; plan deletion removes all its owned
 runs/results and leaves an active plan in the same transaction. Confirmations reject

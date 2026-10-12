@@ -1,6 +1,43 @@
-# Boros profile backup, schema 19 (schemas 1-18 supported)
+# Boros profile backup, schema 20 (schemas 1-19 supported)
 
-Current exports pair **backup v19 / database v13**; AI remains **v8**. The stable
+Current exports pair **backup v20 / database v14**; AI is **v9**. The stable
+database name remains `boros`. V14 adds no stores/indexes. It expands only finite
+editable plans with legacy cyclic `weeks` into explicit `programWeeks` arrays,
+retaining the week IDs, day IDs and all prescriptions. Profiles, settings, photos,
+measurements, schedules, drafts and completed sessions are not rewritten. Legacy
+unbounded plans keep their cyclic representation. A failed upgrade aborts the
+transaction and surfaces the error; it never clears or replaces the database.
+
+V20 adds:
+
+- `weeks[].programWeeks`: nonempty positive integer program-week assignments on
+  each stable type. For finite explicit plans, every week 1 through duration must
+  occur exactly once, and type count can be 1 through duration. No divisibility
+  rule applies. Immutable legacy schedule/session snapshots retain their old
+  resolver. A historical schedule revision validates against its own assignment
+  extent, including after a reviewed duration change.
+- Optional workout `mergedIntoId`, `mergedAt`, `mergeOperationId`. Retired sources
+  have no active name key and retain their prescriptions. Validators check
+  profile ownership, complete retirement metadata, same training type, missing
+  destinations and cycles. Workout tombstones may retain a canonical redirect.
+- The same **40 CSV tables**: `unique_weeks.csv` adds a `programWeeks` JSON-array
+  cell to each type/day row; `workouts.csv` adds the three merge metadata columns.
+  JSON plus photos remain authoritative. Analysis CSV is a separate contract.
+
+Original v19 JSON, CSV headers and checksums are checked using frozen model/schema
+copies before promotion to v20. V1–18 continue through their original readers.
+Only editable finite plans are expanded after validation; no old snapshot gains
+invented assignments. Restore remaps workout references and redirects, preserves
+separate performed sessions, and does not import active runtime ownership.
+Ordinary unmerged workout conflicts keep reviewed stable-ID/normalized-name rules.
+Retired sources match by ID only; importing a pre-merge record cannot reactivate
+a source used by retained device history. Invalid combined redirects remain an
+actionable restore error. Deleting the survivor follows its canonical family for
+standalone ownership, retaining plan-owned copies and history with tombstones.
+
+## Previous v19 contract (historical)
+
+V19 exports paired **backup v19 / database v13**; AI was **v8**. The stable
 IndexedDB name is `boros`. V13 changes no stores/indexes and rewrites no records.
 Existing IDs, profiles, selection, measurements, photos and historical snapshots
 remain intact. Failures remain errors, never replacement empty databases.

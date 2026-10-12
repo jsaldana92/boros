@@ -1,3 +1,4 @@
+import { explicitWeeks } from '../schemas/plan.ts'
 import { currentInstructions, currentPlanInstructions } from './instructions.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import { classifyStrengthRecords } from './training-migration.ts'
@@ -50,7 +51,7 @@ export function planService(database: BorosDatabase) {
       })
     },
     async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }, creationId?: string) {
-      const input = planInputSchema.parse({ ...raw, days: raw.days.map(convertIntervalDay) })
+      const input = planInputSchema.parse(explicitWeeks({ ...raw, days: raw.days.map(convertIntervalDay) }))
       classifyStrengthRecords(input)
       if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing plan.') }
       return database.transaction('rw', tables, async () => {

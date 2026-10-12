@@ -30,7 +30,7 @@ export function csvTables(data: BackupData) {
   const librarySets = table('library_sets', 'profileId,libraryExerciseId,setOrder,repsMin,repsMax,rirMin,rirMax')
   const tagLinks = table('exercise_tags', 'profileId,libraryExerciseId,tagId,tagOrder')
   table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : '') + (weekly ? ',notes' : '') + (data.backupSchemaVersion >= 7 ? ',instructions' : '') + typeColumn, data.plans as unknown as Row[])
-  if (libraryWorkouts) table('workouts', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt,instructions,notes' + typeColumn + postRest, data.workouts as unknown as Row[])
+  if (libraryWorkouts) table('workouts', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt,instructions,notes' + typeColumn + postRest + (data.backupSchemaVersion >= 20 ? ',mergedIntoId,mergedAt,mergeOperationId' : ''), data.workouts as unknown as Row[])
   const circuits = typed ? table('circuits', `${scope},circuitId,circuitOrder,name,roundsPerSet,sets,restBetweenSetsSeconds,restAfterCircuitSeconds${repeats ? ",repeat" : ""}`) : []
   const members = typed ? table('circuit_exercises', `${scope},circuitId,exerciseOccurrenceId,exerciseOrder`) : []
   const stateRows = typed ? table('interval_state', 'profileId,ownerKind,ownerId,status,phaseId,elapsedMs,anchorAt,phaseStartedAt' + (timerV2 ? ',engineVersion,mode,executionId,executionMode,circuitId' : '') + (data.backupSchemaVersion >= 19 ? ',activityJson' : '')) : []
@@ -38,7 +38,7 @@ export function csvTables(data: BackupData) {
   const cues = timerV2 ? table('interval_cues', 'profileId,ownerKind,ownerId,executionId,key,kind,phaseId,at') : []
   const phaseRows = typed ? table('interval_phases', 'profileId,ownerKind,ownerId,phaseId,phaseOrder,kind,circuitId,circuitName,exerciseId,exerciseName,templateId,set,round,durationSeconds' + (repeats ? ',repetition' : '')) : []
   const resultRows = typed ? table('interval_results', 'profileId,ownerKind,ownerId,phaseId,elapsedMs,status,startedAt,endedAt,notes') : []
-  const definitions = data.backupSchemaVersion >= 10 ? table('unique_weeks', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,weekId,weekOrder,dayId,dayOrder') : []
+  const definitions = data.backupSchemaVersion >= 10 ? table('unique_weeks', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,weekId,weekOrder,dayId,dayOrder' + (data.backupSchemaVersion >= 20 ? ',programWeeks' : '')) : []
   const days = table('days', `${scope},name${typeColumn}${postRest}${typed ? ',publishedWorkoutId' : ''}${libraryWorkouts ? ",sourceWorkoutId,instructions,notes" : ""}`)
   const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}${data.backupSchemaVersion >= 4 ? ',templateId' : ''}${timingColumns}`)
   const groups = current ? table('supersets', `${scope},groupId,number,blockOrder,restBetweenRoundsSeconds,restAfterGroupSeconds`) : []
@@ -90,7 +90,7 @@ export function csvTables(data: BackupData) {
     if (exercise.notes !== undefined || exercise.noteOverride !== undefined) notes.push({ profileId: data.profile.id, ownerKind: 'library', ownerId: exercise.id, noteKind: 'prescription', text: exercise.notes, noteOverride: exercise.noteOverride })
   }
   const snapshotWeeks = (context: Row, source: WeeklyStructure) => {
-    if (data.backupSchemaVersion >= 10 && source.weeks) planWeeks(source).forEach((week, index) => week.days.forEach((day, d) => definitions.push({ profileId: data.profile.id, ...context, weekId: week.id, weekOrder: index + 1, dayId: day.id, dayOrder: d + 1 })))
+    if (data.backupSchemaVersion >= 10 && source.weeks) planWeeks(source).forEach((week, index) => week.days.forEach((day, d) => definitions.push({ profileId: data.profile.id, ...context, programWeeks: week.programWeeks === undefined ? undefined : JSON.stringify(week.programWeeks), weekId: week.id, weekOrder: index + 1, dayId: day.id, dayOrder: d + 1 })))
     snapshotDays(context, source.days)
   }
   for (const workout of data.workouts ?? []) snapshotDays({ ownerKind: 'workout', ownerId: workout.id }, [workout])

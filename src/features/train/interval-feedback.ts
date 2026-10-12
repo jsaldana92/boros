@@ -18,8 +18,10 @@ export class IntervalFeedback {
   private speechRelease?: () => void
   private cancelSpeech() { try { this.speech?.cancel() } catch { /* Optional. */ } this.speechRelease?.(); this.speechRelease = undefined }
   private focus() { const release = alertFocus().acquire(); const done = () => { release(); this.releases.delete(done) }; this.releases.add(done); return done }
-  constructor(media: IntervalAudio, speech?: SpeechSynthesis) {
+  private vibrate: (ms: number) => void
+  constructor(media: IntervalAudio, speech?: SpeechSynthesis, vibrate = (ms: number) => { if (typeof navigator !== 'undefined') navigator.vibrate?.(ms) }) {
     this.media = media; this.speech = speech
+    this.vibrate = vibrate
     this.completion = new TimerFeedback(() => media.complete, () => {}, () => {})
   }
   cancel() {
@@ -75,10 +77,16 @@ export class IntervalFeedback {
     cues.forEach(c => this.seen.add(c.key))
     if (!this.initialized) { this.initialized = true; this.visible = visible; this.lastAt = now; return }
     const wasVisible = this.visible, gap = this.lastAt !== undefined && now - this.lastAt > 1500; this.visible = visible; this.lastAt = now
-    if (!sound || !visible || !wasVisible || gap || state.status === 'paused' || state.status === 'stopped') { this.cancel(); return }
+    if (!visible || !wasVisible || gap || state.status === 'paused' || state.status === 'stopped') { this.cancel(); return }
+    if (!sound) this.cancel()
     const fresh = unseen.filter(c => now - Date.parse(c.at) >= 0 && now - Date.parse(c.at) < 1500)
     if (!fresh.length) return
     this.cancel()
+    if (!sound) {
+      // Start+spoken name, or end+next start/rest at one boundary, is one alert.
+      for (const _at of new Set(fresh.map(c => c.at))) try { this.vibrate(100) } catch { /* Best effort; never affect the timer. */ }
+      return
+    }
     const rest = fresh.find(c => c.kind === 'rest' && c.phaseId === state.phaseId)
     // End precedes the next start at a zero-rest boundary. The bounded queue is
     // replaced by each newer boundary; media completion never drives the clock.

@@ -1,3 +1,4 @@
+import { explicitWeeks } from '../schemas/plan.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import type { DeletedSource } from '../schemas/deleted-source.ts'
 import type { Workout } from '../schemas/workout.ts'
@@ -78,6 +79,10 @@ export class BorosDatabase extends Dexie {
     this.version(12).stores({ activeWorkouts: 'id' })
     // Optional note provenance, plan-note snapshots and attempt activity. No rewrites.
     this.version(13).stores({})
+    // Expand only finite editable templates; immutable schedule/session snapshots stay intact.
+    this.version(14).stores({}).upgrade(async tx => {
+      await tx.table('plans').toCollection().modify(record => { Object.assign(record, explicitWeeks(record)) })
+    })
   }
 }
 
