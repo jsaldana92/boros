@@ -19,6 +19,7 @@ export function isYouTubeUrl(value: string) {
 }
 export const strengthInputSchema = z.object({
   trainingType: z.literal('strength').optional(),
+  lrDistinction: z.boolean().optional(),
   name: z.string().trim().min(1, 'Enter an exercise name.').max(120, 'Use at most 120 characters.').refine((value) => !!nameKey(value), 'Enter an exercise name.'),
   sets: z.array(setSchema).min(1, 'Add at least one set.').max(100, 'Use at most 100 sets.'),
   restBetweenSeconds: integer(0).optional(),
@@ -29,7 +30,7 @@ export const strengthInputSchema = z.object({
   tutorialUrl: z.string().trim().refine(isYouTubeUrl, 'Use an HTTPS YouTube video URL (watch, youtu.be, shorts, live, or embed).').optional(),
   tagNames: z.array(tagNameSchema).max(50, 'Use at most 50 tags.'),
 }).strict()
-export const intervalInputSchema = strengthInputSchema.omit({ sets: true, restBetweenSeconds: true, restAfterSeconds: true }).extend({
+export const intervalInputSchema = strengthInputSchema.omit({ lrDistinction: true, sets: true, restBetweenSeconds: true, restAfterSeconds: true }).extend({
   trainingType: z.literal('interval'),
   // Empty compatibility collection, never lifting targets or results.
   sets: z.array(z.never()).max(0).default([]),

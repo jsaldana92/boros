@@ -1,3 +1,6 @@
+import { useLRReview } from './use-lr-review'
+import { resolveLRReferences, type LRApprovals } from '../../db/lr-conversion'
+import { templateReference } from '../../lib/template-ownership'
 import { convertIntervalDay } from '../../schemas/interval-conversion'
 import { CircuitFields } from './CircuitFields'
 import { trainingTypeOf } from '../../schemas/training-type'
@@ -24,7 +27,8 @@ function reorder<T>(items: T[], index: number, offset: number) {
   const [item] = result.splice(index, 1); result.splice(index + offset, 0, item)
   return result
 }
-export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false, workoutMode = false }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput) => Promise<{ name: string }>; initialDirty?: boolean; workoutMode?: boolean }) {
+export function PlanEditor({ profileId, initial, original, choices, tags, onClose, onSaved, onSave, initialDirty = false, workoutMode = false }: { profileId: string; initial?: PlanInput; original?: Plan; choices: PrescriptionChoice[]; tags: Tag[]; onClose: () => void; onSaved: (name: string) => void; onSave?: (input: PlanInput, approvals?: LRApprovals) => Promise<{ name: string }>; initialDirty?: boolean; workoutMode?: boolean }) {
+  const lr = useLRReview(profileId)
   const { setDirty, dirty } = useWorkspace()
   const [form, setForm] = useState<PlanInput>(() => initial ? explicitWeeks({ ...structuredClone(initial), days: initial.days.map(convertIntervalDay) }) : { name: '', days: [newDay(1)] })
   const [baseline] = useState(() => JSON.stringify(form))
@@ -88,7 +92,11 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
     <div hidden={!!picker || !!editing}><EditorTitle path={['Create', workoutMode ? 'Workout' : 'Plan']} headingRef={heading} /></div>
     {!picker && !editing && original?.archivedAt && <p className="muted">Archived {workoutMode ? "workout" : "plan"}. Rename here to resolve a conflict, then restore from the library.</p>}
     {picker && <ExercisePicker path={['Create', workoutMode ? 'Workout' : 'Plan', 'Exercise']} choices={choices.filter(c => trainingTypeOf(c.prescription) === trainingTypeOf(form))} remaining={100 - (form.days.find((day) => day.id === picker)?.exercises.length ?? 0)} onClose={closeSubeditor} onChoose={(selected) => { const additions = selected.map(choice => copyExercise(choice.prescription, choice.source)); updateDay(picker, day => { if (day.trainingType !== 'interval') return { ...day, exercises: [...day.exercises, ...additions] }; const circuits = day.circuits?.map(c => c.id === pickerCircuit ? { ...c, exerciseIds: [...c.exerciseIds, ...additions.map(e => e.id)] } : c); const all = [...day.exercises, ...additions]; return { ...day, circuits, exercises: circuits!.flatMap(c => c.exerciseIds.map(id => all.find(e => e.id === id)!)) } }); closeSubeditor() }} />}
-    {editing && <PrescriptionEditor path={['Create', workoutMode ? 'Workout' : 'Plan', 'Exercise']} sharedInstructions={!!(editing.exercise.templateId || editing.exercise.source)} initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply" onDirty={setNestedDirty} onClose={closeSubeditor} onSubmit={async (prescription) => { exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription, ...(item.setIds ? { setIds: prescription.sets.map((_, i) => item.setIds?.[i] ?? createId()) } : {}) } : item)); closeSubeditor() }} />}
+    {editing && <PrescriptionEditor profileId={profileId} lrIdentity={templateReference(editing.exercise)} path={['Create', workoutMode ? 'Workout' : 'Plan', 'Exercise']} sharedInstructions={!!(editing.exercise.templateId || editing.exercise.source)} initial={editing.exercise.prescription} tags={tags} title="Edit plan exercise" saveLabel="Apply" onDirty={setNestedDirty} onClose={closeSubeditor} onSubmit={async (prescription, approvals) => {
+      Object.assign(lr.approvals.current,approvals)
+      const refs=await resolveLRReferences(profileId,form.days.flatMap(d=>d.exercises)),ref=templateReference(editing.exercise)
+      if(ref && prescription.trainingType!=='interval') days(items=>items.map(d=>({...d,exercises:d.exercises.map(e=>templateReference(e)&&refs[templateReference(e)!]===refs[ref]?{...e,prescription:{...e.prescription,lrDistinction:prescription.lrDistinction}} as PlanExercise:e)})))
+      exerciseList(editing.dayId, (items) => items.map((item) => item.id === editing.exercise.id ? { ...item, prescription, ...(item.setIds ? { setIds: prescription.sets.map((_, i) => item.setIds?.[i] ?? createId()) } : {}) } : item)); closeSubeditor() }} />}
     <form ref={formRef} hidden={!!picker || !!editing} noValidate onSubmit={async (event) => {
       event.preventDefault(); if (submitting.current) return; setError('')
       const durationWeeks = duration.trim() ? Number(duration) : undefined
@@ -104,7 +112,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
         requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"]')?.focus()); return
       }
       submitting.current = true; setBusy(true)
-      try { const saved = await (onSave ? onSave(parsed.data) : plans.save(profileId, parsed.data, original, original ? undefined : creationId.current)); setDirty(false); onSaved(saved.name) }
+      try { const saved = await lr.save(approvals => onSave ? onSave(parsed.data,approvals) : plans.save(profileId,parsed.data,original,original ? undefined : creationId.current,approvals)); setDirty(false); onSaved(saved.name) }
       catch (e) { setError((e as Error).message) } finally { submitting.current = false; setBusy(false) }
     }}><fieldset disabled={busy}>
       <legend className="sr-only">{workoutMode ? "Workout details" : "Plan details"}</legend>
@@ -153,7 +161,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       <div className="actions"><button className="primary" type="submit">{busy ? 'Saving...' : workoutMode ? 'Save workout' : 'Save plan'}</button><button type="button" onClick={() => dirty ? setConfirm({ title: workoutMode ? 'Leaving workout creation' : 'Discard unsaved plan?', ...(workoutMode ? { label: 'Leave', message: 'Leaving this page will lose all information entered.' } : {}), action: onClose }) : onClose()}>Cancel</button></div>
     </fieldset></form>
     {addingWorkout && <WorkoutPicker profileId={profileId} onClose={() => setAddingWorkout(undefined)} trainingType={trainingTypeOf(form)} onChoose={value => { days(items => items.length < 7 ? [...items, copyWorkout(value)] : items, addingWorkout.weekId); setAddingWorkout(undefined) }} />}
-    {menu && <ActionDialog title={menu.exercise.prescription.name + ' actions'} onClose={() => setMenu(undefined)}>
+    {menu && <ActionDialog className="exercise-actions-dialog" title={menu.exercise.prescription.name + ' actions'} onClose={() => setMenu(undefined)}>
       <div className="occurrence-menu">
         <button type="button" onClick={() => { setMenu(undefined); setEditing(menu) }}>Edit</button>
         <button type="button" disabled={(form.days.find((day) => day.id === menu.dayId)?.exercises.length ?? 100) >= 100} onClick={() => { exerciseList(menu.dayId, (items) => [...items, { ...copyExercise(menu.exercise.prescription, menu.exercise.source), ...(menu.exercise.templateId ? { templateId: menu.exercise.templateId } : {}), ...(menu.exercise.groupId ? { groupId: menu.exercise.groupId } : {}) }]); setMenu(undefined) }}>Duplicate</button>
@@ -165,6 +173,7 @@ export function PlanEditor({ profileId, initial, original, choices, tags, onClos
       <p>Choose a destination. Moving to another workout removes this occurrence from its superset.</p>
       <div className="destination-list">{form.days.filter((day) => day.id !== moving.dayId).map((day) => <button key={day.id} disabled={day.exercises.length >= 100} onClick={() => { const occurrence = form.days.find((item) => item.id === moving.dayId)?.exercises.find((item) => item.id === moving.exerciseId); if (!occurrence) return; days((items) => items.map((item) => item.id === moving.dayId ? compactGroups({ ...item, exercises: item.exercises.filter((entry) => entry.id !== occurrence.id) }) : item.id === day.id ? { ...item, exercises: [...item.exercises, { ...occurrence, groupId: undefined }] } : item)); setMoving(undefined); requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>(`[data-occurrence-id="${occurrence.id}"] button[aria-haspopup]`)?.focus()) }}>Workout {form.days.indexOf(day) + 1}: {day.name}{day.exercises.length >= 100 ? ' (full)' : ''}</button>)}</div>
     </ActionDialog>}
+    {lr.dialog}
     {confirm && <ConfirmDialog title={confirm.title} confirmLabel={confirm.label ?? "Confirm"} onCancel={() => setConfirm(undefined)} onConfirm={() => { confirm.action(); setConfirm(undefined); requestAnimationFrame(() => { if (document.activeElement === document.body) heading.current?.focus() }) }}><p>{confirm.message ?? "This discards the affected unsaved input. Saved source exercises and other plans are unchanged."}</p></ConfirmDialog>}
   </section>
 }

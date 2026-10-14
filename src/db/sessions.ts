@@ -83,14 +83,14 @@ export function sessionService(database: BorosDatabase) {
     async hints(value: SessionDraft, unit: WeightUnit) {
       return database.transaction('r', tables, async () => {
         await owner(value.profileId)
-        return previousResults(value, await database.sessions.where('profileId').equals(value.profileId).toArray(), unit, await database.exercises.where('profileId').equals(value.profileId).toArray())
+        return previousResults(value, await database.sessions.where('profileId').equals(value.profileId).toArray(), unit, [...await database.exercises.where('profileId').equals(value.profileId).toArray(), ...(await database.deletedSources.where('profileId').equals(value.profileId).toArray()).filter(t=>t.kind==='exercise')], [...await database.workouts.where('profileId').equals(value.profileId).toArray(), ...(await database.deletedSources.where('profileId').equals(value.profileId).toArray()).filter(t=>t.kind==='workout')])
       })
     },
     async history(value: SessionDraft) {
       return database.transaction('r', tables, async () => {
         await owner(value.profileId)
-        const saved = await database.sessions.where('profileId').equals(value.profileId).toArray(), identities = await database.exercises.where('profileId').equals(value.profileId).toArray()
-        return Object.fromEntries(value.day.exercises.map(exercise => [exercise.id, instructionHistory(value, exercise, saved, identities)]))
+        const saved = await database.sessions.where('profileId').equals(value.profileId).toArray(), identities = [...await database.exercises.where('profileId').equals(value.profileId).toArray(), ...(await database.deletedSources.where('profileId').equals(value.profileId).toArray()).filter(t=>t.kind==='exercise')], workouts = [...await database.workouts.where('profileId').equals(value.profileId).toArray(), ...(await database.deletedSources.where('profileId').equals(value.profileId).toArray()).filter(t=>t.kind==='workout')]
+        return Object.fromEntries(value.day.exercises.map(exercise => [exercise.id, instructionHistory(value, exercise, saved, identities, workouts)]))
       })
     },
     async start(profileId: string, planId: string, dayId: string) {

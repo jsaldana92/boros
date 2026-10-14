@@ -102,7 +102,7 @@ export const strengthInterchangeSchema = z.discriminatedUnion('kind', [
 export const v7StrengthInterchangeSchema = z.discriminatedUnion('kind', [strengthInterchangeSchema.options[0].extend({ schemaVersion: z.literal(7) }), strengthInterchangeSchema.options[1].extend({ schemaVersion: z.literal(7) }), strengthInterchangeSchema.options[2].extend({ schemaVersion: z.literal(7) })])
 export const v8StrengthInterchangeSchema = z.discriminatedUnion('kind', [v7StrengthInterchangeSchema.options[0].extend({ schemaVersion: z.literal(8) }), v7StrengthInterchangeSchema.options[1].extend({ schemaVersion: z.literal(8) }), v7StrengthInterchangeSchema.options[2].extend({ schemaVersion: z.literal(8) })])
 // v9 keeps the public week list but assigns explicit program weeks to each type.
-function assignedPlan(day: typeof interchangeWorkoutSchema | typeof publicIntervalWorkout) {
+function assignedPlan<T extends z.ZodTypeAny>(day: T) {
   const count = z.number().int().min(1).max(7)
   const days = z.array(day).min(1).max(7)
   return z.discriminatedUnion('mode', [
@@ -128,7 +128,22 @@ export const v9IntervalInterchangeSchema = z.discriminatedUnion('kind', [
   intervalInterchangeSchema.options[1].extend({schemaVersion:z.literal(9)}),
   intervalInterchangeSchema.options[2].extend({schemaVersion:z.literal(9),plan:assignedPlan(publicIntervalWorkout)}),
 ])
-export const interchangeSchema = z.union([v9StrengthInterchangeSchema, v9IntervalInterchangeSchema, intervalInterchangeSchema, v7IntervalInterchangeSchema, v8StrengthInterchangeSchema, v6IntervalInterchangeSchema, v7StrengthInterchangeSchema, strengthInterchangeSchema, currentInterchangeSchema, v4InterchangeSchema, v3InterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
+const lrExercise = v4Exercise.extend({ lrDistinction: z.boolean().default(false) })
+const lrWorkout = interchangeWorkoutSchema.innerType().extend({ exercises: z.array(lrExercise.extend({ superset: positiveInteger.nullable().default(null) })).min(1).max(100) }).superRefine((day, context) => {
+  const checked = interchangeWorkoutSchema.safeParse({ ...day, exercises: day.exercises.map(({lrDistinction: _lr, ...e}) => e) })
+  if (!checked.success) checked.error.issues.forEach(issue => context.addIssue(issue))
+})
+export const v10StrengthInterchangeSchema = z.discriminatedUnion('kind', [
+  v9StrengthInterchangeSchema.options[0].extend({schemaVersion:z.literal(10),exercise:lrExercise}),
+  v9StrengthInterchangeSchema.options[1].extend({schemaVersion:z.literal(10),workout:lrWorkout}),
+  v9StrengthInterchangeSchema.options[2].extend({schemaVersion:z.literal(10),plan:assignedPlan(lrWorkout)}),
+])
+export const v10IntervalInterchangeSchema = z.discriminatedUnion('kind', [
+  v9IntervalInterchangeSchema.options[0].extend({schemaVersion:z.literal(10)}),
+  v9IntervalInterchangeSchema.options[1].extend({schemaVersion:z.literal(10)}),
+  v9IntervalInterchangeSchema.options[2].extend({schemaVersion:z.literal(10)}),
+])
+export const interchangeSchema = z.union([v10StrengthInterchangeSchema, v10IntervalInterchangeSchema, v9StrengthInterchangeSchema, v9IntervalInterchangeSchema, intervalInterchangeSchema, v7IntervalInterchangeSchema, v8StrengthInterchangeSchema, v6IntervalInterchangeSchema, v7StrengthInterchangeSchema, strengthInterchangeSchema, currentInterchangeSchema, v4InterchangeSchema, v3InterchangeSchema, v2InterchangeSchema, legacyInterchangeSchema])
 export type Interchange = z.infer<typeof interchangeSchema>
 export type InterchangeExercise = z.infer<typeof interchangeExerciseSchema>
 export type ImportKind = Interchange['kind']

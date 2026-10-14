@@ -44,7 +44,7 @@ test('stopped Interval activity survives reload and CSV retains four executions 
 test('empty analysis, cancellation, worker failure and profile change produce no misleading download or mutation',async({page})=>{
   await open(page);await b(page,'Settings').click();let count=0;page.on('download',()=>count++)
   await b(page,'Download analysis CSV').click();await b(page,'Cancel').click();expect(count).toBe(0)
-  await b(page,'Download analysis CSV').click();await b(page,'I understand (Download)').click();await expect(page.getByText('No saved training history to export.',{exact:true})).toBeVisible();expect(count).toBe(0)
+  await b(page,'Download analysis CSV').click();await b(page,'I understand (Download)').click();await expect(page.getByText('No saved training history or measurements to export.',{exact:true})).toBeVisible();expect(count).toBe(0)
   await page.evaluate(()=>{window.Worker=class {constructor(){throw new Error('CSV worker unavailable')}} as unknown as typeof Worker})
   await b(page,'Download analysis CSV').click();await b(page,'I understand (Download)').click();await expect(page.getByRole('alert')).toContainText('No download was started');expect(count).toBe(0)
   await page.reload();await page.evaluate(()=>{const Original=Worker;window.Worker=class extends Original {postMessage(){}}})

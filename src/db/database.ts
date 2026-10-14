@@ -1,3 +1,4 @@
+import { inferRecordedLR } from '../schemas/lr-compatibility.ts'
 import { explicitWeeks } from '../schemas/plan.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
 import type { DeletedSource } from '../schemas/deleted-source.ts'
@@ -83,6 +84,14 @@ export class BorosDatabase extends Dexie {
     this.version(14).stores({}).upgrade(async tx => {
       await tx.table('plans').toCollection().modify(record => { Object.assign(record, explicitWeeks(record)) })
     })
+    // Optional Strength side results; no historical conversion without review.
+    this.version(15).stores({}).upgrade(async tx => {
+      for (const name of ['drafts', 'sessions']) await tx.table(name).toCollection().modify(record => {
+        if (inferRecordedLR(record)) record.revision++
+      })
+    })
+    // Shared optional body metrics; preserve every existing record and asset.
+    this.version(16).stores({})
   }
 }
 

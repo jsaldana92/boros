@@ -1,3 +1,4 @@
+import { lrMode } from '../schemas/strength-results.ts'
 import type { TrainingDay } from '../schemas/plan.ts'
 import type { Workout } from '../schemas/workout.ts'
 import { templateReference } from './template-ownership.ts'
@@ -14,7 +15,7 @@ export function workoutComparison(day: TrainingDay, resolve: (id: string) => str
     exercises:day.exercises.map(e=>{
       const p=e.prescription, reference=templateReference(e)
       return { identity:reference ? resolve(reference) : `unlinked:${e.id}`, group:e.groupId ? groups.get(e.groupId) : undefined,
-        sets:p.sets, activeSeconds:p.trainingType==='interval'?p.activeSeconds:undefined,recoverySeconds:p.trainingType==='interval'?p.recoverySeconds:undefined,
+        lrDistinction:lrMode(p), sets:p.sets, activeSeconds:p.trainingType==='interval'?p.activeSeconds:undefined,recoverySeconds:p.trainingType==='interval'?p.recoverySeconds:undefined,
         restBetweenSeconds:p.restBetweenSeconds,restAfterSeconds:p.restAfterSeconds,
         ...(authored?{name:p.name,notes:p.notes,instructions:p.instructions,tags:[...p.tagNames].sort(),tutorialUrl:p.tutorialUrl}:{}) }
     }),

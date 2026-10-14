@@ -1,3 +1,4 @@
+import { lrMode } from '../../schemas/strength-results.ts'
 import { appendSessionExercises, appendSessionSets, type SessionSnapshot } from '../../schemas/session-structure.ts'
 import type { PrescriptionChoice } from '../../db/plans.ts'
 import type { WeightUnit } from '../../schemas/profile.ts'
@@ -21,14 +22,26 @@ export class DraftController {
   private sequence = 0
   private persisted = 0
   private disposed = false
+  private conversionConflict = false
   constructor(record: SessionDraft, service = sessions) { this.record = record; this.snapshot = { day: structuredClone(record.day), structure: structuredClone(record.structure) }; this.input = structuredClone(record.input); this.service = service }
+  reconcile(next: SessionDraft) {
+    if (next.id !== this.record.id || next.profileId !== this.record.profileId || next.revision <= this.record.revision || this.retired) return
+    if (!next.day.exercises.some(e => { const old = this.snapshot.day.exercises.find(x => x.id === e.id); return old && lrMode(old.prescription) !== lrMode(e.prescription) })) return
+    clearTimeout(this.timeout)
+    if (this.status !== 'saved' || this.busy || this.persisted !== this.sequence) {
+      this.conversionConflict = true; this.status = 'failed'; this.error = 'L/R Distinction changed. Your input is kept. Copy any unsaved values, then reload the saved draft.'
+    } else {
+      this.record = next; this.snapshot = { day: structuredClone(next.day), structure: structuredClone(next.structure) }; this.input = structuredClone(next.input)
+    }
+    this.emit()
+  }
   activate() { this.disposed = false; if (this.status === 'pending') this.schedule() }
   retire() { this.retired = true; clearTimeout(this.timeout); this.status = 'failed'; this.error = 'This workout was saved or removed in another tab. Your input is kept.'; this.emit() }
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   private emit() { this.listeners.forEach((listener) => listener()) }
   private schedule() { clearTimeout(this.timeout); this.timeout = setTimeout(() => { void this.flush().catch(() => {}) }, 400) }
   change(input: SessionInput) {
-    if (this.busy || this.disposed || this.retired || this.record.finalizedAt) return
+    if (this.busy || this.disposed || this.retired || this.conversionConflict || this.record.finalizedAt) return
     this.input = input; this.sequence++; this.status = 'pending'; this.error = ''; this.emit(); this.schedule()
   }
   private enqueue<T>(work: () => Promise<T>) {
@@ -39,13 +52,17 @@ export class DraftController {
     return this.enqueue(() => this.persist())
   }
   private async persist() {
-    if (this.retired) throw new Error(this.error)
+    if (this.retired || this.conversionConflict) throw new Error(this.error)
     if (this.disposed || this.record.finalizedAt) return this.record
     if (this.persisted === this.sequence) { this.status = 'saved'; this.error = ''; this.emit(); return this.record }
     const sequence = this.sequence, input = structuredClone(this.input), snapshot = structuredClone(this.snapshot)
     this.status = 'saving'; this.emit()
     try {
-      this.record = await this.service.update(this.record.profileId, this.record.id, this.record.revision, input, snapshot)
+      const updated = await this.service.update(this.record.profileId, this.record.id, this.record.revision, input, snapshot)
+      // A conversion notification can arrive after the write commits but before
+      // its response resolves. Keep the conflict and recoverable input visible.
+      if (this.conversionConflict) throw new Error(this.error)
+      this.record = updated
       this.persisted = sequence; this.status = sequence === this.sequence ? 'saved' : 'pending'; this.error = ''
       if (sequence !== this.sequence && !this.busy && !this.disposed) this.schedule()
       return this.record
@@ -62,12 +79,12 @@ export class DraftController {
     })
   }
   addSets(blockId: string, unit: WeightUnit) {
-    if (this.busy || this.disposed || this.record.finalizedAt) return
+    if (this.busy || this.disposed || this.conversionConflict || this.record.finalizedAt) return
     const amended = appendSessionSets(this.snapshot, this.input, blockId, unit)
     this.snapshot = { day: amended.day, structure: amended.structure }; this.change(amended.input)
   }
   addExercises(choices: PrescriptionChoice[], unit: WeightUnit) {
-    if (this.busy || this.disposed || this.record.finalizedAt) return
+    if (this.busy || this.disposed || this.conversionConflict || this.record.finalizedAt) return
     const amended = appendSessionExercises(this.snapshot, this.input, choices, unit)
     this.snapshot = { day: amended.day, structure: amended.structure }; this.change(amended.input)
   }
@@ -110,6 +127,7 @@ export class DraftController {
   reload() {
     return this.command(async () => {
       this.record = await this.service.getDraft(this.record.profileId, this.record.id)
+      this.conversionConflict = false
       this.snapshot = { day: structuredClone(this.record.day), structure: structuredClone(this.record.structure) }
       this.input = structuredClone(this.record.input); this.sequence++; this.persisted = this.sequence; this.status = 'saved'; return this.record
     })

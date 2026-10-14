@@ -1,3 +1,4 @@
+import { applyLRConversions, lrTargets, lrTables, type LRApprovals } from './lr-conversion.ts'
 import { z } from 'zod'
 import { workoutResolver } from '../lib/workout-identity.ts'
 import { SimilarWorkoutError, similarWorkouts, similarityToken } from '../lib/workout-comparison.ts'
@@ -13,7 +14,7 @@ import { exerciseService } from './exercises.ts'
 import { templateReference } from '../lib/template-ownership.ts'
 
 export function workoutService(database: BorosDatabase) {
-  const tables = [database.profiles, database.workouts, database.exercises, database.tags, database.deletedSources]
+  const tables = [...lrTables(database), database.profiles, database.workouts, database.exercises, database.tags, database.deletedSources]
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => { const value = await database.workouts.get([profileId, id]); if (!value) throw new Error('This workout is unavailable in this profile.'); return value }
   const checkName = async (profileId: string, name: string, ownId?: string) => { const other = await database.workouts.where('[profileId+activeNameKey]').equals([profileId, nameKey(name)]).first(); if (other && other.id !== ownId) throw new Error('An active workout with this name already exists. Choose a different name.') }
@@ -21,7 +22,7 @@ export function workoutService(database: BorosDatabase) {
   return {
     get: async (profileId: string, id: string) => database.transaction('r', tables, async () => currentInstructions(database, profileId, await get(profileId, id), true)),
     async library(profileId: string) { return database.transaction('r', tables, async () => { await owner(profileId); return Promise.all((await database.workouts.where('profileId').equals(profileId).toArray()).filter(w => !w.mergedIntoId).map(w => currentInstructions(database, profileId, w, true))) }) },
-    async save(profileId: string, raw: WorkoutInput, existing?: { id: string; revision: number }, importing = false, confirmedSimilar?: string) {
+    async save(profileId: string, raw: WorkoutInput, existing?: { id: string; revision: number }, importing = false, confirmedSimilar?: string, approvals?: LRApprovals) {
       const input = workoutInputSchema.parse(convertIntervalDay(raw))
       classifyStrengthRecords(input)
       return database.transaction('rw', tables, async () => {
@@ -44,6 +45,7 @@ export function workoutService(database: BorosDatabase) {
             item.source = { kind: 'exercise', id: linked.id }; item.templateId = linked.id
           }
         }
+        await applyLRConversions(database,profileId,lrTargets([input]),approvals,importing)
         const all = await database.workouts.where('profileId').equals(profileId).toArray()
         const identities = [...await database.exercises.where('profileId').equals(profileId).toArray(), ...(await database.deletedSources.where('profileId').equals(profileId).toArray()).filter(t=>t.kind==='exercise')]
         const matches = similarWorkouts(profileId,input,all,identities,old?.id)

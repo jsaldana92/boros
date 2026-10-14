@@ -32,7 +32,8 @@ class TrainingRuntime {
       void this.wake.update(false, this.visible)
     })
   }
-  sync(owner: string | undefined, timer: RestTimer | undefined, sound: boolean) {
+  sync(owner: string | undefined, timer: RestTimer | undefined, sound: boolean, draft?: SessionDraft) {
+    if (draft) this.strength?.reconcile(draft)
     if (this.owner && this.owner !== owner) { this.feedback.cancel(); this.interval?.retire(); this.strength?.retire(); this.soundedToken = undefined }
     this.owner = owner; this.timer = timer
     if (!sound && this.sound) { this.feedback.cancel(); this.interval?.feedback.cancel() }

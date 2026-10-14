@@ -74,7 +74,7 @@ test('new plans require duration; legacy v5 records and unbounded schedules surv
   const plan = await plans.save(id, { ...raw, durationWeeks: 2 }); delete plan.durationWeeks; await db.plans.put(plan)
   const schedule = await schedules.create(id, { planId: plan.id, planRevision: plan.revision, startWeek: '2024-12-30', timeZone: 'America/New_York', mapping: [{ dayId: plan.days[0].id, weekday: 6 }] })
   const before = await captureProfile(id, db); db.close(); await db.open()
-  assert.equal(db.verno, 14); const after = await captureProfile(id, db); before.capturedAt = after.capturedAt; assert.deepEqual(after, before)
+  assert.equal(db.verno, 16); const after = await captureProfile(id, db); before.capturedAt = after.capturedAt; assert.deepEqual(after, before)
   assert.equal(schedule.endDate, undefined); assert.equal(occurrences(schedule, '2040-01-01', '2040-01-07').length, 1)
   const saved = await plans.save(id, { ...planToInput(plan), name: 'Still unbounded' }, plan)
   assert.equal(saved.durationWeeks, undefined); assert.equal((await schedules.get(id, schedule.id)).durationWeeks, undefined); assert.deepEqual((await schedules.get(id, schedule.id)).revisions[0].days, schedule.revisions[0].days)
@@ -185,7 +185,7 @@ test('AI v2 validates repeated/groups/duration with precise paths; v1 needs expl
 test('populated v5 reopen leaves every store and original photo bytes unchanged', async (t) => {
   const { db } = await setup(t); await representativeProfile(db)
   const read = async () => Promise.all(db.tables.map(async (table) => [table.name, await Promise.all((await table.toArray()).map(async (item) => item.blob ? { ...item, blob: Array.from(new Uint8Array(await item.blob.arrayBuffer())) } : item))]))
-  const before = await read(); db.close(); await db.open(); assert.equal(db.verno, 14); assert.deepEqual(await read(), before)
+  const before = await read(); db.close(); await db.open(); assert.equal(db.verno, 16); assert.deepEqual(await read(), before)
 })
 
 test('current backup round trip retains Group 2 groups/repeated results/duration and both whole-family merge priorities', async (t) => {
@@ -196,7 +196,7 @@ test('current backup round trip retains Group 2 groups/repeated results/duration
   const draft = await sessions.start(id, plan.id, plan.days[0].id); await sessions.complete(id, draft.id, draft.revision, filled(draft), false)
   await sessions.start(id, plan.id, plan.days[0].id)
   const original = await captureProfile(id, db), output = await generateBackup(original, 'test'), backup = await readBackup(output.bytes)
-  assert.equal(backup.manifest.backupSchemaVersion, 20); assert.ok(backup.manifest.csvRows['csv/supersets.csv'] > 0)
+  assert.equal(backup.manifest.backupSchemaVersion, 22); assert.ok(backup.manifest.csvRows['csv/supersets.csv'] > 0)
   const restore = restoreService(db), preview = await restore.preview(backup, 'new', 'Roundtrip'), owner = await restore.commit(preview, true)
   const round = await captureProfile(owner, db); assert.equal(family(round), family(original))
   assert.deepEqual((await readBackup((await generateBackup(round, 'test')).bytes)).data.plans[0].days, plan.days)
@@ -229,7 +229,7 @@ test('validated v1 archives transform only after checksums; unbounded meaning an
   const manifest = { ...generated.manifest, backupSchemaVersion: 1, databaseSchemaVersion: 5, counts: recordCounts(data), csvRows: Object.fromEntries(csvTables(data).map((table) => [table.path, table.rows])), inventory: await Promise.all(payload.map(async ([path, text]) => ({ path, bytes: new TextEncoder().encode(text).length, sha256: await sha256(new TextEncoder().encode(text)), mediaType: path.endsWith('json') ? 'application/json' : 'text/csv; charset=utf-8' }))) }
   for (const [path, text] of payload) zip.file(path, text, { createFolders: false }); zip.file('manifest.json', JSON.stringify(manifest))
   const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }), checksum = await sha256(bytes), restored = await readBackup(bytes)
-  assert.equal(restored.manifest.backupSchemaVersion, 1); assert.equal(restored.data.backupSchemaVersion, 20)
+  assert.equal(restored.manifest.backupSchemaVersion, 1); assert.equal(restored.data.backupSchemaVersion, 22)
   assert.equal(restored.data.plans[0].durationWeeks, undefined); assert.equal(restored.data.schedules[0].endDate, undefined)
   assert.deepEqual(withoutTrainingFields(restored.data.plans[0].days), withoutTrainingFields(JSON.parse(JSON.stringify(plan.days)))); assert.equal(await sha256(bytes), checksum)
   zip.file('data.json', JSON.stringify({ ...data, profile: { ...data.profile, name: 'Tampered' } }))

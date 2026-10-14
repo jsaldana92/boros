@@ -1,7 +1,7 @@
 import { isRepeatCircuit } from './circuit.ts'
 import { intervalPhases as v2Phases } from './interval-session-v2.ts'
 import { z } from 'zod'
-import type { TrainingDay } from './plan.ts'
+import type { TrainingDay } from './plan-v14.ts'
 import * as legacy from './interval-legacy.ts'
 
 const identity = (p: { kind: string; circuitId: string; set?: number; round?: number; repetition?: number; exerciseId?: string }) => p.repetition !== undefined && !['preparation', 'workout-rest'].includes(p.kind) ? `${p.circuitId}:repeat:${p.repetition}:${p.exerciseId ? p.exerciseId + ':' : ''}${p.kind}` : p.kind === 'active' || p.kind === 'recovery' ? `${p.circuitId}:${p.set}:${p.round}:${p.exerciseId}:${p.kind}` : p.kind === 'set-rest' ? `${p.circuitId}:${p.set}:set-rest` : `${p.circuitId}:${p.kind}`

@@ -1,3 +1,4 @@
+import { applyLRConversions, lrTargets, lrTables, type LRApprovals } from './lr-conversion.ts'
 import { explicitWeeks } from '../schemas/plan.ts'
 import { currentInstructions, currentPlanInstructions } from './instructions.ts'
 import { convertIntervalDay } from '../schemas/interval-conversion.ts'
@@ -20,7 +21,7 @@ export interface PrescriptionChoice {
   label: string; prescription: ExerciseInput; source: ExerciseSource
 }
 export function planService(database: BorosDatabase) {
-  const tables = [database.exercises, database.workouts, database.profiles, database.plans, database.tags, database.schedules, database.deletedSources]
+  const tables = [...lrTables(database), database.exercises, database.workouts, database.profiles, database.plans, database.tags, database.schedules, database.deletedSources]
   const owner = async (profileId: string) => { if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.') }
   const get = async (profileId: string, id: string) => {
     const plan = await database.plans.get([profileId, id])
@@ -50,7 +51,7 @@ export function planService(database: BorosDatabase) {
         return { plans: await Promise.all(plans.map(p => currentPlanInstructions(database, p))), choices, tags, exercises: library }
       })
     },
-    async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }, creationId?: string) {
+    async save(profileId: string, raw: PlanInput, existing?: { id: string; revision: number }, creationId?: string, approvals?: LRApprovals) {
       const input = planInputSchema.parse(explicitWeeks({ ...raw, days: raw.days.map(convertIntervalDay) }))
       classifyStrengthRecords(input)
       if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing plan.') }
@@ -70,6 +71,7 @@ export function planService(database: BorosDatabase) {
           if (source) assertSameTrainingType(day, source)
           if (ref && !source && (await database.exercises.toArray()).some(e => e.id === ref && e.profileId !== profileId)) throw new Error('A source exercise belongs to another profile.')
         }
+        await applyLRConversions(database,profileId,lrTargets(input.days),approvals)
         input.days = await Promise.all(input.days.map(d => currentInstructions(database, profileId, d)))
         input.days = await publishWorkouts(database, profileId, input.days, now, old?.days)
         const result: Plan = { ...input, trainingType: trainingTypeOf(input), profileId, id: old?.id ?? creationId ?? createId(), nameKey: nameKey(input.name), activeNameKey: old?.archivedAt ? undefined : nameKey(input.name), archivedAt: old?.archivedAt, revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? now, updatedAt: now }

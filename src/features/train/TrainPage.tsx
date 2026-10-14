@@ -1,3 +1,4 @@
+import { inputRows } from '../../schemas/strength-results'
 import { useSimilarWorkout } from '../create/use-similar-workout'
 import { useTrainingScroll } from './use-training-scroll'
 import { SessionActions } from './SessionActions'
@@ -190,20 +191,21 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
   })
   const requestSwap = () => {
     const input = controller.input.exercises.find(e => e.id === replacing)
-    if (input && (input.notes || input.sets.some(s => s.load !== '' || s.reps !== '' || s.rir !== '' || s.skipped))) setConfirmSwap(true)
+    if (input && (input.notes || input.sets.some(group => inputRows(group).some(({ result: s }) => s.load !== '' || s.reps !== '' || s.rir !== '' || s.skipped)))) setConfirmSwap(true)
     else void swap()
   }
   const setFields = (exercise: PlanExercise, s: number) => {
     const e = day.exercises.findIndex((item) => item.id === exercise.id), prescribed = exercise.prescription.sets[s]
     if (!prescribed) return null
-    const hint = hints?.values[exercise.id]?.[s]
-    const set = controller.input.exercises[e].sets[s], prefix = `${e}.${s}`, label = `${memberLabel(exercise)} set ${s + 1}`
-    const update = (field: 'load' | 'reps' | 'rir' | 'skipped', value: string | boolean) => { const input = structuredClone(controller.input); Object.assign(input.exercises[e].sets[s], { [field]: value }, field === 'load' ? { unit } : {}); controller.change(input) }
-    return <div className="training-set" key={exercise.id} data-occurrence-id={exercise.id}><h4 className="set-heading">{exercise.groupId ? memberLabel(exercise) : `Set ${s + 1}`}</h4><p className="set-target">{target(prescribed.reps)} reps{prescribed.rir && <> · {target(prescribed.rir)} RIR</>}</p><div className="training-fields">
-      <Field reserveError label={`Weight (${unit})`} aria-label={`${label} Weight (${unit})`} inputMode="decimal" maxLength={64} disabled={set.skipped} placeholder={hint?.load} aria-describedby={hint ? `previous-${exercise.id}-${s}` : undefined} value={displayedLoad(set, unit)} error={assessed.errors[`${prefix}.load`] ? 'Enter a load of 0 or more.' : undefined} onChange={(event) => update('load', event.target.value)} />
-      <Field reserveError label="Reps" aria-label={`${label} Repetitions`} inputMode="numeric" maxLength={64} disabled={set.skipped} placeholder={hint?.reps} aria-describedby={hint ? `previous-${exercise.id}-${s}` : undefined} value={set.reps} error={assessed.errors[`${prefix}.reps`] ? 'Use a whole number of 0 or more.' : undefined} onChange={(event) => update('reps', event.target.value)} />
-      <Field reserveError label="RIR (optional)" aria-label={`${label} Actual RIR (optional)`} inputMode="numeric" maxLength={64} disabled={set.skipped} placeholder={hint?.rir} aria-describedby={hint?.rir !== undefined ? `previous-${exercise.id}-${s}` : undefined} value={set.rir} error={assessed.errors[`${prefix}.rir`] ? 'Use a whole number of 0 or more, or blank.' : undefined} onChange={(event) => update('rir', event.target.value)} />
-    </div>{hint && <span className="sr-only" id={`previous-${exercise.id}-${s}`}>Placeholders show previous results, not entered values.</span>}{set.unit !== unit && set.load && numericResult(set.load) === undefined && <p className="field-error">Invalid saved load in {set.unit}; replace it with a valid {unit} value.</p>}<div className="skip-row"><label className="check-label skip-control"><input type="checkbox" aria-label={`Skip ${label}`} checked={set.skipped} onChange={(event) => update('skipped', event.target.checked)} />Skip</label></div></div>
+    const group = controller.input.exercises[e].sets[s], previous = hints?.values[exercise.id]?.[s]
+    return <div className="training-set" key={exercise.id} data-occurrence-id={exercise.id}><h4 className="set-heading">{exercise.groupId ? memberLabel(exercise) : `Set ${s + 1}`}</h4><p className="set-target">{target(prescribed.reps)} reps{prescribed.rir && <> · {target(prescribed.rir)} RIR</>}</p>{inputRows(group).map(({side, result: set}) => {
+      const prefix = `${e}.${s}${side ? `.${side}` : ''}`, label = `${memberLabel(exercise)} set ${s + 1}${side ? ` ${side === 'left' ? 'Left' : 'Right'}` : ''}`, hint = side ? previous?.sides?.[side] : previous
+      const update = (field: 'load' | 'reps' | 'rir' | 'skipped', value: string | boolean) => { const input = structuredClone(controller.input), row = side ? input.exercises[e].sets[s].sides![side] : input.exercises[e].sets[s]; Object.assign(row, { [field]: value }, field === 'load' ? { unit } : {}); delete row.conversion; controller.change(input) }
+      return <div className="training-side" key={side ?? 'no'}>{side && <h5>{side === 'left' ? 'Left' : 'Right'}</h5>}<div className="training-fields">
+      <Field reserveError label={`Weight (${unit})`} aria-label={`${label} Weight (${unit})`} inputMode="decimal" maxLength={64} disabled={set.skipped} placeholder={hint?.load} aria-describedby={hint ? `previous-${exercise.id}-${s}-${side ?? "no"}` : undefined} value={displayedLoad(set, unit)} error={assessed.errors[`${prefix}.load`] ? 'Enter a load of 0 or more.' : undefined} onChange={(event) => update('load', event.target.value)} />
+      <Field reserveError label="Reps" aria-label={`${label} Repetitions`} inputMode="numeric" maxLength={64} disabled={set.skipped} placeholder={hint?.reps} aria-describedby={hint ? `previous-${exercise.id}-${s}-${side ?? "no"}` : undefined} value={set.reps} error={assessed.errors[`${prefix}.reps`] ? 'Use a whole number of 0 or more.' : undefined} onChange={(event) => update('reps', event.target.value)} />
+      <Field reserveError label="RIR (optional)" aria-label={`${label} Actual RIR (optional)`} inputMode="numeric" maxLength={64} disabled={set.skipped} placeholder={hint?.rir} aria-describedby={hint?.rir !== undefined ? `previous-${exercise.id}-${s}-${side ?? "no"}` : undefined} value={set.rir} error={assessed.errors[`${prefix}.rir`] ? 'Use a whole number of 0 or more, or blank.' : undefined} onChange={(event) => update('rir', event.target.value)} />
+    </div>{hint && <span className="sr-only" id={`previous-${exercise.id}-${s}-${side ?? "no"}`}>Placeholders show previous results, not entered values.</span>}{set.unit !== unit && set.load && numericResult(set.load) === undefined && <p className="field-error">Invalid saved load in {set.unit}; replace it with a valid {unit} value.</p>}<div className="skip-row"><label className="check-label skip-control"><input type="checkbox" aria-label={`Skip ${label}`} checked={set.skipped} onChange={(event) => update('skipped', event.target.checked)} />Skip</label></div></div>})}</div>
   }
   return <section className="training-session" aria-label="Training session">
     <div className="training-heading"><h2 ref={heading} tabIndex={-1}>{day.name}</h2><WorkoutActions instructions={day.instructions} noteDisabled={controller.busy || !!controller.record.finalizedAt} onNote={() => setNote({ value: controller.input.notes })} /></div>
@@ -248,7 +250,7 @@ function SessionEditor({ initial, unit, timer, onClose, onCompleted }: { initial
       else if (action === 'partial') requestFinish(true)
       else if (action === 'clear') { feedback.cancel(); void act(() => controller.clear()) }
       else void act(async () => { await controller.reload(); requestAnimationFrame(() => heading.current?.focus()) })
-    }}><p>{confirm === 'noteLeave' ? 'Discard unapplied note changes?' : confirm === 'leave' ? 'Leaving now will clear all your progress and you will have to restart.' : confirm === 'clear' ? 'This will clear all entered results and notes.' : confirm === 'partial' ? `${assessed.skipped} omitted sets will be marked skipped. ${assessed.recorded} recorded sets will be saved. Cancel keeps all input.` : 'Copy any input you need first. Load the latest saved version and discard your unpersisted edits.'}</p></ConfirmDialog>}
+    }}><p>{confirm === 'noteLeave' ? 'Discard unapplied note changes?' : confirm === 'leave' ? 'Leaving now will clear all your progress and you will have to restart.' : confirm === 'clear' ? 'This will clear all entered results and notes.' : confirm === 'partial' ? 'Recorded results will be saved. Missing or skipped results will stay empty. Cancel keeps all input.' : 'Copy any input you need first. Load the latest saved version and discard your unpersisted edits.'}</p></ConfirmDialog>}
   </section>
 }
 function RestControl({ label, seconds, onStart, disabled }: { label: string; seconds?: number; disabled?: boolean; onStart: () => Promise<void> }) {

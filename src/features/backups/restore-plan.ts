@@ -1,3 +1,7 @@
+import { convertLRRecords } from '../../db/lr-conversion.ts'
+import { lrMode } from '../../schemas/strength-results.ts'
+import { exerciseResolver } from '../../lib/exercise-identity.ts'
+import { templateReference } from '../../lib/template-ownership.ts'
 import { assertSameTrainingType, type TrainingType } from '../../schemas/training-type.ts'
 import { closedRunDraftIds } from '../../lib/closed-runs.ts'
 import { materializeTemplates } from '../../lib/template-ownership.ts'
@@ -63,7 +67,7 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     ? { id: newId, name: source.name, nameKey: source.nameKey, kind: source.kind, weightUnit: source.weightUnit, heightUnit: source.heightUnit, ...(source.timeZone ? { timeZone: source.timeZone } : {}), revision: 1, createdAt: at, updatedAt: at }
     : { ...structuredClone(source), id: newId, ...(choice === 'new' ? { name: displayName.trim(), nameKey: nameKey(displayName), kind: input!.profile.kind === 'guest' && displayName === 'Guest' ? 'guest' as const : 'named' as const } : {}) }
   if (!profile.nameKey || profile.name.length > 80) throw new Error('Enter an unused profile name of 1–80 characters.')
-  const result: ProfileSnapshot = { databaseVersion: 11, deletedSources: [], capturedAt: at, profile, tags: [], exercises: [], workouts: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
+  const result: ProfileSnapshot = { databaseVersion: 16, deletedSources: [], capturedAt: at, profile, tags: [], exercises: [], workouts: [], plans: [], schedules: [], drafts: [], sessions: [], measurements: [], photos: [] }
   const plan: RestorePlan = { id: newId, choice, targetId: local?.profile.id, targetName: local?.profile.name, targetFingerprint: local && snapshotFingerprint(local), targetPhotoFingerprint: local && await photoFingerprint(local.photos), result, counts, warnings, conflicts }
   if (choice === 'clear') { for (const key of ownedStores) counts[key].removed = (local![key] ?? []).length; return plan }
   const file = input!, device = current
@@ -171,7 +175,16 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
     if (same) { counts.measurements.conflicts++; conflicts.push(`measurement: ${m.id} (${displayDateTime(same.measuredAt, 'UTC')} / ${displayDateTime(m.measuredAt, 'UTC')} UTC)`); if (same.measuredAt !== m.measuredAt || same.loggedAt !== m.loggedAt) warnings.push(`Measurement ${m.id} has different date/origin metadata. The selected source wins this ID.`) }
     if (m.lastMutationId && localMeasurements.some((row) => row.id !== m.id && row.lastMutationId === m.lastMutationId)) throw new Error('Ambiguous measurement: the same saved mutation has different IDs. Import under a new name and review the measurements separately.')
   }
-  const selectedMeasurements = file.measurements.filter((m) => preferImport || !localMeasurements.some((row) => row.id === m.id))
+  const selectedMeasurements = file.measurements.filter((m) => preferImport || !localMeasurements.some((row) => row.id === m.id)).map(m => {
+    const same = localMeasurements.find(row => row.id === m.id)
+    // Pre-body-fat backups cannot express an intentional body-fat clear. Only
+    // a reviewed merge of this same stable record may retain the device metric.
+    if (merging && backup!.manifest.backupSchemaVersion < 22 && same?.bodyFatPercentage !== undefined && m.bodyFatPercentage === undefined) {
+      warnings.push('Existing body fat is retained for a matching legacy weight entry, using the selected entry date and photo.')
+      return { ...m, bodyFatPercentage: same.bodyFatPercentage }
+    }
+    return m
+  })
   result.measurements = [...localMeasurements.filter((m) => !preferImport || !measurementIds.has(m.id)), ...selectedMeasurements]
   counts.measurements.added = file.measurements.length - counts.measurements.conflicts; counts.measurements.replaced = preferImport ? counts.measurements.conflicts : 0; counts.measurements.skipped = preferImport ? 0 : counts.measurements.conflicts
   const importedRefs = [...(choice === 'device' ? [] : [result.profile]), ...selectedMeasurements], localRefs = [...(choice === 'device' ? [result.profile] : []), ...result.measurements.filter((m) => !selectedMeasurements.includes(m))]
@@ -210,6 +223,21 @@ export async function buildRestorePlan(backup: ValidatedBackup | undefined, loca
   result.plans = repaired.plans; result.exercises = repaired.exercises; result.tags = repaired.tags
   counts.exercises.added += repaired.addedExercises.length; counts.tags.added += repaired.addedTags.length
   if (repaired.changedPlans.length || repaired.addedExercises.length) warnings.push(`Library compatibility repair: update links in ${repaired.changedPlans.length} plans and add ${repaired.addedExercises.length} independent templates using the earliest retained occurrence defaults. Existing templates and all historical snapshots stay unchanged. Original AI defaults may no longer be recoverable.`)
+  if (merging) {
+    const resolve = exerciseResolver(newId, [...result.exercises, ...result.deletedSources.filter(t => t.kind === 'exercise')])
+    const linked = (day: TrainingDay, id: string) => day.exercises.filter(e => { const ref = templateReference(e); return e.prescription.trainingType !== 'interval' && !!ref && resolve(ref) === id })
+    const targets = result.exercises.filter(e => !e.mergedIntoId && e.trainingType !== 'interval').map(e => ({id: e.id, mode: lrMode(e)}))
+    for (const target of targets) {
+      const allDays = [...result.workouts, ...result.plans.flatMap(p => p.days), ...result.schedules.flatMap(s => [...s.revisions.flatMap(r => r.days), ...(s.outcomes ?? []).map(o => o.day)]), ...result.drafts.map(d => d.day), ...result.sessions.map(s => s.day)]
+      if (allDays.some(day => linked(day,target.id).some(e => lrMode(e.prescription) !== target.mode)) || result.exercises.some(e => resolve(e.id) === target.id && lrMode(e) !== target.mode)) {
+        const name = result.exercises.find(e => e.id === target.id)!.name
+        conflicts.push(`L/R Distinction: ${name}`)
+        warnings.push(`${name}: ${target.mode ? 'Turn on L/R Distinction? Previous results will be copied to both Left and Right. Each side will start with the same weight, reps, and RIR.' : 'Turn off L/R Distinction? Previous left and right results will be combined into one result per set. The higher-weight result will be kept, using reps to break a tie. The other result will be removed.'}`)
+        convertLRRecords(result, [target], linked, at)
+        for (const e of result.exercises) if (e.trainingType !== 'interval' && resolve(e.id) === target.id && lrMode(e) !== target.mode) { e.lrDistinction = target.mode; e.revision++ }
+      }
+    }
+  }
   validateBackupData(canonicalSnapshot(result)); validateRestoreRecords(canonicalSnapshot(result))
   if (removesFamilies) warnings.push('Removed plan families include all their history, schedules and saved drafts. Histories are not combined inside a conflicting family.')
   return plan

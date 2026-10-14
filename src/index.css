@@ -323,10 +323,10 @@ button.nav-link { background: transparent; border-inline: 0; border-bottom: 0; b
 .weight-point:focus-visible span, .weight-point:hover span { width: 15px; height: 15px; }
 .body-weight-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .body-weight-heading h2 { margin: 0; }
-.current-weight { text-align: center; margin: 24px 0; }
-.current-weight strong, .current-weight time { display: block; }
-.current-weight strong, .weight-detail-value { font-size: 2rem; font-weight: 700; }
-.current-weight time { margin-top: 8px; }
+:is(.current-weight, .current-body-fat) { text-align: center; margin: 24px 0; }
+:is(.current-weight, .current-body-fat) strong, :is(.current-weight, .current-body-fat) time { display: block; }
+:is(.current-weight, .current-body-fat) strong, .weight-detail-value { font-size: 2rem; font-weight: 700; }
+:is(.current-weight, .current-body-fat) time { margin-top: 8px; }
 .weight-detail-value { margin: 8px 0; }
 .analytics-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; margin: 28px 0; }
 .analytics-metric { min-width: 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; overflow-wrap: anywhere; }
@@ -563,3 +563,12 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 .similar-workouts { max-height: 40dvh; overflow-y: auto; padding-left: 20px; }
 .similar-workouts li { margin-bottom: 12px; overflow-wrap: anywhere; }
 .similar-workouts small { display: block; margin-top: 4px; }
+/* Side rows share their set heading and rest control. */
+.training-side + .training-side { border-top: 1px solid var(--border); padding-top: .75rem; margin-top: .5rem; }
+.training-side h5 { font-size: 1rem; margin: .5rem 0; }
+.lr-toggle { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: 1rem; }
+.lr-toggle .segmented { display: flex; gap: .35rem; }
+.lr-toggle button[aria-pressed="true"] { border-color: var(--text); font-weight: 700; }
+
+/* Only contents of exercise action controls; preserve their existing layout. */
+.exercise-editor button, .exercise-actions-dialog button { text-align: center; justify-content: center; }

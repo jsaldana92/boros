@@ -61,7 +61,9 @@ export interface PhotoAsset {
 export interface Measurement {
   profileId: string
   id: string
-  weightKg: number
+  weightKg?: number
+  bodyFatPercentage?: number
+  timeSource?: MeasurementTimeSource
   measuredAt: string
   loggedAt: string
   // Optional metadata keeps legacy v5 records readable without rewriting them.
@@ -79,13 +81,21 @@ export const photoSchema = z.object({
   height: z.number().int().positive().max(4096),
 })
 export type PreparedPhoto = z.infer<typeof photoSchema>
-export const measurementSchema = z.object({
-  weightKg: z.number().finite().positive().max(1000),
+export const measurementTimeSourceSchema = z.enum(['device_clock', 'date_only_noon', 'legacy_preserved_time'])
+export type MeasurementTimeSource = z.infer<typeof measurementTimeSourceSchema>
+export const measurementWeightSchema = z.number().finite().positive().max(1000)
+export const bodyFatSchema = z.number().finite().gt(0).lt(100)
+export const measurementFieldsSchema = z.object({
+  weightKg: measurementWeightSchema.optional(),
+  bodyFatPercentage: bodyFatSchema.optional(),
   measuredAt: z.string().datetime(),
   measuredLocal: z.string().optional(),
   timeZone: z.string().optional(),
   offsetMinutes: z.number().int().optional(),
+  timeSource: measurementTimeSourceSchema.optional(),
 })
+export const hasMeasurementMetric = (value: { weightKg?: number; bodyFatPercentage?: number }) => value.weightKg !== undefined || value.bodyFatPercentage !== undefined
+export const measurementSchema = measurementFieldsSchema.refine(hasMeasurementMetric, { message: 'Enter weight or body fat.', path: ['weightKg'] })
 
 export const toKg = (value: number, unit: WeightUnit) => unit === 'lb' ? value * 0.45359237 : value
 export const fromKg = (value: number, unit: WeightUnit) => unit === 'lb' ? value / 0.45359237 : value

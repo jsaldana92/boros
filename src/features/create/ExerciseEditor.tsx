@@ -10,8 +10,8 @@ export function ExerciseEditor({ profileId, initial, original, tags, onClose, on
   const [merging, setMerging] = useState<ExerciseInput>()
   const { setDirty } = useWorkspace()
   useEffect(() => () => setDirty(false), [setDirty])
-  return <><CreateLeaveGuard kind="exercise" /><PrescriptionEditor initial={initial} tags={tags} title={original ? 'Edit exercise' : 'Create exercise'} archived={!!original?.archivedAt} onMerge={original && !original.archivedAt && !original.mergedIntoId ? setMerging : undefined} onDirty={setDirty} onClose={onClose} onSubmit={async (input) => {
-    const saved = await exercises.save(profileId, input, original)
+  return <><CreateLeaveGuard kind="exercise" /><PrescriptionEditor profileId={profileId} lrIdentity={original?.id} initial={initial} tags={tags} title={original ? 'Edit exercise' : 'Create exercise'} archived={!!original?.archivedAt} onMerge={original && !original.archivedAt && !original.mergedIntoId ? setMerging : undefined} onDirty={setDirty} onClose={onClose} onSubmit={async (input, approvals) => {
+    const saved = await exercises.save(profileId, input, original, undefined, approvals)
     setDirty(false); onSaved(saved.name)
   }} />{merging && original && <MergeExerciseDialog profileId={profileId} edited={original} input={merging} onClose={() => setMerging(undefined)} onSaved={record => { setDirty(false); onMerged(record) }} />}</>
 }

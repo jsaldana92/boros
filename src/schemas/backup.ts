@@ -1,5 +1,8 @@
+import { measurementSchema } from './measurement-v15.ts'
+import { inferRecordedLR } from './lr-compatibility.ts'
+import { recordedSetSchema, lrMode } from './strength-results.ts'
 import { workoutResolver } from '../lib/workout-identity.ts'
-import { validateBackupData as validateLegacyBackup } from './backup-v19.ts'
+import { validateBackupData as validateLegacyBackup } from './backup-v21.ts'
 import { intervalStateSchema as v14IntervalStateSchema, intervalPhases as legacyIntervalPhases } from './interval-legacy.ts'
 import { repeatCircuitSchema, legacyCircuitSchema } from './circuit.ts'
 import { trainingTypeSchema, assertSameTrainingType } from './training-type.ts'
@@ -12,7 +15,7 @@ import { sessionStructureSchema, validateStructure } from './session-structure.t
 import { z } from 'zod'
 import { strengthInputSchema, intervalInputSchema, setSchema } from './exercise.ts'
 import { daySchema as originalDaySchema, occurrenceSchema, weekSchema, sourceSchema, planInputSchema, planInstructionsSchema, positiveInteger } from './plan.ts'
-import { heightUnitSchema, measurementSchema, selectedPlanIdsSchema, timeZoneSchema, weightUnitSchema, type Measurement, type PhotoAsset, type Profile } from './profile.ts'
+import { heightUnitSchema, measurementFieldsSchema, hasMeasurementMetric, selectedPlanIdsSchema, timeZoneSchema, weightUnitSchema, type Measurement, type PhotoAsset, type Profile } from './profile.ts'
 import type { Exercise, Tag } from './exercise.ts'
 import type { Plan } from './plan.ts'
 import { dateSchema, mappingSchema, cycleMappingSchema, occurrenceKey, programEnd, programWeek, validateMapping, type Schedule } from './schedule.ts'
@@ -20,7 +23,7 @@ import { assessSession, sessionInputSchema, validateDraftInput, type CompletedSe
 import { monday, validZone } from '../lib/calendar-dates.ts'
 import { validateTimeContext } from '../lib/measurement-dates.ts'
 
-export const BACKUP_VERSION = 20
+export const BACKUP_VERSION = 22
 const LEGACY_SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Wait for Draft saved locally in every training tab before exporting.'
 export const SNAPSHOT_POLICY = 'Persisted records only. Unsaved forms, unapplied notes and pending/failed autosaves in any tab are excluded. Apply notes and wait until Saving disappears without an error in every training tab before exporting.'
 export interface ProfileSnapshot {
@@ -39,7 +42,7 @@ const number = z.number().finite().nonnegative(), integer = number.int().max(Num
 const recorded = z.discriminatedUnion('skipped', [z.object({ skipped: z.literal(true) }).strict(), z.object({ skipped: z.literal(false), weightKg: number, load: number, unit: weightUnitSchema, reps: integer, rir: integer.optional() }).strict()])
 export const assetSchema = z.object({ ...owned, createdAt: time, role: z.enum(['avatar', 'progress']), width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), bytes: z.number().int().positive().max(5 * 1024 * 1024), path: z.string().regex(/^photos\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/i) }).strict()
 export type BackupAsset = z.infer<typeof assetSchema>
-export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20; assets: BackupAsset[] }
+export interface BackupData extends Omit<ProfileSnapshot, 'databaseVersion' | 'capturedAt' | 'photos'> { format: 'boros-profile-backup'; backupSchemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22; assets: BackupAsset[] }
 // Validation never replaces the original records with Zod's parsed/transformed output.
 // The JSON payload retains saved text, optional-field presence, array order and snapshots.
 export const v4BackupDataSchema = z.object({
@@ -173,6 +176,7 @@ export const v14BackupDataSchema = v13BackupDataSchema.extend({
 })
 export const backupDataSchema = v13BackupDataSchema.extend({
   backupSchemaVersion: z.literal(BACKUP_VERSION),
+  measurements: z.array(measurementFieldsSchema.extend({ ...owned, loggedAt: time, updatedAt: time.optional(), revision: revision.optional(), photoId: id.optional(), lastMutationId: id.optional() }).strict().refine(hasMeasurementMetric, 'Enter weight or body fat.')),
   exercises: z.array(z.discriminatedUnion('trainingType', [
     v12BackupDataSchema.shape.exercises.element.extend({ trainingType: z.literal('strength').optional() }),
     intervalInputSchema.omit({ tagNames: true }).extend({ ...archived, tagIds: z.array(id), mergedIntoId: id.optional(), mergedAt: time.optional(), mergeOperationId: id.optional() }).strict(),
@@ -184,11 +188,11 @@ export const backupDataSchema = v13BackupDataSchema.extend({
     outcomes: z.array(v13BackupDataSchema.shape.schedules.element.shape.outcomes.unwrap().element.extend({ planNotes: planInstructionsSchema, day: typedDay })).optional(),
   })),
   drafts: z.array(v13BackupDataSchema.shape.drafts.element.extend({ planNotes: planInstructionsSchema, day: typedDraftDay, interval: intervalStateSchema.optional() })),
-  sessions: z.array(v13BackupDataSchema.shape.sessions.element.extend({ noteEdited: z.boolean().optional(), exercises: z.array(z.object({ id, notes: z.string(), noteEdited: z.boolean().optional(), sets: z.array(recorded) }).strict()), planNotes: planInstructionsSchema, day: typedDraftDay, interval: intervalStateSchema.optional() })),
+  sessions: z.array(v13BackupDataSchema.shape.sessions.element.extend({ noteEdited: z.boolean().optional(), exercises: z.array(z.object({ id, notes: z.string(), noteEdited: z.boolean().optional(), sets: z.array(recordedSetSchema) }).strict()), planNotes: planInstructionsSchema, day: typedDraftDay, interval: intervalStateSchema.optional() })),
 })
 export const inventorySchema = z.object({ path: z.string(), bytes: z.number().int().nonnegative(), sha256: z.string().regex(/^[0-9a-f]{64}$/), mediaType: z.string() }).strict()
 export const manifestSchema = z.object({
-  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13), z.literal(14), z.literal(15), z.literal(16), z.literal(17), z.literal(18), z.literal(19), z.literal(20)]), databaseSchemaVersion: z.union([z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13), z.literal(14)]),
+  format: z.literal('boros-profile-backup'), backupSchemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13), z.literal(14), z.literal(15), z.literal(16), z.literal(17), z.literal(18), z.literal(19), z.literal(20), z.literal(21), z.literal(22)]), databaseSchemaVersion: z.union([z.literal(5), z.literal(6), z.literal(7), z.literal(8), z.literal(9), z.literal(10), z.literal(11), z.literal(12), z.literal(13), z.literal(14), z.literal(15), z.literal(16)]),
   app: z.object({ name: z.literal('boros'), version: z.string().min(1) }).strict(), exportedAt: time, snapshotAt: time,
   profile: z.object({ id, name: z.string(), kind: z.enum(['guest', 'named']) }).strict(), snapshotPolicy: z.union([z.literal(LEGACY_SNAPSHOT_POLICY), z.literal(SNAPSHOT_POLICY)]),
   counts: z.record(z.number().int().nonnegative()), csvRows: z.record(z.number().int().nonnegative()),
@@ -209,10 +213,13 @@ function equalRecord(a: unknown, b: unknown): boolean {
   return keys.length === other.length && keys.every((key, index) => key === other[index] && equalRecord(left[key], right[key]))
 }
 export function validateBackupData(data: BackupData) {
-  if (data.backupSchemaVersion <= 19) return validateLegacyBackup(data as import('./backup-v19.ts').BackupData)
+  if (data.backupSchemaVersion <= 21) return validateLegacyBackup(data as import('./backup-v21.ts').BackupData)
   const fail = (message: string): never => { throw new Error(`Backup cannot be completed: ${message}. Reopen the affected record and repair it before retrying; source data was not changed.`) }
   const validation = (data.backupSchemaVersion === 1 ? legacyBackupDataSchema : data.backupSchemaVersion === 2 ? v2BackupDataSchema : data.backupSchemaVersion === 3 ? v3BackupDataSchema : data.backupSchemaVersion === 4 ? v4BackupDataSchema : data.backupSchemaVersion === 5 ? v5BackupDataSchema : data.backupSchemaVersion === 6 ? v6BackupDataSchema : data.backupSchemaVersion === 7 ? v7BackupDataSchema : data.backupSchemaVersion === 8 ? v8BackupDataSchema : data.backupSchemaVersion === 9 ? v9BackupDataSchema : data.backupSchemaVersion === 10 ? v10BackupDataSchema : data.backupSchemaVersion === 11 ? v11BackupDataSchema : data.backupSchemaVersion === 12 ? v12BackupDataSchema : data.backupSchemaVersion === 13 ? v13BackupDataSchema : data.backupSchemaVersion === 14 ? v14BackupDataSchema : backupDataSchema).safeParse(data)
   if (!validation.success) { const issue = validation.error.issues[0]; fail(`invalid saved ${issue.path.join('.')}: ${issue.message}`) }
+  // Validate a compatibility view; original JSON/CSV/checksum bytes stay authoritative.
+  data = structuredClone(data)
+  for (const record of [...data.drafts, ...data.sessions]) inferRecordedLR(record)
   const index = <T extends { id: string; profileId: string }>(records: T[], label: string) => {
     const map = new Map<string, T>()
     for (const item of records) { if (item.profileId !== data.profile.id) fail(`wrong profile in ${label}`); if (map.has(item.id)) fail(`duplicate ${label} ID ${item.id}`); map.set(item.id, item) }
@@ -318,6 +325,11 @@ export function validateBackupData(data: BackupData) {
   }
   for (const draft of data.drafts) { validateDraftInput(draft.input, draft.day); if (draft.finalizedAt && !sessions.has(draft.id)) fail(`finalized draft ${draft.id} requires a completed session`) }
   for (const session of data.sessions) {
+    for (const exercise of session.day.exercises) {
+      if (exercise.prescription.trainingType === 'interval') continue
+      const results = session.exercises.find(e => e.id === exercise.id)?.sets ?? []
+      if (results.some(set => ('sides' in set) !== lrMode(exercise.prescription))) fail(`session ${session.id} has incompatible L/R results`)
+    }
     const draft = drafts.get(session.draftId)
     if (!draft || draft.id !== session.id || draft.finalizedAt !== session.completedAt || draft.prunedAt !== session.prunedAt || draft.sourcePlanId !== session.sourcePlanId || !equalRecord(draft.source, session.source) || draft.timeZone !== session.timeZone || draft.occurrenceKey !== session.occurrenceKey || draft.planInstructions !== session.planInstructions || draft.planNotes !== session.planNotes || (draft.input.noteEdited === undefined ? undefined : draft.input.noteEdited || !!draft.input.noteInheritedClear && draft.input.notes === '') !== session.noteEdited || !equalRecord(draft.day, session.day) || !equalRecord(draft.structure, session.structure)) fail(`session ${session.id} has an inconsistent finalized draft`)
     if (session.day.trainingType === 'interval') {

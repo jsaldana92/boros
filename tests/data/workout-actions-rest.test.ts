@@ -185,21 +185,21 @@ test('v10 to v11 is record/Blob preserving; v17 archive/restore keeps independen
   const rows = await Promise.all(f.db.tables.filter(t => t.name !== 'activeWorkouts').map(async table => [table.name, await table.toArray()] as const)), name = 'boros-test-v10-rest-' + uid(), prior = new Dexie(name)
   prior.version(10).stores(Object.fromEntries(f.db.tables.filter(t => t.name !== 'activeWorkouts').map(table => [table.name, [table.schema.primKey.src, ...table.schema.indexes.map(i => i.src)].join(',')]))); await prior.open()
   for (const [store, values] of rows) await prior.table(store).bulkPut(values)
-  prior.close(); const next = new BorosDatabase(name); t.after(() => next.delete()); await next.open(); assert.equal(next.verno, 14)
+  prior.close(); const next = new BorosDatabase(name); t.after(() => next.delete()); await next.open(); assert.equal(next.verno, 16)
   for (const [store, values] of rows) assert.deepEqual(await next.table(store).toArray(), values)
   assert.deepEqual(new Uint8Array(await (await next.photos.toArray())[0].blob.arrayBuffer()), photoBytes)
-  const original = canonicalSnapshot(await captureProfile(f.id, next)); original.backupSchemaVersion = 16; validateBackupData(original)
+  const original = canonicalSnapshot(await captureProfile(f.id, next)); original.backupSchemaVersion = 16; original.measurements.forEach(m => delete m.timeSource); validateBackupData(original)
   // Build genuine old-contract bytes and CSVs, then verify before promotion.
   const bundle = await generateBackup(await captureProfile(f.id, next), 'old-contract'), archive = await JSZip.loadAsync(bundle.bytes)
   const files = [{ path: 'data.json', bytes: new TextEncoder().encode(JSON.stringify(original)), mediaType: 'application/json' }, ...csvTables(original).map(t => ({ path: t.path, bytes: new TextEncoder().encode(t.text), mediaType: 'text/csv' })), ...await Promise.all(original.assets.map(async a => ({ path: a.path, bytes: await archive.file(a.path)!.async('uint8array'), mediaType: a.mediaType })))]
   const zip = new JSZip(), manifest = { ...bundle.manifest, backupSchemaVersion: 16, databaseSchemaVersion: 10, counts: recordCounts(original), csvRows: Object.fromEntries(csvTables(original).map(t => [t.path, t.rows])), inventory: await Promise.all(files.map(async file => ({ path: file.path, bytes: file.bytes.length, mediaType: file.mediaType, sha256: await sha256(file.bytes) }))) }
   files.forEach(file => zip.file(file.path, file.bytes, { createFolders: false })); zip.file('manifest.json', JSON.stringify(manifest))
   const oldRead = await readBackup(await zip.generateAsync({ type: 'uint8array' }), () => {}, async () => {})
-  assert.equal(oldRead.manifest.backupSchemaVersion, 16); assert.equal(oldRead.data.backupSchemaVersion, 20); assert.deepEqual(oldRead.data.drafts[0].interval, JSON.parse(JSON.stringify(old)))
+  assert.equal(oldRead.manifest.backupSchemaVersion, 16); assert.equal(oldRead.data.backupSchemaVersion, 22); assert.deepEqual(oldRead.data.drafts[0].interval, JSON.parse(JSON.stringify(old)))
   const rest = advanceInterval(begin(d.day, 'rest', initialInterval(d.day), Date.now() - 7000))
   await next.drafts.put({ ...d, interval: rest, input: { ...d.input, notes: 'Rest note' } })
   const backup = await generateBackup(await captureProfile(f.id, next), 'rest-test'), read = await readBackup(backup.bytes, () => {}, async () => {})
-  assert.equal(read.manifest.backupSchemaVersion, 20); assert.equal(read.manifest.databaseSchemaVersion, 14)
+  assert.equal(read.manifest.backupSchemaVersion, 22); assert.equal(read.manifest.databaseSchemaVersion, 16)
   assert.ok(backup.manifest.csvRows['csv/interval_cues.csv'] > 0)
   const restore = await buildRestorePlan(read, undefined, 'new', uid(), 'Copy', new Date().toISOString()), restored = restore.result.drafts[0]
   assert.equal(restored.interval!.status, 'paused'); assert.equal(restored.interval!.anchorAt, undefined); assert.equal(restored.interval!.execution!.owner, undefined); assert.equal(restored.interval!.execution!.mode, 'rest'); assert.equal(restored.interval!.elapsedMs, rest.elapsedMs); assert.equal(restored.input.notes, 'Rest note')

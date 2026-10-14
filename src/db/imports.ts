@@ -1,3 +1,4 @@
+import { applyLRConversions, lrTargets, lrTables, type LRApprovals } from './lr-conversion.ts'
 import { assertImportInstructions } from '../lib/import-instructions.ts'
 import { workoutService } from './workouts.ts'
 import type { WorkoutInput } from '../schemas/workout.ts'
@@ -14,13 +15,13 @@ import { materializeTemplates } from '../lib/template-ownership.ts'
 export function importSession(profileId: string, database: BorosDatabase = db) {
   const creationId = createId()
   return {
-    saveLibraryWorkout: (input: WorkoutInput, confirmedSimilar?: string) => database.transaction('rw', database.profiles, database.deletedSources, database.workouts, database.exercises, database.tags, async () => {
+    saveLibraryWorkout: (input: WorkoutInput, confirmedSimilar?: string, approvals?: LRApprovals) => database.transaction('rw', [...lrTables(database),database.tags], async () => {
       const committed = await database.workouts.get([profileId, creationId])
       if (!committed) assertImportInstructions([input], await database.exercises.where('profileId').equals(profileId).toArray())
-      return committed ?? workoutService(database).save(profileId, { ...input, id: creationId }, undefined, true, confirmedSimilar)
+      return committed ?? workoutService(database).save(profileId, { ...input, id: creationId }, undefined, true, confirmedSimilar, approvals)
     }),
     saveWorkout: (input: ExerciseInput) => exerciseService(database).save(profileId, input, undefined, creationId),
-    savePlan: (input: PlanInput) => database.transaction('rw', [database.workouts, database.profiles, database.deletedSources, database.exercises, database.tags, database.plans, database.schedules], async () => {
+    savePlan: (input: PlanInput, approvals?: LRApprovals) => database.transaction('rw', [...lrTables(database),database.tags], async () => {
       if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.')
       const committed = await database.plans.get([profileId, creationId])
       if (committed) return committed
@@ -31,7 +32,8 @@ export function importSession(profileId: string, database: BorosDatabase = db) {
       const linked = materializeTemplates(profileId, { plans: [virtual], exercises, tags }, at, true)
       if (linked.addedTags.length) await database.tags.bulkAdd(linked.addedTags)
       if (linked.addedExercises.length) await database.exercises.bulkAdd(linked.addedExercises)
-      return planService(database).save(profileId, planToInput(linked.plans[0]), undefined, creationId)
+      await applyLRConversions(database,profileId,lrTargets(linked.plans[0].days),approvals,true)
+      return planService(database).save(profileId, planToInput(linked.plans[0]), undefined, creationId, approvals)
     }),
   }
 }

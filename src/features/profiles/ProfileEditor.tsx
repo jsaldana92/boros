@@ -11,7 +11,7 @@ function initialForm(snapshot: ProfileSnapshot) {
   const inches = (p.heightCm ?? 0) / 2.54
   return { name: effectiveProfileName(p), age: p.age == null ? '' : String(p.age),
     height: p.heightCm == null ? '' : displayNumber(p.heightCm), feet: p.heightCm == null ? '' : String(Math.floor(inches / 12)), inches: p.heightCm == null ? '' : displayNumber(inches % 12),
-    weight: snapshot.measurement ? displayNumber(fromKg(snapshot.measurement.weightKg, p.weightUnit)) : '', weightUnit: p.weightUnit, heightUnit: p.heightUnit }
+    weight: snapshot.measurement?.weightKg !== undefined ? displayNumber(fromKg(snapshot.measurement.weightKg, p.weightUnit)) : '', weightUnit: p.weightUnit, heightUnit: p.heightUnit }
 }
 export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
   const { snapshot: latest, setDirty } = useWorkspace()
@@ -96,7 +96,7 @@ export function ProfileEditor({ initial }: { initial: ProfileSnapshot }) {
         <label>Height unit<select value={form.heightUnit} onChange={(e) => changeHeightUnit(e.target.value as HeightUnit)}><option value="cm">cm</option><option value="ft">ft / in</option></select></label>
       </div>
       <div className="measurement-unit-row">
-        <label>Weight ({form.weightUnit}, optional)<input inputMode="decimal" value={weightChanged ? form.weight : latest.measurement ? displayNumber(fromKg(latest.measurement.weightKg, form.weightUnit)) : ''} onChange={(e) => { change('weight', e.target.value); setWeightChanged(true) }} /></label>
+        <label>Weight ({form.weightUnit}, optional)<input inputMode="decimal" value={weightChanged ? form.weight : latest.measurement?.weightKg !== undefined ? displayNumber(fromKg(latest.measurement.weightKg, form.weightUnit)) : ''} onChange={(e) => { change('weight', e.target.value); setWeightChanged(true) }} /></label>
         <label>Weight unit<select value={form.weightUnit} onChange={(e) => changeWeightUnit(e.target.value as WeightUnit)}><option value="kg">kg</option><option value="lb">lb</option></select></label>
       </div>
       {latest.measurement ? <p className="muted">Last weight recorded: {displayDateTime(latest.measurement.measuredAt)}</p> : <p className="muted">No recorded weight.</p>}

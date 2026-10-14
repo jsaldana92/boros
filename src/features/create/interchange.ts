@@ -1,6 +1,6 @@
 import { convertIntervalDay } from '../../schemas/interval-conversion.ts'
 import type { IntervalInterchange as V7IntervalInterchange } from '../../schemas/interval-interchange-v7.ts'
-import { v9StrengthInterchangeSchema, v9IntervalInterchangeSchema, v6IntervalInterchangeSchema, v7IntervalInterchangeSchema, v8StrengthInterchangeSchema, v7StrengthInterchangeSchema } from '../../schemas/interchange.ts'
+import { v10StrengthInterchangeSchema, v10IntervalInterchangeSchema, v9StrengthInterchangeSchema, v9IntervalInterchangeSchema, v6IntervalInterchangeSchema, v7IntervalInterchangeSchema, v8StrengthInterchangeSchema, v7StrengthInterchangeSchema } from '../../schemas/interchange.ts'
 import { z } from 'zod'
 import { intervalInterchangeSchema, type IntervalInterchange } from '../../schemas/interval-interchange.ts'
 import type { TrainingType } from '../../schemas/training-type.ts'
@@ -26,14 +26,14 @@ export function parseInterchange(text: string): { value?: Interchange; issues: I
     ? 'Invalid JSON. Curly quotes cannot delimit JSON property names or strings. Ask for the complete result in one json code block with straight ASCII double quotes (U+0022), then copy the code directly. Legitimate punctuation inside valid strings is preserved; no automatic quote replacement is performed.'
     : 'Invalid JSON. Paste one complete JSON object, with no prose or additional code blocks. Check straight double quotes, commas, and brackets.' }] } }
   const version = raw && typeof raw === 'object' && 'schemaVersion' in raw ? raw.schemaVersion : undefined
-  if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6 && version !== 7 && version !== 8 && version !== 9) return { issues: [{ path: 'schemaVersion', message: 'Supported AI schema versions are 1, 2, 3, 4, 5, 6, 7, 8 and 9.' }] }
-  const parsed = (version === 9 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? v9IntervalInterchangeSchema : v9StrengthInterchangeSchema) : version === 8 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? intervalInterchangeSchema : v8StrengthInterchangeSchema) : version === 7 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? v7IntervalInterchangeSchema : v7StrengthInterchangeSchema) : version === 6 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? v6IntervalInterchangeSchema : strengthInterchangeSchema) : version === 1 ? legacyInterchangeSchema : version === 2 ? v2InterchangeSchema : version === 3 ? v3InterchangeSchema : version === 4 ? v4InterchangeSchema : currentInterchangeSchema).safeParse(raw)
+  if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6 && version !== 7 && version !== 8 && version !== 9 && version !== 10) return { issues: [{ path: 'schemaVersion', message: 'Supported AI schema versions are 1, 2, 3, 4, 5, 6, 7, 8, 9 and 10.' }] }
+  const parsed = (version === 10 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? v10IntervalInterchangeSchema : v10StrengthInterchangeSchema) : version === 9 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? v9IntervalInterchangeSchema : v9StrengthInterchangeSchema) : version === 8 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? intervalInterchangeSchema : v8StrengthInterchangeSchema) : version === 7 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? v7IntervalInterchangeSchema : v7StrengthInterchangeSchema) : version === 6 ? ((raw as { trainingType?: string }).trainingType === 'interval' ? v6IntervalInterchangeSchema : strengthInterchangeSchema) : version === 1 ? legacyInterchangeSchema : version === 2 ? v2InterchangeSchema : version === 3 ? v3InterchangeSchema : version === 4 ? v4InterchangeSchema : currentInterchangeSchema).safeParse(raw)
   if (parsed.success) return { value: parsed.data, issues: [] }
   return { issues: parsed.error.issues.flatMap((issue) => issue.code === 'unrecognized_keys' ? issue.keys.map((key) => ({ path: fieldPath([...issue.path, key]), message: 'Unknown field. Remove it; IDs and ownership fields are not accepted.' })) : [{ path: fieldPath(issue.path), message: issue.message }]) }
 }
 function toExercise(value: InterchangeExercise): ExerciseInput {
   return {
-    trainingType: 'strength', name: value.name,
+    trainingType: 'strength', name: value.name, ...('lrDistinction' in value ? { lrDistinction: value.lrDistinction as boolean } : {}),
     sets: value.sets.map((set) => ({ reps: { ...set.reps }, ...(set.rir === null ? {} : { rir: { ...set.rir } }) })),
     ...(value.restBetweenSetsSeconds === null ? {} : { restBetweenSeconds: value.restBetweenSetsSeconds }),
     ...(value.restAfterExerciseSeconds === null ? {} : { restAfterSeconds: value.restAfterExerciseSeconds }),
@@ -45,6 +45,7 @@ function toExercise(value: InterchangeExercise): ExerciseInput {
 }
 export type ImportDraft = { kind: 'exercise'; input: ExerciseInput } | { kind: 'workout'; input: WorkoutInput } | { kind: 'plan'; input: PlanInput }
 export function toImportDraft(value: Interchange): ImportDraft {
+  if (value.schemaVersion === 10) return toImportDraft({ ...value, schemaVersion: 9 } as Interchange)
   if (value.schemaVersion === 9) {
     // Conversion reuses unchanged workout/exercise fields; the v9 map is applied
     // explicitly rather than interpreting the v8 cycle as the new wire meaning.
@@ -59,7 +60,7 @@ export function toImportDraft(value: Interchange): ImportDraft {
   }
   if (value.kind === 'exercise') return { kind: 'exercise', input: toExercise(value.exercise) }
   if (value.kind === 'workout' && value.schemaVersion !== 5) return { kind: 'exercise', input: toExercise(value.workout) }
-  type PublicDay = Extract<Exclude<Interchange, { schemaVersion: 6 | 7 | 8 | 9 }>, { kind: 'plan' }>['plan'] extends infer P ? P extends { days: (infer D)[] } ? D : P extends { weeks: { days: (infer D)[] }[] } ? D : never : never
+  type PublicDay = Extract<Exclude<Interchange, { schemaVersion: 6 | 7 | 8 | 9 | 10 }>, { kind: 'plan' }>['plan'] extends infer P ? P extends { days: (infer D)[] } ? D : P extends { weeks: { days: (infer D)[] }[] } ? D : never : never
   const convert = (day: PublicDay): TrainingDay => {
     const groups = 'supersets' in day ? day.supersets.map((group) => ({ id: createId(), number: group.number, ...(group.restBetweenRoundsSeconds === null ? {} : { restBetweenRoundsSeconds: group.restBetweenRoundsSeconds }), ...(group.restAfterGroupSeconds === null ? {} : { restAfterGroupSeconds: group.restAfterGroupSeconds }) })) : undefined
     return { id: createId(), trainingType: 'strength', name: day.name, ...('instructions' in day && typeof day.instructions === 'string' ? { instructions: day.instructions } : {}), ...('notes' in day && typeof day.notes === 'string' ? { notes: day.notes, noteOverride: true } : {}), ...(groups ? { groups } : {}), exercises: day.exercises.map((exercise) => ({ ...copyExercise(toExercise(exercise)), ...('superset' in exercise && exercise.superset !== null ? { groupId: groups!.find((group) => group.number === exercise.superset)!.id } : {}) })) }
@@ -96,7 +97,7 @@ Preserve my requested order, sets, reps, RIR, and rest targets. Do not invent mi
 
 Exact public contract (schemaVersion 5):
 Envelope: { "schemaVersion": 5, "kind": "${kind}", "${kind}": ${kind === 'plan' ? 'Plan' : kind === 'workout' ? 'Workout' : 'Exercise'} }. Include exactly that matching payload.
-${collectionContract}${workoutContract}Exercise: { "name": string, "sets": Set[], "restBetweenSetsSeconds": integer|null, "restAfterExerciseSeconds": integer|null, "instructions": string, "youtubeUrl": string|null, "tags": string[] }.
+${collectionContract}${workoutContract}Exercise: { "name": string, "lrDistinction": boolean, "sets": Set[], "restBetweenSetsSeconds": integer|null, "restAfterExerciseSeconds": integer|null, "instructions": string, "youtubeUrl": string|null, "tags": string[] }.
 Set: { "reps": { "min": integer, "max": integer }, "rir": { "min": integer, "max": integer }|null }.
 
 No extra fields at ANY object level. Never include IDs, profile/ownership fields, revisions, timestamps, or internal database fields. Optional exercise "notes" is a plain-text string of at most 20,000 characters. Older schemaVersion 1-4 payloads remain accepted under their original contracts: kind workout means ONE exercise only in those versions. Version 5 workout means a collection; never mix version shapes. schemaVersion 1 plans require the owner to enter duration in the preview before saving.
@@ -105,7 +106,7 @@ Use null for missing RIR/rest and unknown tutorials. Never invent a tutorial URL
 Include plain-text exercise instructions and string tags when available; otherwise exercise instructions is "" and tags is []. Instructions allow at most 20,000 characters; at most 50 tags per exercise, each 1-80 characters. Omitted optional rir/rest/youtubeUrl default to null; omitted exercise instructions defaults to ""; omitted tags defaults to []. Null is not valid for instructions or tags. Escape newlines inside JSON strings. Do not output HTML to be rendered or executable code.
 
 The following is a valid illustrative example of the exact format, NOT a prescription to copy into my requested exercise/plan. Replace it with my requested content:
-${JSON.stringify(example, null, 2)}`
+${JSON.stringify(example, (key, value) => key === 'exercise' || value && typeof value === 'object' && 'sets' in value && 'restBetweenSetsSeconds' in value ? { ...value, lrDistinction: false } : value, 2)}`
 }
 
 function toIntervalDraft(value: IntervalInterchange | V7IntervalInterchange): ImportDraft {
@@ -121,11 +122,11 @@ function toIntervalDraft(value: IntervalInterchange | V7IntervalInterchange): Im
 }
 export function formattingInstructions(kind: ImportKind, type: TrainingType = 'strength') {
   const ownership = 'Keep instructions identical for repeated occurrences of the same exercise. Notes may differ per occurrence; Boros previews shared-instruction conflicts and the first ordered occurrence seeds a new library default. Existing library defaults are not overwritten.\n'
-  if (type === 'strength') return ownership + 'Training type is Strength. The envelope requires trainingType: "strength"; timed circuits and Interval fields are not supported in this contract.\n' + strengthFormattingInstructions(kind).replaceAll('schemaVersion 5', 'schemaVersion 9').replaceAll('"schemaVersion": 5', '"schemaVersion": 9, "trainingType": "strength"')
+  if (type === 'strength') return ownership + 'Strength exercise lrDistinction is a real JSON boolean (true/false), default false. Include it explicitly. It allows separate Left/Right results for any movement, including arms, legs, abdominal muscles or back. Never infer it from the name. Linked repeated exercises must use one consistent mode.\n' + 'Training type is Strength. The envelope requires trainingType: "strength"; timed circuits and Interval fields are not supported in this contract.\n' + strengthFormattingInstructions(kind).replaceAll('schemaVersion 5', 'schemaVersion 10').replaceAll('"schemaVersion": 5', '"schemaVersion": 10, "trainingType": "strength"')
   const exercise = { name: 'Sprint', activeSeconds: 20, recoverySeconds: 10, tags: [], youtubeUrl: null }, workout = { name: 'Intervals', circuits: [{ name: 'Circuit 1', exercises: [exercise], repeat: 1, restAfterCircuitSeconds: 0 }] }
-  const example = v9IntervalInterchangeSchema.parse({ schemaVersion: 9, trainingType: 'interval', kind, [kind]: kind === 'exercise' ? exercise : kind === 'workout' ? workout : { name: 'Interval plan', mode: 'repeating', durationWeeks: 2, trainingDaysPerWeek: 1, days: [workout] } })
+  const example = v10IntervalInterchangeSchema.parse({ schemaVersion: 10, trainingType: 'interval', kind, [kind]: kind === 'exercise' ? exercise : kind === 'workout' ? workout : { name: 'Interval plan', mode: 'repeating', durationWeeks: 2, trainingDaysPerWeek: 1, days: [workout] } })
   return ownership + `Format my request as one complete Boros Interval ${kind}. Return exactly one complete JSON object in exactly one json fenced code block, with straight ASCII double quotes, no comments, trailing commas, prose or truncation. Never invent missing durations or targets unless I authorize choosing them; ask first. No mixed Strength content.
-Envelope: { "schemaVersion": 9, "trainingType": "interval", "kind": "${kind}", "${kind}": ${kind} }.
+Envelope: { "schemaVersion": 10, "trainingType": "interval", "kind": "${kind}", "${kind}": ${kind} }.
 Exercise: name, activeSeconds (positive integer), recoverySeconds (nonnegative integer), tags (0-50 strings, 1-80 characters), youtubeUrl (supported HTTPS YouTube video URL or null). Optional instructions and notes are separate plain-text strings up to 20,000 characters. Names are 1-120 characters. Durations are seconds, at most 86,400. Missing is not zero. No reps, weights, RIR or Strength supersets.
 Workout: name, optional instructions/notes, optional postWorkoutRestSeconds (nonnegative whole seconds; omitted or 0 means none), circuits (1-100). Circuit: name, exercises (ordered Exercise objects), repeat (integer 0-10; additional executions, defaults to 0), restAfterCircuitSeconds (explicit nonnegative integer seconds). 0 repeats executes once, 1 twice, 10 eleven times. Up to 100 exercise occurrences per workout. Each active interval retains its own recovery, including the last exercise. Rest after circuit follows EVERY execution, including the final one. All repetitions of a circuit finish before the next circuit. Post-workout rest runs once in continuous mode after all circuits and rests, never in circuit-only mode. Rests remain distinct and additive. No Interval sets, roundsPerSet or restBetweenSetsSeconds, nested circuits, references or IDs. Strength set fields are unchanged.
 Plan repeating: name, mode:"repeating", durationWeeks (positive whole number), trainingDaysPerWeek (1-7), days (matching ordered Workout objects). Plan unique: name, mode:"unique", durationWeeks, uniqueWeekCount (1 through durationWeeks), weeks (exactly that many {programWeeks,trainingDaysPerWeek,days} types). Each programWeeks is a nonempty array of program-week numbers; assign every week 1 through durationWeeks exactly once, with no cycle or divisibility rule. Definitions may have different workout counts. Plans optionally have instructions and notes. Never mix unique/repeating fields. Do not invent duration or missing weeks.

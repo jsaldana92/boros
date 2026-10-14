@@ -177,7 +177,7 @@ test('v6 closed state and completed history round-trip; reviewed restore removes
   const { db, id, run, record, open, actions } = await setup(t), completed = await record(0), abandoned = await open(1)
   await actions.leave(await actions.preview(id, run.id, run.revision)); await db.drafts.add(abandoned)
   const snapshot = await captureProfile(id, db), zip = await generateBackup(snapshot, 'train-refinement'), backup = await readBackup(zip.bytes)
-  assert.equal(backup.data.backupSchemaVersion, 20)
+  assert.equal(backup.data.backupSchemaVersion, 22)
   for (const choice of ['new', 'replace', 'device', 'import'] as const) {
     const restored = await buildRestorePlan(backup, choice === 'new' ? undefined : snapshot, choice, crypto.randomUUID(), snapshot.profile.name, new Date().toISOString())
     assert.ok(restored.result.schedules[0].closedAt); assert.equal(restored.result.sessions[0].id, completed.id)
@@ -197,7 +197,7 @@ test('hints use one prior actual corresponding set, stable run/day/occurrence id
   latest.exercises[0].sets[1] = { skipped: true }; older.exercises[0].sets[1] = { skipped: false, weightKg: 54.4310844, load: 120, unit: 'lb', reps: 8, rir: 2 }
   latest.exercises[1].sets[0] = { skipped: false, weightKg: 10, load: 10, unit: 'kg', reps: 9, rir: 0 }
   const id = target.day.exercises[0].id, repeat = target.day.exercises[1].id, hints = previousResults(target, [older, latest], 'lb')
-  assert.deepEqual(hints[id], [{ load: '0', reps: '0' }, { load: '120', reps: '8', rir: '2' }]); assert.equal(hints[repeat][0]?.reps, '9'); assert.equal(hints[repeat][0]?.rir, '0')
+  assert.deepEqual(hints[id], [{ load: '0', reps: '0' }, undefined]); assert.equal(hints[repeat][0]?.reps, '9'); assert.equal(hints[repeat][0]?.rir, '0')
   // Grouping does not merge repeated occurrences or use another member's set.
   const groupId = crypto.randomUUID()
   for (const item of [target, older, latest]) {
@@ -206,7 +206,7 @@ test('hints use one prior actual corresponding set, stable run/day/occurrence id
   }
   assert.deepEqual(previousResults(target, [older, latest], 'lb'), hints)
   const changed = structuredClone(target); changed.day.exercises[0].prescription.sets.reverse(); changed.day.exercises[0].prescription.sets[0].reps.min = 1
-  assert.deepEqual(previousResults(changed, [latest, older], 'kg')[id], [undefined, { load: '54.431084', reps: '8', rir: '2' }])
+  assert.deepEqual(previousResults(changed, [latest, older], 'kg')[id], [undefined, undefined])
   for (const mutate of [(s: typeof latest) => { s.occurrence!.scheduleId = crypto.randomUUID() }, (s: typeof latest) => { s.profileId = crypto.randomUUID() }]) { const wrong = structuredClone(latest); mutate(wrong); assert.deepEqual(previousResults(target, [wrong], 'kg')[id], [undefined, undefined]) }
   assert.equal(hasSessionInput(target.input), false)
 })

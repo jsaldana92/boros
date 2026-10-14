@@ -1,4 +1,4 @@
-# Training analysis CSV and note ownership
+# Training and measurement analysis CSV and note ownership
 
 Settings has separate **Data**, **Profile Backup**, **Restore Profile from Backup**,
 and **Clear data** sections. Data downloads the CSV described here. Profile Backup
@@ -8,7 +8,7 @@ Only a validated Boros ZIP can restore a profile. Neither file is encrypted.
 ## Analysis contract
 
 Export takes one readonly IndexedDB transaction for the selected profile, saved
-sessions/finalized inputs, outcome markers and canonical exercise/workout identities. It
+sessions/finalized inputs, outcome markers, all historical measurements and canonical exercise/workout identities. It
 does not load photos, write records, include other profiles, or treat pending
 workouts/templates/unfinished drafts as history. Export cancellation, errors,
 navigation or profile switching cannot retarget the captured owner. Empty history
@@ -23,8 +23,13 @@ policy. Canonical records are never changed. The filename is
 `Boros_<profile>_analysis_<UTC export date-time>.csv`; that filename timestamp is
 not a performance timestamp.
 
-Rows sort chronologically by saved completion/outcome timestamp with stable ID
-ties. Within a workout, Strength follows original exercise/set order. Interval
+Rows sort chronologically by saved completion/outcome/measurement timestamp with stable ID
+ties. Within a workout, Strength follows original exercise/set order, then Left
+and Right. Two unsided sets produce two rows; two L/R sets produce four (four
+sets produce four or eight). Sides retain the same original set number and context,
+with independent values and status. A blank side is `Unrecorded`; an explicit
+skip is `Skipped`. Missing values never become zero. Conversion is saved before
+export; export never copies or collapses sides itself. Interval
 follows the compiled prescribed active-phase order, with that phase's own recovery
 in the same row. Repeats remain separate: Repeat circuit 3 produces four executions.
 Warm Up, circuit rest, legacy set rest and post-workout rest produce no rows/time.
@@ -33,18 +38,19 @@ final day copy. Its retained phase name/identity/target/activity is still export
 after current prescribed rows; unavailable old instructions/notes are `None`, never
 substituted from a replacement exercise.
 
-The first 22 columns, in order, are:
+The first 23 columns, in order, are:
 
 ```text
-username,date,time,type,plan,workout,circuit,exercise,reps_target,reps,weight,rir_target,rir,exercise_time_target,exercise_time,plan_instructions,plan_notes,workout_instructions,workout_notes,exercise_instructions,exercise_notes,youtube_link
+username,date,time,type,plan,workout,circuit,exercise,l_r_distinction,reps_target,reps,weight,rir_target,rir,exercise_time_target,exercise_time,plan_instructions,plan_notes,workout_instructions,workout_notes,exercise_instructions,exercise_notes,youtube_link
 ```
 
 | Column(s) | Meaning |
 | --- | --- |
 | username | Current selected profile name; Guest fallback if unnamed. |
-| date, time | `dd/mm/yyyy`, 24-hour `HH:mm:ss`, in the exporting browser's time zone captured with the snapshot. Seconds come from the stored timestamp, never elapsed exercise time. Hidden legacy profile-zone preferences are not applied. |
+| date, time | `dd/mm/yyyy`, 24-hour `HH:mm:ss`. Exercise rows use the exporting browser's time zone captured with the snapshot. Measurement rows use their saved local date/time or UTC for context-free legacy records. Seconds come from the stored timestamp, never elapsed exercise time. Hidden legacy profile-zone preferences are not applied. |
 | type | `strength` or `interval`. |
 | plan, workout, circuit, exercise | Saved historical names; plan is `NA` for standalone/custom, circuit is `NA` for Strength. |
+| l_r_distinction | `left` or `right` for a sided Strength result; `no` for unsided Strength and all Interval rows. |
 | reps_target, rir_target | Prescribed set targets: `8` or `5-8`. Missing Strength RIR is `None`. Interval is `NA`. |
 | reps, weight, rir | Actual set values. Canonical kg converts to the captured profile kg/lb preference (up to six decimal places). Zero stays zero; missing RIR is `None`. Interval is `NA`. |
 | exercise_time_target | Interval active seconds and own recovery seconds, `X, Y`; Strength `NA`. |
@@ -75,6 +81,32 @@ These columns follow in this exact order:
 | workout_status | `Completed` for saved sessions (including partials) and manual completion; `Skipped` for a skipped workout. |
 | time_zone | IANA display zone for date/time. No time-zone text is added to ordinary app screens. |
 | workout_id | Canonical library workout identity through durable workout redirects, or `None` when unlinked. Appended after `time_zone`; historical names, session/occurrence IDs and row counts stay unchanged. |
+| record_type | `exercise_result` or `measurement`. Filter this before counting exercise sets/executions. |
+| body_weight | Measurement canonical kg converted to the captured profile unit (up to six decimal places), or `None` if absent; `NA` on exercise rows. Never exercise load. |
+| body_weight_unit | Captured profile kg/lb for a present body weight, `None` if weight absent; `NA` on exercise rows. |
+| body_fat_percentage | Numeric percentage such as `24.5`, without `%`; `None` if absent, `NA` on exercise rows. |
+| measurement_date | Selected/stored measurement date as `dd/mm/yyyy`; `NA` on exercise rows. |
+| measurement_id | Stable shared entry ID; `NA` on exercise rows. |
+| measurement_logged_at_utc | Original entry creation instant; `NA` on exercise rows. |
+| measurement_updated_at_utc | Last edit instant or `None` for old entries without one; `NA` on exercise rows. |
+
+Each measurement produces exactly one row, including a combined weight/body-fat
+entry. A measurement-only profile is exportable. Missing optional metrics are
+`None`, never zero. Exercise fields (`type`, `weight`, `weight_unit`, targets,
+set/status/context/notes and `l_r_distinction`) are `NA` on measurement rows.
+The profile's current values are never copied onto exercise rows. Existing
+Strength/L/R/Interval row counts and value conventions remain unchanged.
+
+On measurement rows, `performed_at_utc` is `measuredAt`; `date` and
+`measurement_date` use the saved wall date so backdating and cross-zone exports
+do not shift it. `time` stays `HH:mm:ss`. `time_source` is `device_clock` for
+automatic current-day capture, `date_only_noon` for automatic noon on another
+selected date, or `legacy_preserved_time` after moving a context-free legacy
+entry's date. Without source metadata it is `measurement_time_legacy`.
+None of these imply the user entered an exact clock time. `time_zone` is the
+saved zone or UTC for context-free legacy entries. Full millisecond precision
+remains in UTC metadata and the restorable ZIP. Date edits retain original clock
+time/zone; DST gaps reject rather than shift, folds prefer the saved offset.
 
 For Interval timing with attempts, the earliest recorded start for that prescribed
 active execution supplies the timestamp. Where no phase timestamp exists, use the

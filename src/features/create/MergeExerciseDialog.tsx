@@ -1,3 +1,4 @@
+import { useLRReview } from './use-lr-review'
 import { trainingTypeOf } from '../../schemas/training-type'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
@@ -9,6 +10,7 @@ import { ActionDialog, ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ExercisePicker } from './ExercisePicker'
 
 export function MergeExerciseDialog({ profileId, edited, input, onClose, onSaved }: { profileId: string; edited: Exercise; input: ExerciseInput; onClose: () => void; onSaved: (record: Exercise) => void }) {
+  const lr=useLRReview(profileId)
   const [library, setLibrary] = useState<{ exercises: Exercise[]; tags: Tag[] }>()
   const [selectedId, setSelected] = useState<string>(), [confirm, setConfirm] = useState(false), [switched, setSwitched] = useState(false)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
@@ -20,7 +22,7 @@ export function MergeExerciseDialog({ profileId, edited, input, onClose, onSaved
   const commit = async () => {
     if (locked.current || !selected || !source) return
     locked.current = true; setBusy(true); setError('')
-    try { onSaved(await exercises.merge(profileId, { id: edited.id, revision: edited.revision, input }, selected, source.id, operation.current)) }
+    try { onSaved(await lr.save(approvals=>exercises.merge(profileId,{id:edited.id,revision:edited.revision,input},selected,source.id,operation.current,approvals))) }
     catch (e) { setError((e as Error).message) }
     finally { locked.current = false; setBusy(false) }
   }
@@ -32,5 +34,5 @@ export function MergeExerciseDialog({ profileId, edited, input, onClose, onSaved
     <p>Merging these two exercises will combine both into only one.</p>
     <div className="merge-direction"><strong>Merge: {source?.name}</strong><ArrowDown aria-hidden="true" size={32} strokeWidth={1.75} /><strong>Into: {destination?.name}</strong><button disabled={busy} onClick={() => { setSwitched(value => !value); operation.current = createId() }}>Switch</button></div>
     {error && <p role="alert">{error}</p>}
-  </ConfirmDialog>}</>
+  </ConfirmDialog>}{lr.dialog}</>
 }

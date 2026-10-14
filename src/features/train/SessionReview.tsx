@@ -1,3 +1,4 @@
+import { recordedRows } from '../../schemas/strength-results'
 import { phaseActivity } from '../../schemas/interval-session'
 import { sessionRounds } from '../../schemas/session-structure'
 import { Fragment, useState } from 'react'
@@ -11,7 +12,7 @@ function StrengthSessionReview({ session, onClose, backLabel = 'Back to workouts
   const [note, setNote] = useState<{ title: string; text: string }>()
   const result = (exercise: PlanExercise, s: number) => {
     const entry = session.exercises.find((item) => item.id === exercise.id)!, set = entry.sets[s], prescribed = exercise.prescription.sets[s]
-    return set ? <li key={exercise.id}>{exercise.groupId && `${exercise.prescription.name}: `}Set {s + 1}: {set.skipped ? 'Skipped' : `${set.load} ${set.unit} · ${set.reps} reps · ${set.rir === undefined ? 'unspecified' : set.rir} actual RIR`}<p className="muted">Target: {target(prescribed.reps)} reps · {target(prescribed.rir)} RIR</p></li> : null
+    return set ? <li key={exercise.id}>{exercise.groupId && `${exercise.prescription.name}: `}Set {s + 1}: {recordedRows(set).map(({side, result}) => <p key={side ?? 'no'}>{side && `${side === 'left' ? 'Left' : 'Right'}: `}{result.skipped ? result.unrecorded ? 'Unrecorded' : 'Skipped' : `${result.load ?? '—'} ${result.unit ?? ''} · ${result.reps ?? '—'} reps · ${result.rir === undefined ? 'unspecified' : result.rir} actual RIR`}</p>)}<p className="muted">Target: {target(prescribed.reps)} reps · {target(prescribed.rir)} RIR</p></li> : null
   }
   return <section aria-label="Saved session details"><div className="training-heading"><h2>{session.day.name}</h2><button aria-label="Session Note" onClick={() => setNote({ title: 'Session note', text: session.notes })}><NotebookPen aria-hidden="true" size={20} /></button></div><p>{session.partial ? 'Partial session' : 'Complete session'}</p><p>Started: {displayDateTime(session.startedAt)}<br />Completed: {displayDateTime(session.completedAt)}<br />Logged: {displayDateTime(session.loggedAt)}</p>
     {trainingBlocks(session.day).map((block) => <section className="training-exercise" key={block.id} aria-label={block.group ? `Saved superset ${block.group.number}` : block.members[0].prescription.name}>

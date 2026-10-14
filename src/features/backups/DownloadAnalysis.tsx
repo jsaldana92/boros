@@ -30,7 +30,7 @@ export function DownloadAnalysis() {
         const result = event.data
         if (result.kind === 'error') { fail(result.message); return }
         if (result.kind === 'progress') { setStatus(`${captured.profile.name}: ${result.message}`); return }
-        if (result.kind === 'empty') { setStatus('No saved training history to export.'); task.terminate(); worker.current = undefined; locked.current = false; setBusy(false); return }
+        if (result.kind === 'empty') { setStatus('No saved training history or measurements to export.'); task.terminate(); worker.current = undefined; locked.current = false; setBusy(false); return }
         if (result.kind === 'ready') {
           try { startDownload(result.blob, result.filename); setStatus(`Download started for ${captured.profile.name}. Check your browser downloads; Boros cannot confirm that the file was saved.`); task.terminate(); worker.current = undefined; locked.current = false; setBusy(false) }
           catch (error) { fail((error as Error).message) }
@@ -41,7 +41,7 @@ export function DownloadAnalysis() {
   }
   return <div className="backup-export">
     <div className="actions"><button type="button" aria-label="Download analysis CSV" className="primary" disabled={busy} onClick={() => { setError(''); setStatus(''); setConfirmation({ id: snapshot.profile.id, name: effectiveProfileName(snapshot.profile) }) }}>{busy ? 'Preparing export…' : 'Download'}</button>{busy && <button type="button" onClick={cancel}>Cancel export</button>}</div>
-    {confirmation && <ConfirmDialog title="Download analysis CSV" confirmLabel="I understand (Download)" onCancel={() => setConfirmation(undefined)} onConfirm={() => void download()}><p>This CSV contains saved training history for {confirmation.name}, which may be sensitive. It may contain sensitive information and is not password protected. It is for analysis and cannot restore a profile.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
+    {confirmation && <ConfirmDialog title="Download analysis CSV" confirmLabel="I understand (Download)" onCancel={() => setConfirmation(undefined)} onConfirm={() => void download()}><p>This CSV contains saved training history and measurements for {confirmation.name}, which may be sensitive. It may contain sensitive information and is not password protected. It is for analysis and cannot restore a profile.</p>{error && <p role="alert">{error}</p>}</ConfirmDialog>}
     <p role="status" aria-live="polite">{status}</p>{!confirmation && error && <p role="alert">{error}</p>}
   </div>
 }

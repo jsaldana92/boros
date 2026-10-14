@@ -1,3 +1,5 @@
+import { useLRReview } from './use-lr-review'
+import type { LRApprovals } from '../../db/lr-conversion'
 import { EditorTitle } from './EditorTitle'
 import { TagPills } from './TagPills'
 import { RestInput } from '../../components/ui/RestInput'
@@ -8,7 +10,8 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Field, TextareaField } from '../../components/ui/Field'
 import { blankSet, parseForm, toForm, type SetFields } from './form'
 
-export function PrescriptionEditor({ sharedInstructions = false, initial, tags, title, archived, saveLabel = 'Save', initialDirty = false, onDirty, onSubmit, onClose, onMerge, path = ['Create', 'Exercise'] }: { sharedInstructions?: boolean; path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput) => Promise<void>; onClose: () => void; onMerge?: (input: ExerciseInput) => void }) {
+export function PrescriptionEditor({ profileId, lrIdentity, sharedInstructions = false, initial, tags, title, archived, saveLabel = 'Save', initialDirty = false, onDirty, onSubmit, onClose, onMerge, path = ['Create', 'Exercise'] }: { profileId?: string; lrIdentity?: string; sharedInstructions?: boolean; path?: string[]; initial?: ExerciseInput; tags: Pick<Tag, 'id' | 'name' | 'archivedAt'>[]; title: string; archived?: boolean; saveLabel?: string; initialDirty?: boolean; onDirty: (dirty: boolean) => void; onSubmit: (input: ExerciseInput, approvals: LRApprovals) => Promise<void>; onClose: () => void; onMerge?: (input: ExerciseInput) => void }) {
+  const lr = useLRReview(profileId)
   const [form, setForm] = useState(() => toForm(initial))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
@@ -53,13 +56,13 @@ export function PrescriptionEditor({ sharedInstructions = false, initial, tags, 
       const parsed = parseForm(form); setErrors(parsed.errors)
       if (!parsed.value) { requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); return }
       submitting.current = true; setBusy(true)
-      try { await onSubmit(parsed.value) }
+      try { await lr.save(approvals => onSubmit(parsed.value!,approvals)) }
       catch (e) { setError((e as Error).message) } finally { submitting.current = false; setBusy(false) }
     }}>
       <fieldset disabled={busy}>
         <legend className="sr-only">Exercise prescription</legend>
         <Field label="Exercise name" required maxLength={120} value={form.name} error={errors.name} onChange={(e) => change('name', e.target.value)} />
-        {form.trainingType === 'interval' ? <div className="rest-pair">{(['activeSeconds', 'recoverySeconds'] as const).map(key => <RestInput key={key} label={key === 'activeSeconds' ? 'Active' : 'Rest'} value={form[key]} errors={{ minutes: errors[`${key}.minutes`], seconds: errors[`${key}.seconds`] }} onChange={value => setForm(current => ({ ...current, [key]: value }))} />)}</div> : <><div className="actions count-controls"><Field label="Number of sets" inputMode="numeric" required value={form.count} error={errors.count} onChange={(e) => change('count', e.target.value)} /><button type="button" onClick={applyCount}>Apply</button></div>
+        {form.trainingType === 'interval' ? <div className="rest-pair">{(['activeSeconds', 'recoverySeconds'] as const).map(key => <RestInput key={key} label={key === 'activeSeconds' ? 'Active' : 'Rest'} value={form[key]} errors={{ minutes: errors[`${key}.minutes`], seconds: errors[`${key}.seconds`] }} onChange={value => setForm(current => ({ ...current, [key]: value }))} />)}</div> : <><div role="group" aria-label="L/R Distinction" className="lr-toggle"><span>L/R Distinction</span><div className="segmented">{([false,true] as const).map(mode=><button type="button" key={String(mode)} aria-pressed={form.lrDistinction===mode} onClick={async()=>{if(form.lrDistinction===mode)return;setBusy(true);setError('');try{if(await lr.toggle(lrIdentity,mode))setForm(f=>({...f,lrDistinction:mode}))}catch(e){setError((e as Error).message)}finally{setBusy(false)}}}>{mode?'Yes':'No'}</button>)}</div></div><div className="actions count-controls"><Field label="Number of sets" inputMode="numeric" required value={form.count} error={errors.count} onChange={(e) => change('count', e.target.value)} /><button type="button" onClick={applyCount}>Apply</button></div>
         <p className="muted">Enter a minimum only for a fixed target. Add a maximum for a range. RIR is optional; 0 is valid.</p>
 
         {form.sets.map((set, index) => <fieldset className="set-fields" key={index}><legend>Set {index + 1}</legend><div className="prescription-grid">
@@ -90,6 +93,7 @@ export function PrescriptionEditor({ sharedInstructions = false, initial, tags, 
         }}>Cancel</button></div>
       </fieldset>
     </form>
+    {lr.dialog}
     {confirm && <ConfirmDialog title={confirm.title} confirmLabel="Confirm" onCancel={() => setConfirm(undefined)} onConfirm={() => { confirm.action(); setConfirm(undefined) }}><p>{confirm.message}</p></ConfirmDialog>}
   </section>
 }

@@ -9,6 +9,7 @@ export function spreadsheetCell(value: unknown) {
   return typeof value === 'string' && /^[\s\uFEFF]*(?:[=+\-@＝＋－＠]|\t|\r|\n)/u.test(value) ? `'${value}` : value
 }
 export function csvTables(data: BackupData) {
+  const lr = data.backupSchemaVersion >= 21, lrColumn = lr ? ',lrDistinction' : '', sideColumns = lr ? ',side,unrecorded,conversionJson' : ''
   const repeats = data.backupSchemaVersion >= 16
   const timerV2 = data.backupSchemaVersion >= 15
   const postRest = timerV2 ? ',postWorkoutRestSeconds' : ''
@@ -26,7 +27,7 @@ export function csvTables(data: BackupData) {
   if (data.backupSchemaVersion >= 3) table('train_selections', 'profileId,planId,selectionOrder', (data.profile.selectedPlanIds ?? []).map((planId, i) => ({ profileId: data.profile.id, planId, selectionOrder: i + 1 })))
   if (data.backupSchemaVersion >= 13) table('deleted_sources', 'profileId,kind,id,deletedAt,mergedIntoId', data.deletedSources as unknown as Row[])
   table('tags', 'profileId,id,name,nameKey,archivedAt,createdAt,updatedAt', data.tags as unknown as Row[])
-  const libraries = table('library_exercises', `profileId,id,name,nameKey,activeNameKey,revision,archivedAt,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl,createdAt,updatedAt${data.backupSchemaVersion >= 12 ? ',mergedIntoId,mergedAt,mergeOperationId' : ''}${timingColumns}`)
+  const libraries = table('library_exercises', `profileId,id,name,nameKey,activeNameKey,revision,archivedAt,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl,createdAt,updatedAt${data.backupSchemaVersion >= 12 ? ',mergedIntoId,mergedAt,mergeOperationId' : ''}${timingColumns}${lrColumn}`)
   const librarySets = table('library_sets', 'profileId,libraryExerciseId,setOrder,repsMin,repsMax,rirMin,rirMax')
   const tagLinks = table('exercise_tags', 'profileId,libraryExerciseId,tagId,tagOrder')
   table('plans', 'profileId,id,name,nameKey,activeNameKey,revision,archivedAt,createdAt,updatedAt' + (current ? ',durationWeeks' : '') + (weekly ? ',notes' : '') + (data.backupSchemaVersion >= 7 ? ',instructions' : '') + typeColumn, data.plans as unknown as Row[])
@@ -40,7 +41,7 @@ export function csvTables(data: BackupData) {
   const resultRows = typed ? table('interval_results', 'profileId,ownerKind,ownerId,phaseId,elapsedMs,status,startedAt,endedAt,notes') : []
   const definitions = data.backupSchemaVersion >= 10 ? table('unique_weeks', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,weekId,weekOrder,dayId,dayOrder' + (data.backupSchemaVersion >= 20 ? ',programWeeks' : '')) : []
   const days = table('days', `${scope},name${typeColumn}${postRest}${typed ? ',publishedWorkoutId' : ''}${libraryWorkouts ? ",sourceWorkoutId,instructions,notes" : ""}`)
-  const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}${data.backupSchemaVersion >= 4 ? ',templateId' : ''}${timingColumns}`)
+  const prescriptions = table('prescriptions', `${scope},exerciseOccurrenceId,exerciseOrder,name,sourceKind,sourceId,sourceDayId,sourceOccurrenceId,restBetweenSeconds,restAfterSeconds,instructions,notes,tutorialUrl${current ? ',groupId,sourceLibraryId' : ''}${data.backupSchemaVersion >= 4 ? ',templateId' : ''}${timingColumns}${lrColumn}`)
   const groups = current ? table('supersets', `${scope},groupId,number,blockOrder,restBetweenRoundsSeconds,restAfterGroupSeconds`) : []
   const prescriptionSets = table('prescription_sets', `${scope},exerciseOccurrenceId,exerciseOrder,setOrder,repsMin,repsMax,rirMin,rirMax${data.backupSchemaVersion >= 10 ? ',setId' : ''}`)
   const prescriptionTags = table('prescription_tags', `${scope},exerciseOccurrenceId,exerciseOrder,tagOrder,tagName`)
@@ -58,11 +59,11 @@ export function csvTables(data: BackupData) {
   const event = 'occurrenceKey,scheduleId,scheduleRevisionId,scheduledDate,scheduledWeek,timeZone'
   const structureSets = data.backupSchemaVersion >= 9 ? table('session_structure', 'profileId,ownerKind,ownerId,amended,exerciseOccurrenceId,setOrder,setId,round') : []
   const drafts = table('drafts', `profileId,id,sourcePlanId,sourceDayId,planName,revision,activeSourceKey,startedAt,updatedAt,finalizedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}${data.backupSchemaVersion >= 13 ? ',prunedAt' : ''}`)
-  const draftResults = table('draft_results', 'profileId,draftId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,loadText,repsText,rirText,unit,skipped')
+  const draftResults = table('draft_results', 'profileId,draftId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,loadText,repsText,rirText,unit,skipped' + sideColumns)
   const sessions = table('sessions', `profileId,id,draftId,sourcePlanId,sourceDayId,planName,revision,partial,startedAt,completedAt,loggedAt,${event}${snapshotInstructions}${libraryWorkouts ? ",sourceKind,sourceWorkoutId,completionTimeZone" : ""}${data.backupSchemaVersion >= 13 ? ',prunedAt' : ''}`)
-  const sessionResults = table('session_results', 'profileId,sessionId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,skipped,weightKg,load,unit,reps,rir')
+  const sessionResults = table('session_results', 'profileId,sessionId,sourcePlanId,dayId,exerciseOccurrenceId,exerciseOrder,setOrder,skipped,weightKg,load,unit,reps,rir' + sideColumns)
   const notes = table('notes', 'profileId,ownerKind,ownerId,scheduleRevisionId,sourcePlanId,dayId,exerciseOccurrenceId,noteKind,text' + (data.backupSchemaVersion >= 19 ? ',noteOverride,noteEdited,noteInitial,noteInheritedClear' : ''))
-  table('progress', 'profileId,id,weightKg,measuredAt,measuredLocal,timeZone,offsetMinutes,loggedAt,updatedAt,revision,photoId,lastMutationId', data.measurements as unknown as Row[])
+  table('progress', 'profileId,id,weightKg,measuredAt,measuredLocal,timeZone,offsetMinutes,loggedAt,updatedAt,revision,photoId,lastMutationId' + (data.backupSchemaVersion >= 22 ? ',bodyFatPercentage,timeSource' : ''), data.measurements as unknown as Row[])
   table('assets', 'profileId,id,path,mediaType,bytes,width,height,role,createdAt', data.assets as unknown as Row[])
   const assetRefs = table('asset_references', 'profileId,ownerKind,ownerId,photoId')
   const writeSets = (target: Row[], context: Row, sets: ExerciseInput['sets'], ids?: string[]) => sets.forEach((set, i) => target.push({ ...context, setOrder: i + 1, setId: ids?.[i], repsMin: set.reps.min, repsMax: set.reps.max, rirMin: set.rir?.min, rirMax: set.rir?.max }))
@@ -116,7 +117,7 @@ export function csvTables(data: BackupData) {
     notes.push({ ...context, noteKind: 'session', text: input.notes, noteEdited: input.noteEdited, ...('noteInitial' in input ? { noteInitial: input.noteInitial, noteInheritedClear: input.noteInheritedClear } : {}) })
     input.exercises.forEach((exercise, e) => {
       notes.push({ ...context, exerciseOccurrenceId: exercise.id, noteKind: 'exercise', text: exercise.notes, noteEdited: exercise.noteEdited, ...('noteInitial' in exercise ? { noteInitial: exercise.noteInitial, noteInheritedClear: exercise.noteInheritedClear } : {}) })
-      exercise.sets.forEach((set, s) => results.push({ profileId: data.profile.id, [`${kind}Id`]: record.id, sourcePlanId: record.sourcePlanId, dayId: record.day.id, exerciseOccurrenceId: exercise.id, exerciseOrder: e + 1, setOrder: s + 1, ...set, ...('load' in set && typeof set.load === 'string' ? { loadText: set.load, repsText: set.reps, rirText: set.rir } : {}) }))
+      exercise.sets.forEach((group, s) => { const rows = 'sides' in group && group.sides ? [{ side: 'left', ...group.sides.left }, { side: 'right', ...group.sides.right }] : [{ side: 'no', ...group }]; rows.forEach(set => results.push({ profileId: data.profile.id, [`${kind}Id`]: record.id, sourcePlanId: record.sourcePlanId, dayId: record.day.id, exerciseOccurrenceId: exercise.id, exerciseOrder: e + 1, setOrder: s + 1, ...set, conversionJson: 'conversion' in set && set.conversion ? JSON.stringify(set.conversion) : undefined, ...('load' in set && typeof set.load === 'string' ? { loadText: set.load, repsText: set.reps, rirText: set.rir } : {}) })); })
     })
   }
   for (const record of [data.profile, ...data.measurements]) if (record.photoId) assetRefs.push({ profileId: data.profile.id, ownerKind: record === data.profile ? 'profile' : 'measurement', ownerId: record.id, photoId: record.photoId })

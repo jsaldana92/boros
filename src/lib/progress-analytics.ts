@@ -1,3 +1,4 @@
+import { recordedRows, inputRows, type RecordedSide, type Side } from '../schemas/strength-results.ts'
 import type { DeletedSource } from '../schemas/deleted-source.ts'
 import { exerciseResolver } from './exercise-identity.ts'
 import type { Schedule } from '../schemas/schedule.ts'
@@ -5,13 +6,13 @@ import { resolvedDays, runProgress } from './run-progress.ts'
 import { nameKey } from '../schemas/profile.ts'
 import type { Exercise } from '../schemas/exercise.ts'
 import type { Plan, PlanExercise, TrainingDay } from '../schemas/plan.ts'
-import type { CompletedSession, RecordedSet, SessionDraft } from '../schemas/session.ts'
+import type { CompletedSession, SessionDraft } from '../schemas/session.ts'
 
-export type ActualSet = Extract<RecordedSet, { skipped: false }>
+export type ActualSet = Extract<RecordedSide, { skipped: false }>
 export interface Performance {
   id: string; exerciseKey: string; itemKey: string; instanceId: string
   session: CompletedSession; occurrence: PlanExercise; occurrenceIndex: number
-  sets: { id: string; index: number; result: ActualSet }[]
+  sets: { id: string; index: number; side?: Side; result: ActualSet }[]
 }
 export interface ProgressItem { key: string; name: string; context: string; nameKey: string; createdAt: string; tagIds: string[] }
 export interface ExerciseOutcome { id: string; instanceId: string; itemKey: string; exerciseKey: string; completed: boolean; skipped: boolean }
@@ -30,7 +31,7 @@ export function exerciseIdentity(planId: string | undefined, dayId: string, exer
 }
 export const occurrenceItemKey = (dayId: string, exerciseId: string) => JSON.stringify([dayId, exerciseId])
 export const legacyPlanKey = (planId: string) => `legacy:${planId}`
-const validActual = (set: RecordedSet): set is ActualSet => !set.skipped && Number.isFinite(set.weightKg) && set.weightKg >= 0 && Number.isSafeInteger(set.reps) && set.reps >= 0
+const validActual = (set: RecordedSide): set is ActualSet => !set.skipped && ((set.weightKg !== undefined && Number.isFinite(set.weightKg) && set.weightKg >= 0) || (set.reps !== undefined && Number.isSafeInteger(set.reps) && set.reps >= 0))
 
 export function deriveProgress(profileId: string, _allPlans: Plan[], allExercises: Exercise[], allSessions: CompletedSession[], schedules: Schedule[] = [], drafts: SessionDraft[] = [], deletedSources: DeletedSource[] = []): ProgressAnalytics {
   const library = allExercises.filter((e) => e.profileId === profileId && e.trainingType !== 'interval'), runs = schedules.filter((r) => r.profileId === profileId)
@@ -54,15 +55,15 @@ export function deriveProgress(profileId: string, _allPlans: Plan[], allExercise
     for (const [index, occurrence] of session.day.exercises.entries()) {
       if (occurrence.prescription.trainingType === 'interval') continue
       const results = session.exercises.find((e) => e.id === occurrence.id)?.sets ?? []
-      const sets = results.flatMap((result, s) => validActual(result) ? [{ id: `${session.id}:${occurrence.id}:${session.structure?.exercises[index]?.sets[s]?.id ?? s}`, index: s, result }] : [])
+      const sets = results.flatMap((group, s) => recordedRows(group).flatMap(({side, result}) => validActual(result) ? [{ id: `${session.id}:${occurrence.id}:${session.structure?.exercises[index]?.sets[s]?.id ?? s}:${side ?? 'no'}`, index: s, side, result }] : []))
       const itemKey = occurrenceItemKey(session.day.id, occurrence.id), exerciseKey = identity(session.sourcePlanId, session.day.id, occurrence)
       const id = `${instanceId}:${session.occurrence?.key ?? session.id}:${occurrence.id}`
       const prior = outcomes.get(id), count = occurrence.prescription.sets.length
       const explicit = savedDraft?.input.exercises.find((e) => e.id === occurrence.id)?.sets
-      const completed = count > 0 && results.length === count && sets.length === count
+      const completed = count > 0 && results.length === count && results.every(group => recordedRows(group).every(({result}) => validActual(result)))
       // Blank fields were historically serialized as skipped sets too. Without
       // retained explicit input evidence, do not invent an exercise-level skip.
-      const skipped = count > 0 && results.length === count && results.every((r) => r.skipped) && explicit?.length === count && explicit.every((r) => r.skipped)
+      const skipped = count > 0 && results.length === count && results.every(group => recordedRows(group).every(({result}) => result.skipped)) && explicit?.length === count && explicit.every(group => inputRows(group).every(({result}) => result.skipped))
       outcomes.set(id, { id, instanceId, itemKey, exerciseKey, completed: !!(prior?.completed || completed), skipped: !(prior?.completed || completed || sets.length) && !!(prior?.skipped || skipped) })
       if (sets.length) performances.push({ id: `${session.id}:${occurrence.id}`, exerciseKey, itemKey, instanceId, session, occurrence, occurrenceIndex: index, sets })
     }
@@ -106,6 +107,6 @@ export function exerciseCounts(data: ProgressAnalytics, key: string, instanceId?
 export function performanceStats(performances: Performance[]) {
   const ordered = [...performances].sort((a, b) => sessionOrder(a.session, b.session) || a.occurrenceIndex - b.occurrenceIndex)
   const sets = ordered.flatMap((performance) => performance.sets.map((set) => ({ ...set, performance })))
-  const extreme = (field: 'weightKg' | 'reps', max: boolean) => sets.reduce<typeof sets[number] | undefined>((best, set) => !best || (max ? set.result[field] > best.result[field] : set.result[field] < best.result[field]) ? set : best, undefined)
+  const extreme = (field: 'weightKg' | 'reps', max: boolean) => sets.reduce<typeof sets[number] | undefined>((best, set) => set.result[field] === undefined ? best : !best || (max ? set.result[field]! > best.result[field]! : set.result[field]! < best.result[field]!) ? set : best, undefined)
   return { sets, minimum: extreme('weightKg', false), maximum: extreme('weightKg', true), repsMinimum: extreme('reps', false), repsMaximum: extreme('reps', true), starting: ordered.filter((p) => p.session.id === ordered[0]?.session.id), latest: ordered.filter((p) => p.session.id === ordered.at(-1)?.session.id) }
 }

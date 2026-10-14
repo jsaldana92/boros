@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { strengthInputSchema } from './exercise.ts'
+import { strengthInputSchema } from './exercise-v14.ts'
 
 const name = strengthInputSchema.shape.name, text = z.string().max(20000).optional()
 const duration = z.number().int().min(0).max(86400), count = z.number().int().min(1).max(100)

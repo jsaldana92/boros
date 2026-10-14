@@ -1,7 +1,7 @@
 import { meaningfulInterval, type IntervalState } from './interval-session-v4.ts'
-import type { SessionStructure } from './session-structure.ts'
+import type { SessionStructure } from './session-structure-v14.ts'
 import { z } from 'zod'
-import type { TrainingDay } from './plan.ts'
+import type { TrainingDay } from './plan-v14.ts'
 import type { OccurrenceRef } from './schedule.ts'
 import { displayNumber, fromKg, toKg, weightUnitSchema, type WeightUnit } from './profile.ts'
 

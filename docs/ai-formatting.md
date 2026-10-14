@@ -1,7 +1,13 @@
-# Boros AI interchange v9: explicit week-type assignments
+# Boros AI interchange v10: Strength L/R Distinction
 
-The current formatting prompt emits **schemaVersion 9** for Strength and Interval.
-Exercise/workout fields and repeating-plan fields retain v8 meanings. A unique
+The current formatting prompt emits **schemaVersion 10** for Strength and Interval.
+Strength exercise objects add `lrDistinction`: a real JSON `true`/`false` boolean,
+defaulting to false when omitted. Prompts request an explicit value. It applies
+to any movement with separate Left/Right results, not just arms; names never infer
+it. Interval objects reject the field. New and repeated imported exercises can
+be reviewed in the shared editor; conflicting modes require an explicit choice,
+and existing historical conversion is separately confirmed at Save. Nothing is
+converted at validation or preview. Other exercise/workout fields retain v8 meanings. A unique
 plan uses `mode:"unique"`, positive integer `durationWeeks`, `uniqueWeekCount`
 (1 through duration), and that many ordered `weeks` objects. Every type contains
 `programWeeks`, `trainingDaysPerWeek` (1–7), and its ordered workout `days`.

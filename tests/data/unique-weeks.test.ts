@@ -140,7 +140,7 @@ test('populated v5 storage reopens unchanged; v10 backup and both whole-family m
   await legacyWorkspace(db)
   const plan=await planService(db).save(id,cycleInput()),[run]=await weeklyService(db).activate(id,plan.id),e=occurrences(run,run.startWeek,addDays(run.startWeek,6))[0];await sessionService(db).openOccurrence(id,run.id,e.day.id,e.ref.scheduledDate)
   const snapshot=await captureProfile(id,db),backup=await generateBackup(snapshot,'cycles'),read=await readBackup(backup.bytes,()=>{},async()=>{})
-  assert.equal(read.data.backupSchemaVersion, 20);assert.equal(csvTables(read.data).length,40);assert.deepEqual(read.data.plans,JSON.parse(JSON.stringify(snapshot.plans)));assert.equal(backup.manifest.csvRows['csv/unique_weeks.csv'],14)
+  assert.equal(read.data.backupSchemaVersion, 22);assert.equal(csvTables(read.data).length,40);assert.deepEqual(read.data.plans,JSON.parse(JSON.stringify(snapshot.plans)));assert.equal(backup.manifest.csvRows['csv/unique_weeks.csv'],14)
   assert.equal(v9BackupDataSchema.safeParse({...read.data,backupSchemaVersion:9}).success,false)
   for(const action of ['new','import','device'] as const) {
     const restored=await buildRestorePlan(read,action==='new'?undefined:snapshot,action,uid(),'Restored',new Date().toISOString());validateBackupData(canonicalSnapshot(restored.result));const cycle=restored.result.plans.find(p=>p.name==='Alternating')!;assert.deepEqual(cycle.weeks,plan.weeks);assert.deepEqual(cycle.days.map(d=>({...d,exercises:d.exercises.map(({templateId:_template,...e})=>e)})),plan.days);assert.ok(cycle.days.every(d=>d.exercises.every(e=>restored.result.exercises.some(x=>x.id===e.templateId))))

@@ -154,21 +154,21 @@ test('hint identity, repeated A/B, per-set prescription/missing RIR/zero/units/p
   draft.day.exercises[0].prescription.sets.push({ reps: { min: 3, max: 5 } })
   assert.equal(previousResults(draft,[old,latest],'kg')[a.id][2],undefined)
 })
-test('compatible other workouts within the same run, canonical merges, deterministic ties and new-run isolation', () => {
+test('other workouts excluded within the same run, canonical merges, deterministic ties and new-run isolation', () => {
   const { draft,a,template,log } = historyFixture(), first = log('2026-10-08T10:00:00.000Z'), cross = log(first.completedAt,20)
   cross.id='ffffffff-ffff-4fff-afff-ffffffffffff'; first.id='00000000-0000-4000-a000-000000000000'
   cross.sourceDayId = cross.day.id = uid(); const ref=uid(); cross.day.exercises[0].source = {kind:'exercise',id:ref}; cross.day.exercises[0].id=uid(); cross.exercises[0].id=cross.day.exercises[0].id
   const identities=[{id:ref,profileId:draft.profileId,mergedIntoId:template},{id:template,profileId:draft.profileId}]
-  assert.equal(previousResults(draft,[first,cross],'kg',identities)[a.id][0]!.load,'20')
+  assert.equal(previousResults(draft,[first,cross],'kg',identities)[a.id][0]!.load,'10')
   cross.profileId=uid();assert.equal(previousResults(draft,[cross],'kg',identities)[a.id][0],undefined)
   draft.occurrence!.scheduleId=uid();assert.equal(previousResults(draft,[first],'kg',identities)[a.id][0],undefined)
 })
 test('history shows complete recorded occurrences in order; limits, fallback, actual ordinals and optional values', () => {
   const { draft,a,log }=historyFixture(), old=log('2026-10-07T10:00:00.000Z'), recent=log('2026-10-08T10:00:00.000Z')
   old.exercises = old.exercises.slice(0,1); recent.exercises = recent.exercises.slice(0,1)
-  assert.deepEqual(instructionHistory(draft,a,[old,recent]),[])
+  assert.equal(instructionHistory(draft,a,[old,recent]).length,2)
   recent.day.exercises[0].prescription.sets[0].reps={min:2,max:2}
-  assert.equal(instructionHistory(draft,a,[old,recent]).length,1)
+  assert.equal(instructionHistory(draft,a,[old,recent]).length,2)
   draft.sourcePlanId=uid(); assert.equal(instructionHistory(draft,a,[old,recent]).length,2)
   delete draft.sourcePlanId; draft.source={kind:'custom'}
   const latest=log('2026-10-09T10:00:00.000Z');latest.day.exercises[0].prescription.sets[0].reps={min:2,max:2}
@@ -226,7 +226,7 @@ test('original v17 archive checksums and five-second checkpoints validate before
   async function encode(){const bytes=new TextEncoder().encode(JSON.stringify(data));zip.file('data.json',bytes);const item=manifest.inventory.find((i:any)=>i.path==='data.json');item.bytes=bytes.length;item.sha256=await sha256(bytes);zip.file('manifest.json',JSON.stringify(manifest));return zip.generateAsync({type:'uint8array',compression:'DEFLATE',createFolders:false})}
   await assert.rejects(readBackup(await encode()),/Invalid|preparation|duration|checkpoint/i)
   const interval=data.drafts[0].interval;interval.phases.find((p:any)=>p.kind==='preparation').durationSeconds=5
-  const imported=await readBackup(await encode());assert.equal(imported.manifest.backupSchemaVersion,17);assert.equal(imported.data.backupSchemaVersion,20)
+  const imported=await readBackup(await encode());assert.equal(imported.manifest.backupSchemaVersion,17);assert.equal(imported.data.backupSchemaVersion,22)
   assert.equal(imported.data.drafts[0].interval!.phases.find(p=>p.kind==='preparation')!.durationSeconds,5)
 })
 test('v11 upgrade preserves records/Blobs and chooses a legacy draft without deleting others; backup18 restores inert ownership',async t=>{
@@ -234,11 +234,11 @@ test('v11 upgrade preserves records/Blobs and chooses a legacy draft without del
   await service.update(id,draft.id,draft.revision,entered(draft));await profiles.save(id,1,{name:'Upgrade',weightUnit:'kg',heightUnit:'cm',weightKg:70},{blob:new Blob([photoBytes],{type:'image/png'}),width:1,height:1})
   const rows=await Promise.all(db.tables.filter(t=>t.name!=='activeWorkouts').map(async t=>[t.name,await t.toArray()] as const)),name='boros-test-upgrade12-'+uid(),legacy=new Dexie(name)
   legacy.version(11).stores(Object.fromEntries(db.tables.filter(t=>t.name!=='activeWorkouts').map(t=>[t.name,[t.schema.primKey.src,...t.schema.indexes.map(i=>i.src)].join(',')])));await legacy.open();for(const [name,values]of rows)await legacy.table(name).bulkPut(values);legacy.close()
-  const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,14)
+  const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,16)
   for(const [name,values]of rows)assert.deepEqual(await next.table(name).toArray(),values)
   await profileService(next).initialize();assert.equal((await currentWorkout(next))!.draftId,draft.id);assert.deepEqual(new Uint8Array(await (await next.photos.toArray())[0].blob.arrayBuffer()),photoBytes)
   const backup=await generateBackup(await captureProfile(id,next),'ownership-test'),read=await readBackup(backup.bytes,()=>{},async()=>{})
-  assert.equal(read.manifest.backupSchemaVersion,20);assert.equal(read.manifest.databaseSchemaVersion,14);assert.equal('activeWorkouts' in read.data,false)
+  assert.equal(read.manifest.backupSchemaVersion,22);assert.equal(read.manifest.databaseSchemaVersion,16);assert.equal('activeWorkouts' in read.data,false)
   const restored=await buildRestorePlan(read,undefined,'new',uid(),'Restored','2026-10-09T15:00:00.000Z');assert.equal(restored.result.drafts[0].id,draft.id)
   await next.activeWorkouts.delete('active');await next.transaction('rw',next.tables,()=>reconcileWorkout(next));assert.equal((await currentWorkout(next))!.draftId,draft.id)
 })

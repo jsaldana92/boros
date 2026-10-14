@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { chartScale } from '../../lib/chart-scale'
 export interface GraphPosition { read: () => number | undefined; write: (value: number | undefined) => void }
-export interface PlotPoint { id: string; time: number; value: number; date: string; label: string; color?: number }
+export interface PlotPoint { id: string; time: number; value: number; date: string; label: string; color?: number; side?: 'left' | 'right' }
 export function ScrollableChart({ points, unit, label, pointsLabel, onSelect, position, filtered = false, connect = false }: { points: PlotPoint[]; unit: string; label: string; pointsLabel: string; onSelect: (id: string) => void; position?: GraphPosition; filtered?: boolean; connect?: boolean }) {
   const scroll = useRef<HTMLDivElement>(null), [width, setWidth] = useState(0), initialized = useRef(false)
   useLayoutEffect(() => {
@@ -23,10 +23,10 @@ export function ScrollableChart({ points, unit, label, pointsLabel, onSelect, po
     <div className="weight-plot-scroll" ref={scroll} onScroll={e => position?.write(e.currentTarget.scrollLeft)} role="group" aria-label={pointsLabel} tabIndex={0}>
       <div className="weight-plot" style={{ width: plotWidth, height: 300 }}>
         <svg width={plotWidth} height="300" aria-hidden="true">{scale.ticks.map((tick, index) => <path key={index} d={`M0 ${tick.y} H${plotWidth}`} stroke="var(--border)" />)}{connect && <polyline points={placed.map(({ x, y }) => `${x},${y}`).join(' ')} fill="none" stroke="var(--chart-0)" strokeWidth="2" />}{placed.map(({ point, x }) => <text key={point.id} className="axis-label date-tick" x={x} y="244" textAnchor="end" transform={`rotate(-45 ${x} 244)`}>{point.date}</text>)}</svg>
-        {placed.map(({ point, x, y }, index) => <button key={point.id} className="weight-point" style={{ left: x - 22, top: y - 22 }} aria-label={point.label} onClick={() => onSelect(point.id)} onKeyDown={event => {
+        {placed.map(({ point, x, y }, index) => <button key={point.id} className="weight-point" data-side={point.side} style={{ left: x - 22, top: y - 22 }} aria-label={point.label} onClick={() => onSelect(point.id)} onKeyDown={event => {
           const offset = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : 0
           if (offset || event.key === 'Home' || event.key === 'End') { event.preventDefault(); const controls = scroll.current?.querySelectorAll<HTMLButtonElement>('.weight-point'); controls?.[event.key === 'Home' ? 0 : event.key === 'End' ? points.length - 1 : Math.max(0, Math.min(points.length - 1, index + offset))]?.focus({ preventScroll: false }) }
-        }}><span aria-hidden="true" style={{ background: `var(--chart-${point.color ?? 0})` }} /></button>)}
+        }}><span aria-hidden="true" style={{ background: `var(--chart-${point.color ?? 0})`, borderRadius: point.side === 'right' ? 0 : undefined }} /></button>)}
       </div>
     </div>
   </div>

@@ -31,12 +31,27 @@ and Start; closed-app time is not activity. Strength restores its timestamp cloc
 Unapplied notes and unrelated editors still have their own discard safeguards.
 Legacy unfinished drafts remain stored; another can resume once ownership is free.
 
-Strength placeholders use compatible actual saved results, including partials,
-without entering or saving values. Planned hints are restricted to the current
-run, stable exercise identity/occurrence and each set's rep/RIR prescription.
-Compatible other workouts in that run may supply hints. Standalone hints consider
-the latest two exercise performances. Instructions shows actual set-by-set History
-when appropriate, with unit conversion; no name-only matches or invented values.
+Strength hints require the same canonical exercise, independent occurrence, full
+ordered set/reps/RIR prescription and L/R mode. Planned hints also require the
+same plan, workout and run; saved standalone workouts and Custom Workouts have
+separate contexts. One latest compatible saved performance supplies every hint.
+Hints remain empty input, never saved results. Instructions always shows up to
+two contextual performances, filling from the profile's wider exercise history
+when needed and retaining the hint source even if it is older.
+
+Strength editors offer **L/R Distinction: No / Yes** (default No), for any movement.
+Each prescribed set can hold independent Left and Right weight/reps/RIR and skips;
+sides share the set's rest. A reviewed toggle commits only with the editor's Save.
+No-to-Yes copies existing results into both sides. Yes-to-No keeps one whole
+recorded tuple: higher canonical weight, then reps, then Left. Missing values are
+not zero and unstarted/skipped sides do not beat a recorded side. Turning it back
+on copies the surviving result, without recovering the discarded side.
+Conversion is atomic and profile scoped, follows stable exercise/merge links,
+and preserves prescription targets, notes, set IDs and performance timestamps.
+Unlinked old history is preserved without guessing names. Saved active drafts
+reconcile; pending old-shape inputs stay visible with an actionable reload error.
+Graphs plot each actual side independently using Left circles and Right squares
+and consistent colors; completion counts still count workouts/exercises/sets.
 
 The shared workout hamburger opens Note, then Instructions. Notes start from independent copied defaults or matching saved branch history;
 explicit clears stay empty. Current shared instructions come from library editors,
@@ -89,24 +104,30 @@ save or complete a workout. Active/paused rest-only checkpoints can be resumed
 after reload; closed time is not counted and no media autoplays.
 
 Settings **Data > Download** creates an analysis CSV with one row per Strength
-set or Interval exercise execution. **Profile Backup > Download** creates the
+set (or side within an L/R set), Interval exercise execution, or historical body
+measurement. `record_type` separates exercise results from measurements; body
+weight is separate from lifted weight. **Profile Backup > Download** creates the
 complete restorable ZIP. **Restore Profile from Backup** accepts ZIP only; Clear
 Data keeps its existing confirmation and transaction safeguards. Exports stay
 profile-bound, include saved history only, and do not claim the browser saved a file.
 
-Current contracts: stable **boros database v14**, **backup v20**, **AI v9**.
-V14 expands finite editable cyclic plans into explicit program-week assignments,
-preserving week/workout IDs and all historical snapshots. Unbounded legacy plans
-remain compatible until explicitly given a finite duration. Backup v20 preserves
-the assignments and workout merge redirects in JSON and the existing 40 CSV tables.
-Strict v19 and earlier contracts/checksums are validated before promotion. Analysis
-CSV now uses browser-zone `HH:mm:ss`, retaining the stored seconds and separate
+Current contracts: stable **boros database v16**, **backup v22**, **AI v10**.
+V16 adds optional weight/body-fat metrics and measurement time-source metadata
+without rewriting existing records or changing stores/indexes. Backup v22 retains
+shared measurements, dates, photos, sides, stable set identities and conversion
+provenance in JSON and the existing 40 CSV tables; v1-21 remain strict and supported.
+The prior L/R compatibility rules remain unchanged: missing mode means No unless
+structured side results prove Yes for that snapshot. No new historical conversion
+occurs in this update.
+AI v10 accepts a real Strength `lrDistinction` boolean and keeps Interval unchanged.
+
+Exercise CSV rows use browser-zone `HH:mm:ss`, retaining the stored seconds and separate
 UTC timestamp/time-source metadata, and adds canonical `workout_id` without
 collapsing any set or execution rows. The separate analysis CSV is not a backup.
 The local workout pointer is not exported; restore does not import runtime ownership
 or start timers/audio. Old discarded timing cannot be recovered; unknown time stays
 `None`, distinct from known zero. See the [analysis contract and ownership rules](docs/analysis-csv.md),
-[backup format](docs/backup-format.md), and [current verification/owner checks](docs/week-types-workout-updates.md).
+[backup format](docs/backup-format.md), and [current verification/owner checks](docs/body-measurements-verification.md).
 
 Legacy editable circuits convert to equivalent ordered sections, splitting counts
 and preserving every old rest boundary; e.g. three sets of five rounds with set
@@ -1010,36 +1031,46 @@ backup v8 with older v1-v7 compatibility and unchanged checksum validation.
 See [Calendar refinement verification](docs/calendar-refinements-verification.md)
 for actual test results and remaining physical-device checks.
 
-## Progress weights and photos (Phase 7)
+## Progress measurements and photos
 
-Progress provides dated weights, optional photos and selectable graph points.
-**Log Weight** automatically captures the device's actual instant and timezone
-at submission, retaining that timestamp and save identity across retries.
-There is no date editor. A point opens details; **Update Weight** preserves its
-original measured time and photo unless a replacement is successfully saved.
-Cancel keeps the saved weight/photo. **Delete Weight?** removes only that entry
-and genuinely unreferenced associated assets.
+Progress shows **Body weight**, then **Body fat**, then the other Progress sections.
+Each graph contains only its own metric. **Log Measurements** beside Body weight
+opens a shared dialog for optional weight, optional body-fat percentage, **Date**
+and a photo. At least one metric is required; a photo alone is insufficient.
+Body fat accepts decimals greater than 0 and less than 100. Nothing estimates or
+backfills a missing metric. Settings continues to edit weight only.
 
-The existing measurements table is the single weight source. Current weight uses
-the greatest measured timestamp, then greatest ID for tied timestamps (the
-existing IndexedDB index order). Backdated entries stay in history without
-replacing a newer current weight. Correction/deletion recalculates the latest,
-including **No recorded weight** when none remain. Settings and Progress observe
-the same saved records. A changed Settings weight appends through the shared
-measurement service, retaining its established timestamp of now or 1 ms after
-the previous latest measurement, whichever is later. Blank Settings weight keeps
-the previous entry; unit-only changes add nothing. Kilograms remain canonical;
-untouched weight/photo edits preserve the original value without conversion drift.
+Edit from either graph opens **Update Measurements** for that same stable record.
+Add/change/remove either metric, change the shared date, replace/remove the photo,
+or Cancel. Unchanged weight preserves canonical precision despite display rounding.
+Delete from a point removes only its metric; the other metric and shared photo/date
+survive. Only removal of the final metric deletes the entry. Photo blobs are removed
+only after their final reference disappears.
 
-Database version remains **5**: no new table/index or migration is needed.
-Measurements add optional revision, update time, mutation ID, photo reference,
-and measured-local/time-zone/offset fields. Existing records remain readable
-without rewriting them (revision defaults to 1, update time to creation time).
-Measured time is separate from creation/update time. New records retain a UTC
-instant and validated local wall time/IANA zone/offset; history retains that zone
-after a device-zone change. Legacy records without context use their UTC date
-and minute. Visible dates omit timezone annotations; full internal precision is
-retained. Automatic timestamps retain the exact instant during repeated DST hours.
+The existing measurements table is the single source for both metrics. Each current
+value independently uses greatest measured timestamp, then greatest ID (the existing
+index tie-breaker). Backdated values do not replace newer ones. Date edits and
+deletions recalculate current values; weight changes also update Settings. Settings
+appends weight-only entries through the same service, retaining its established
+timestamp of now or 1 ms after the latest weight, whichever is later. Blank Settings
+weight keeps prior history; unit-only changes add nothing. Kilograms stay canonical.
+
+**Date** defaults to device-local today. Saving today captures the exact device
+instant at the first valid save attempt (`device_clock`); another chosen date uses
+local noon (`date_only_noon`). Retries preserve that instant and mutation identity.
+Dates are resolved as wall-clock dates in an IANA zone, never parsed as UTC midnight.
+Editing a date retains the original time, milliseconds and zone. Repeated DST times
+prefer the saved offset when valid, otherwise the earlier instant. A skipped local
+time/day produces an actionable date error rather than silently shifting the date.
+Legacy context-free measurements keep UTC semantics; moving their date adds
+`legacy_preserved_time`. These time sources identify automatically assigned times,
+not user-supplied exact clock times.
+
+Database v16 adds no stores/indexes and rewrites no records. Existing IDs, precision,
+timestamps, photos and profile selection survive. Body fat remains absent on old
+weight entries. `measuredAt` is the measurement instant, `loggedAt` its creation,
+and `updatedAt` its edit time. Optional old revisions default to 1. Visible dates
+omit zone annotations; the stored local time, zone/offset and full precision remain.
 
 Measurement edits/deletes compare revisions transactionally. Every measurement
 mutation also increments its owner's profile revision, so an already-open stale
@@ -1060,15 +1091,15 @@ load only when an editor/viewer opens; previews revoke object URLs on replacemen
 and unmount. Photos are not resized or thumbnailed. Delayed decoding cannot move
 input into another profile.
 
-The graph uses chronological record slots with real angled date labels, a fixed
+Each graph uses chronological record slots with real angled date labels, a fixed
 numeric Y axis, and a horizontally scrolling plot/X axis. Slot distance does not
 encode elapsed time; same-date records remain distinct. Every point is a touch
 and keyboard control (Tab, arrows, Home/End, Enter/Space). Filter supports inclusive
-one-sided or two-sided displayed-date bounds without changing current weight.
+one-sided or two-sided displayed-date bounds independently, without changing current values.
 Initial unfiltered positioning is near the measurement closest to now; closing
 details or returning from analytics preserves scroll and filtering. Photo blobs
 load only for the selected details viewer. See the
-[current revision record](docs/progress-redesign-verification.md) for definitions,
+[current revision record](docs/body-measurements-verification.md) for definitions,
 current checks and physical-device limitations. The Phase 7 results below are historical.
 
 Phase 7 checks passed: `npm run build`, `npm run typecheck`, `npm run lint`,

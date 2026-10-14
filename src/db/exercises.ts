@@ -1,3 +1,5 @@
+import { applyLRConversions, lrTables, type LRApprovals } from './lr-conversion.ts'
+import { lrMode } from '../schemas/strength-results.ts'
 import { assertSameTrainingType } from '../schemas/training-type.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
@@ -8,7 +10,7 @@ import { nameKey } from '../schemas/profile.ts'
 import { exerciseResolver } from '../lib/exercise-identity.ts'
 
 export function exerciseService(database: BorosDatabase) {
-  const tables = [database.profiles, database.exercises, database.tags, database.deletedSources]
+  const tables = [...lrTables(database), database.tags]
   const owner = async (profileId: string) => {
     if (!await database.profiles.get(profileId)) throw new Error('This profile is unavailable. Nothing was saved.')
   }
@@ -33,7 +35,7 @@ export function exerciseService(database: BorosDatabase) {
         return { exercises: (await database.exercises.where('profileId').equals(profileId).toArray()).filter(e => !e.mergedIntoId), tags: await database.tags.where('profileId').equals(profileId).toArray() }
       })
     },
-    async merge(profileId: string, edited: { id: string; revision: number; input: ExerciseInput }, other: { id: string; revision: number }, sourceId: string, operationId: string) {
+    async merge(profileId: string, edited: { id: string; revision: number; input: ExerciseInput }, other: { id: string; revision: number }, sourceId: string, operationId: string, approvals?: LRApprovals) {
       const input = exerciseInputSchema.parse(edited.input)
       z.string().uuid().parse(operationId)
       if (edited.id === other.id || ![edited.id, other.id].includes(sourceId)) throw new Error('Select two different exercises in this profile.')
@@ -48,10 +50,13 @@ export function exerciseService(database: BorosDatabase) {
         }
         checkRevision(current, edited.revision); checkRevision(selected, other.revision)
         if (current.archivedAt || selected.archivedAt) throw new Error('An exercise was archived. Your input is kept. Cancel and reopen the merge picker.')
+        const mode = lrMode(destination.id === edited.id ? input : destination)
+        if (current.trainingType !== 'interval') await applyLRConversions(database,profileId,[{id:current.id,mode},{id:selected.id,mode}],approvals,true)
+        const refreshed = await get(profileId,current.id), refreshedSelected = await get(profileId,selected.id)
         const now = new Date().toISOString(), tagIds = await resolveTags(database, profileId, input.tagNames, now)
         const { tagNames: _tags, ...fields } = input
-        const updated = { ...current, ...fields, nameKey: nameKey(input.name), activeNameKey: nameKey(input.name), tagIds } as Exercise
-        const from = source === current ? updated : source, into = destination === current ? updated : destination
+        const updated = { ...refreshed, ...fields, ...(current.trainingType !== 'interval' && lrMode(input) !== mode ? {lrDistinction:mode} : {}), nameKey: nameKey(input.name), activeNameKey: nameKey(input.name), tagIds } as Exercise
+        const from = source === current ? updated : refreshedSelected, into = destination === current ? updated : refreshedSelected
         const combinedTags = [...new Set([...into.tagIds, ...from.tagIds])]
         if (combinedTags.length > 50) throw new Error('The combined exercise exceeds 50 tags. Remove some tags before merging.')
         // Release the source name before checking the survivor's name. Transaction
@@ -63,7 +68,7 @@ export function exerciseService(database: BorosDatabase) {
         return saved
       })
     },
-    async save(profileId: string, raw: ExerciseInput, existing?: { id: string; revision: number }, creationId?: string) {
+    async save(profileId: string, raw: ExerciseInput, existing?: { id: string; revision: number }, creationId?: string, approvals?: LRApprovals) {
       const input = exerciseInputSchema.parse({ ...raw, trainingType: raw.trainingType ?? 'strength' })
       if (creationId) { z.string().uuid().parse(creationId); if (existing) throw new Error('A creation ID cannot overwrite an existing exercise.') }
       return database.transaction('rw', tables, async () => {
@@ -73,6 +78,7 @@ export function exerciseService(database: BorosDatabase) {
         const old = existing ? await get(profileId, existing.id) : undefined
         if (old) { checkRevision(old, existing!.revision); assertSameTrainingType(old, input) }
         if (!old?.archivedAt) await checkName(profileId, input.name, old?.id)
+        if (old && input.trainingType !== 'interval') await applyLRConversions(database,profileId,[{id:old.id,mode:lrMode(input)}],approvals)
         const now = new Date().toISOString()
         const tagIds = await resolveTags(database, profileId, input.tagNames, now)
         const { tagNames: _tagNames, ...fields } = input
@@ -105,6 +111,6 @@ export function exerciseService(database: BorosDatabase) {
   }
 }
 export function exerciseToInput(record: Exercise, tags: Tag[]): ExerciseInput {
-  return { ...(record.trainingType === 'interval' ? { trainingType: 'interval' as const, activeSeconds: record.activeSeconds, recoverySeconds: record.recoverySeconds } : { trainingType: record.trainingType }), name: record.name, sets: structuredClone(record.sets), restBetweenSeconds: record.restBetweenSeconds, restAfterSeconds: record.restAfterSeconds, instructions: record.instructions, notes: record.notes, tutorialUrl: record.tutorialUrl, tagNames: record.tagIds.map((id) => tags.find((tag) => tag.id === id && tag.profileId === record.profileId)?.name).filter((name): name is string => name !== undefined) } as ExerciseInput
+  return { ...(record.trainingType === 'interval' ? { trainingType: 'interval' as const, activeSeconds: record.activeSeconds, recoverySeconds: record.recoverySeconds } : { trainingType: record.trainingType, ...(record.lrDistinction === undefined ? {} : {lrDistinction:record.lrDistinction}) }), name: record.name, sets: structuredClone(record.sets), restBetweenSeconds: record.restBetweenSeconds, restAfterSeconds: record.restAfterSeconds, instructions: record.instructions, notes: record.notes, tutorialUrl: record.tutorialUrl, tagNames: record.tagIds.map((id) => tags.find((tag) => tag.id === id && tag.profileId === record.profileId)?.name).filter((name): name is string => name !== undefined) } as ExerciseInput
 }
 export const exercises = exerciseService(db)

@@ -6,6 +6,38 @@ export function localDateTime(date = new Date()) {
   return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
 }
 export const measurementInstant = (date = new Date()) => ({ measuredAt: date.toISOString(), measuredLocal: localDateTime(date), timeZone: browserZone(), offsetMinutes: date.getTimezoneOffset() })
+function zonedLocal(date: Date, zone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, calendar: 'gregory', numberingSystem: 'latn', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(date)
+  const part = (type: string) => parts.find(p => p.type === type)!.value
+  return `${part('year').padStart(4, '0')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}.${pad(date.getUTCMilliseconds(), 3)}`
+}
+// Resolve a wall clock in its stored zone, not the device's current zone. Folds
+// prefer the original offset when possible, otherwise the earlier instant.
+export function measurementWallTime(local: string, zone: string, preferredOffset?: number) {
+  if (!validZone(zone) || !validDate(local.slice(0, 10)) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/.test(local)) throw new Error('Enter a valid date.')
+  const nominal = Date.parse(`${local}Z`), offsets = new Set<number>()
+  for (let hours = -36; hours <= 36; hours += 6) {
+    const probe = new Date(nominal + hours * 3600000)
+    offsets.add((probe.getTime() - Date.parse(`${zonedLocal(probe, zone)}Z`)) / 60000)
+  }
+  const candidates = [...offsets].map(offsetMinutes => ({ offsetMinutes, instant: new Date(nominal + offsetMinutes * 60000) })).filter(c => zonedLocal(c.instant, zone) === local).sort((a,b) => a.instant.getTime() - b.instant.getTime())
+  const selected = candidates.find(c => c.offsetMinutes === preferredOffset) ?? candidates[0]
+  if (!selected) throw new Error('The saved time does not exist on this date because the clock changes. Choose another date.')
+  return { measuredAt: selected.instant.toISOString(), measuredLocal: local, timeZone: zone, offsetMinutes: selected.offsetMinutes }
+}
+export function measurementDateInput(date: string, initial?: Measurement, now = new Date(), zone = browserZone()) {
+  if (!validDate(date)) throw new Error('Enter a valid date.')
+  if (initial) {
+    if (date === measurementDate(initial)) return { measuredAt: initial.measuredAt, measuredLocal: initial.measuredLocal, timeZone: initial.timeZone, offsetMinutes: initial.offsetMinutes, timeSource: initial.timeSource }
+    // Legacy context-free entries have always been displayed in UTC.
+    const local = initial.measuredLocal ?? new Date(initial.measuredAt).toISOString().slice(0, -1)
+    return { ...measurementWallTime(`${date}${local.slice(10)}`, initial.timeZone ?? 'UTC', initial.offsetMinutes), timeSource: initial.timeSource ?? 'legacy_preserved_time' as const }
+  }
+  const today = zonedLocal(now, zone).slice(0, 10)
+  if (date !== today) return { ...measurementWallTime(`${date}T12:00:00.000`, zone), timeSource: 'date_only_noon' as const }
+  const local = zonedLocal(now, zone)
+  return { measuredAt: now.toISOString(), measuredLocal: local, timeZone: zone, offsetMinutes: (now.getTime() - Date.parse(`${local}Z`)) / 60000, timeSource: 'device_clock' as const }
+}
 export function measurementTime(value: string, expectedZone = browserZone()) {
   if (expectedZone !== browserZone()) throw new Error('Device time zone changed. Reopen the editor before choosing a new measurement time. Your input is kept.')
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/.test(value) || !validDate(value.slice(0, 10))) throw new Error('Enter a valid measurement date and time.')

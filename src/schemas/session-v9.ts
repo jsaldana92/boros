@@ -1,5 +1,5 @@
 import { meaningfulInterval, type IntervalState } from './interval-session-v2.ts'
-import type { SessionStructure } from './session-structure.ts'
+import type { SessionStructure } from './session-structure-v14.ts'
 import { z } from 'zod'
 import type { TrainingDay } from './plan-v9.ts'
 import type { OccurrenceRef } from './schedule.ts'

@@ -1,6 +1,74 @@
-# Boros profile backup, schema 20 (schemas 1-19 supported)
+# Boros profile backup, schema 22 (schemas 1-21 supported)
 
-Current exports pair **backup v20 / database v14**; AI is **v9**. The stable
+Current exports pair **backup v22 / database v16**; AI remains **v10**. Database
+`boros`, its stores/indexes and existing records are unchanged by v16. Errors
+abort and remain visible; upgrades never reset data or create a replacement DB.
+
+V22 extends the existing shared measurement record: optional `weightKg` (positive,
+at most 1000), optional `bodyFatPercentage` (finite, greater than 0 and less than
+100), with at least one present. Missing is absent, never zero or a previous value.
+Stable `(profileId,id)`, `measuredAt`, `loggedAt`, optional `updatedAt`, revision,
+mutation ID, photo reference and existing validated time context remain intact.
+Optional `timeSource` is `device_clock`, `date_only_noon` or
+`legacy_preserved_time`; it distinguishes automatic time conventions.
+
+The same **40 CSV tables** remain. `csv/progress.csv` appends
+`bodyFatPercentage,timeSource`; its optional `weightKg` cell can now be empty.
+One row retains both metrics, their shared date and photo. Manifest counts and
+canonical JSON count entries, not metrics. Photos and JSON remain authoritative;
+all inventories, SHA-256 checksums, strict fields and photo checks still validate.
+
+Original v1-21 JSON/CSV validate against frozen weight-only measurement schemas
+before promotion to v22. Old entries keep their exact IDs, weight precision, dates,
+photos and metadata; no body fat or time-source claim is invented. New/replace
+restore retains the file's whole shared entries. Merge matches measurements only
+by stable ID, never coincident timestamps. For v22, the chosen whole entry's
+absent metric means explicitly cleared; unmatched records survive merge.
+
+A pre-v22 file cannot express a body-fat clear. If its weight entry wins a
+same-ID merge, existing device body fat is retained, with the selected entry's
+date/photo; the preview warns about this rule. Other body-fat records survive
+merge. Explicit Replace keeps its reviewed replacement semantics. Restore
+preserves revisions, photo references and independently derived latest values.
+See [measurement verification and owner checks](body-measurements-verification.md)
+and [analysis CSV](analysis-csv.md) for the separate row-based export contract.
+
+## Previous v21 contract (historical)
+
+V21 exports paired **backup v21 / database v15**; AI is **v10**. Database `boros`
+and all stores/indexes stay stable. V15 leaves ordinary v14 records unchanged.
+Only a missing snapshot mode with already structured, validated side data gains
+`lrDistinction: true`; no side values are copied, collapsed or guessed at upgrade.
+Explicit modes are not changed by compatibility inference. Failed upgrades abort.
+
+V21 Strength prescriptions optionally contain `lrDistinction` (boolean; absent
+means No unless that snapshot has structured side evidence). Interval rejects it.
+A saved set is either the legacy unsided result or `{sides:{left,right}}`. Each
+side holds its own actual weight/load/unit/reps/optional RIR or skip/unrecorded
+state. Drafts retain a blank unsided envelope with their two side inputs; hidden
+unsided values are rejected. Set IDs/numbers live in the existing structure and
+are never duplicated. Optional `conversion` contains UUID `operationId`, UTC
+`convertedAt`, `fromMode` (`no`/`lr`), and `copiedFrom: "unsided"` or `selectedSide`.
+It preserves diagnostic provenance, not a recoverable copy of a removed side.
+
+The same 40 ZIP CSV tables remain. `library_exercises` and `prescriptions` add
+`lrDistinction`. `draft_results` and `session_results` add `side` (`no`/`left`/`right`),
+`unrecorded` and `conversionJson`; sided groups write two rows with the same original
+set order. JSON and photos remain authoritative; the separate analysis CSV uses
+its own `l_r_distinction` column. Original v20 JSON/CSV/checksums validate against
+frozen v14 models before promotion. No reader repeats historical conversion.
+
+Reviewed backup merges that retain conflicting side modes show an explicit L/R
+conversion warning in the restore preview. The chosen library source determines
+the mode. The same conversion functions as editor saves transform only linked
+records in the proposed result, retaining complete winning tuples, notes and IDs.
+Cancel writes nothing; commit uses the existing fingerprint check and atomic
+transaction. New/replace restores preserve saved side data. Unlinked histories
+remain untouched; no same-name guess links them to a converted exercise.
+
+## Previous v20 contract (historical)
+
+V20 exports paired **backup v20 / database v14**; AI is **v9**. The stable
 database name remains `boros`. V14 adds no stores/indexes. It expands only finite
 editable plans with legacy cyclic `weeks` into explicit `programWeeks` arrays,
 retaining the week IDs, day IDs and all prescriptions. Profiles, settings, photos,

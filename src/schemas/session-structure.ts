@@ -1,3 +1,4 @@
+import { blankResult, lrMode } from './strength-results.ts'
 import { assertSameTrainingType } from './training-type.ts'
 import { z } from 'zod'
 import { createId } from '../lib/browser-crypto.ts'
@@ -59,7 +60,7 @@ export function appendSessionSets(snapshot: SessionSnapshot, input: SessionInput
     const id = createId()
     member.setIds?.push(id)
     structure.exercises[i].sets.push({ id, round })
-    next.exercises[i].sets.push({ load: '', reps: '', rir: '', unit, skipped: false })
+    next.exercises[i].sets.push(blankResult(unit, lrMode(member.prescription)))
   }
   structure.amended = true
   return { day, structure, input: next }

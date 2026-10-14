@@ -8,15 +8,16 @@ import { removeUnusedPhoto } from './photos.ts'
 export const measurementRevision = (entry: Measurement) => entry.revision ?? 1
 // Same timestamp: IndexedDB's secondary index orders by primary key, so the
 // greatest ID wins within a profile. Preserve that existing deterministic rule.
-export const latestMeasurement = (database: BorosDatabase, profileId: string) => database.measurements.where('[profileId+measuredAt]').between([profileId, ''], [profileId, '\uffff']).last()
+export type MeasurementMetric = 'weightKg' | 'bodyFatPercentage'
+export const latestMeasurement = (database: BorosDatabase, profileId: string, metric: MeasurementMetric = 'weightKg') => database.measurements.where('[profileId+measuredAt]').between([profileId, ''], [profileId, '\uffff']).filter(entry => entry[metric] !== undefined).last()
 
 // Reused inside the profile save transaction. Profile save already bumps its revision.
 export async function appendSettingsWeight(database: BorosDatabase, profileId: string, weightKg: number) {
   const last = await latestMeasurement(database, profileId)
-  if (last && Math.abs(last.weightKg - weightKg) < 0.000001) return
+  if (last && Math.abs(last.weightKg! - weightKg) < 0.000001) return
   const now = new Date().toISOString(), date = new Date(Math.max(Date.now(), last ? Date.parse(last.measuredAt) + 1 : 0))
   // Preserve the exact instant even during the second half of a DST fold.
-  const measurement = measurementSchema.parse({ weightKg, ...measurementInstant(date) })
+  const measurement = measurementSchema.parse({ weightKg, ...measurementInstant(date), timeSource: 'device_clock' })
   await database.measurements.add({ ...measurement, profileId, id: createId(), loggedAt: now, updatedAt: now, revision: 1 })
 }
 export function measurementService(database: BorosDatabase) {
@@ -26,7 +27,7 @@ export function measurementService(database: BorosDatabase) {
   const check = (entry: Measurement, expected: number) => { if (measurementRevision(entry) !== expected) throw new Error('This measurement changed in another tab. Your input is kept. Copy needed changes, then cancel and reopen the saved entry.') }
   return {
     get,
-    latest: (profileId: string) => latestMeasurement(database, profileId),
+    latest: (profileId: string, metric: MeasurementMetric = 'weightKg') => latestMeasurement(database, profileId, metric),
     async list(profileId: string) { await owner(profileId); return database.measurements.where('[profileId+measuredAt]').between([profileId, ''], [profileId, '\uffff']).toArray() },
     async photo(profileId: string, entryId: string) {
       return database.transaction('r', tables, async () => {
@@ -53,13 +54,20 @@ export function measurementService(database: BorosDatabase) {
         return result
       })
     },
-    async remove(profileId: string, id: string, expectedRevision: number) {
+    async remove(profileId: string, id: string, expectedRevision: number, metric?: MeasurementMetric) {
       return database.transaction('rw', tables, async () => {
         const profile = await owner(profileId), old = await database.measurements.get([profileId, id])
         if (!old) return
         check(old, expectedRevision)
-        await database.measurements.delete([profileId, id])
-        await removeUnusedPhoto(database, profileId, old.photoId)
+        const kept = { ...old }
+        if (metric) delete kept[metric]
+        if (metric && (kept.weightKg !== undefined || kept.bodyFatPercentage !== undefined)) {
+          if (old[metric] === undefined) return
+          await database.measurements.put({ ...kept, revision: measurementRevision(old) + 1, updatedAt: new Date().toISOString(), lastMutationId: undefined })
+        } else {
+          await database.measurements.delete([profileId, id])
+          await removeUnusedPhoto(database, profileId, old.photoId)
+        }
         await database.profiles.put({ ...profile, revision: profile.revision + 1, updatedAt: new Date().toISOString() })
       })
     },

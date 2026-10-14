@@ -102,7 +102,7 @@ test('v13 to v14 expands only finite editable cycles while retaining every other
   await f.db.plans.put(legacy);const unbounded={...legacy,id:uid(),name:'Unbounded',nameKey:'unbounded',activeNameKey:'unbounded',durationWeeks:undefined};await f.db.plans.put(unbounded)
   const name='boros-test-prior13-'+uid(),old=new Dexie(name);old.version(13).stores(Object.fromEntries(f.db.tables.map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(i=>i.src)].join(',')])));await old.open()
   const before=new Map<string,any[]>();for(const table of f.db.tables){const rows=await table.toArray();before.set(table.name,rows);await old.table(table.name).bulkPut(rows)}old.close()
-  const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,14)
+  const next=new BorosDatabase(name);t.after(()=>next.delete());await next.open();assert.equal(next.verno,16)
   for(const table of next.tables) {
     if(table.name==='plans'){assert.deepEqual(await next.plans.get([f.id,p.id]),explicitWeeks(legacy));assert.deepEqual(await next.plans.get([f.id,unbounded.id]),unbounded);continue}
     assert.deepEqual(await table.toArray(),before.get(table.name),table.name)
@@ -117,9 +117,9 @@ test('AI v9 explicit maps, strict legacy contracts and backup20 JSON/CSV retain 
   assert.deepEqual(draft.input.weeks!.map(w=>w.programWeeks),[[1,2,4],[3,5]])
   for(const schemaVersion of [4,5,6,7,8])assert.equal(parseInterchange(JSON.stringify({...payload,schemaVersion})).value,undefined)
   for(const map of [[[1,2],[3,5]],[[1,2,3],[3,4,5]],[[1,2,3,4,5],[]]]){const bad=structuredClone(payload);bad.plan.weeks.forEach((w,i)=>w.programWeeks=map[i]);assert.equal(parseInterchange(JSON.stringify(bad)).value,undefined)}
-  assert.match(formattingInstructions('plan'),/schemaVersion 9/);assert.match(formattingInstructions('plan'),/programWeeks/)
+  assert.match(formattingInstructions('plan'),/schemaVersion 10/);assert.match(formattingInstructions('plan'),/programWeeks/)
   const p=await f.plans.save(f.id,program(f)),snapshot=await captureProfile(f.id,f.db),zip=await generateBackup(snapshot,'explicit'),read=await readBackup(zip.bytes)
-  assert.equal(read.manifest.backupSchemaVersion,20);assert.equal(read.manifest.databaseSchemaVersion,14);assert.deepEqual(read.data.plans[0].weeks,p.weeks)
+  assert.equal(read.manifest.backupSchemaVersion,22);assert.equal(read.manifest.databaseSchemaVersion,16);assert.deepEqual(read.data.plans[0].weeks,p.weeks)
   assert.throws(()=>validateBackupData({...read.data,backupSchemaVersion:19}),/./,'frozen19 cannot silently accept the new contract')
   const restored=await buildRestorePlan(read,undefined,'new',uid(),'Restored',new Date().toISOString());assert.deepEqual(restored.result.plans[0].weeks,p.weeks)
 })
@@ -131,7 +131,7 @@ test('a v19 ZIP validates original checksums/contracts before expanding the old 
   const tables=csvTables(data),files=[{path:'data.json',text:JSON.stringify(data)},...tables.map(t=>({path:t.path,text:t.text}))],zip=new JSZip()
   const manifest={...current.manifest,backupSchemaVersion:19,databaseSchemaVersion:13,counts:recordCounts(data),csvRows:Object.fromEntries(tables.map(t=>[t.path,t.rows])),inventory:await Promise.all(files.map(async file=>{const bytes=new TextEncoder().encode(file.text);return {path:file.path,bytes:bytes.length,sha256:await sha256(bytes),mediaType:file.path.endsWith('json')?'application/json':'text/csv; charset=utf-8'}}))}
   files.forEach(file=>zip.file(file.path,file.text,{createFolders:false}));zip.file('manifest.json',JSON.stringify(manifest))
-  const restored=await readBackup(await zip.generateAsync({type:'uint8array'}));assert.equal(restored.manifest.backupSchemaVersion,19);assert.equal(restored.data.backupSchemaVersion,20);assert.deepEqual(restored.data.plans[0].weeks,p.weeks)
+  const restored=await readBackup(await zip.generateAsync({type:'uint8array'}));assert.equal(restored.manifest.backupSchemaVersion,19);assert.equal(restored.data.backupSchemaVersion,22);assert.deepEqual(restored.data.plans[0].weeks,p.weeks)
   zip.file('data.json',JSON.stringify({...data,plans:[]}));await assert.rejects(readBackup(await zip.generateAsync({type:'uint8array'})),/checksum|size/)
   const name='boros-test-rejected-v14-'+uid(),old=new Dexie(name);old.version(13).stores(Object.fromEntries(f.db.tables.map(table=>[table.name,[table.schema.primKey.src,...table.schema.indexes.map(i=>i.src)].join(',')])));await old.open()
   for(const table of f.db.tables)await old.table(table.name).bulkPut(await table.toArray())

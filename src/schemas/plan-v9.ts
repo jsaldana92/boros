@@ -1,6 +1,6 @@
 import { createId } from '../lib/browser-crypto.ts'
 import { z } from 'zod'
-import { strengthInputSchema, exerciseInputSchema, type ExerciseInput } from './exercise.ts'
+import { strengthInputSchema, exerciseInputSchema, type ExerciseInput } from './exercise-v14.ts'
 import { nameKey } from './profile.ts'
 import { trainingTypeSchema, trainingTypeOf, type TrainingType } from './training-type.ts'
 import { circuitSchema, newCircuit } from './circuit-legacy.ts'
