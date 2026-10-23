@@ -8,7 +8,7 @@ import type { CompletedSession } from '../../schemas/session'
 import { trainingBlocks, type PlanExercise } from '../../schemas/plan'
 import { ActionDialog } from '../../components/ui/ConfirmDialog'
 const target = (range?: { min: number; max: number }) => range ? range.min === range.max ? String(range.min) : `${range.min}–${range.max}` : 'unspecified'
-function StrengthSessionReview({ session, onClose, backLabel = 'Back to workouts' }: { session: CompletedSession; onClose: () => void; backLabel?: string }) {
+function StrengthSessionReview({ session, onClose, onEdit, busy, backLabel = 'Back to workouts' }: { session: CompletedSession; onClose: () => void; onEdit?: () => void; busy?: boolean; backLabel?: string }) {
   const [note, setNote] = useState<{ title: string; text: string }>()
   const result = (exercise: PlanExercise, s: number) => {
     const entry = session.exercises.find((item) => item.id === exercise.id)!, set = entry.sets[s], prescribed = exercise.prescription.sets[s]
@@ -21,7 +21,7 @@ function StrengthSessionReview({ session, onClose, backLabel = 'Back to workouts
       {block.group ? sessionRounds(block.members, session.structure).map((round, s) => <section className="superset-round" key={s}><h4>Set {session.structure?.exercises.find(e => e.id === round[0].member.id)?.sets[round[0].index].round ?? s + 1}</h4><ul>{round.map(({ member, index }) => result(member, index))}</ul></section>) : <ol>{block.members[0].prescription.sets.map((_, s) => <Fragment key={s}>{result(block.members[0], s)}</Fragment>)}</ol>}
     </section>)}
     {note && <ActionDialog title={note.title} onClose={() => setNote(undefined)} actions={<button onClick={() => setNote(undefined)}>Close note</button>}><p className="plain-text">{note.text || 'No notes.'}</p></ActionDialog>}
-    <button onClick={onClose}>{backLabel}</button>
+    <div className="actions"><button disabled={busy} onClick={onClose}>{backLabel}</button>{onEdit && <button disabled={busy} onClick={onEdit}>Edit</button>}</div>
   </section>
 }
 

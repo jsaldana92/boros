@@ -149,6 +149,13 @@ This is timer-recorded activity, not proof of physical movement.
 
 ## Notes and current instructions
 
+Calendar edits to a saved Strength workout replace its existing session and
+finalized input atomically. Exports read those corrected results, including
+independent Left/Right values and explicit skip versus unrecorded intent. The
+same session/set IDs and original event dates remain; editing does not append an
+extra completion or duplicate old results. Session-local added sets/exercises
+produce their own rows. No new CSV columns are needed for this edit workflow.
+
 Library exercise notes are defaults. Workout/plan additions copy them independently;
 copying a workout into a plan copies its workout and exercise notes. Authored
 workouts inside plans start without a workout note and seed a published library

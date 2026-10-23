@@ -1,7 +1,9 @@
 import { trainingTypeName, trainingTypeOf } from '../../schemas/training-type'
+import { SavedSessionEditor } from '../train/SavedSessionEditor'
+import { savedSessions, type SavedSessionEdit } from '../../db/saved-sessions'
 import { SessionReview } from '../train/SessionReview'
 import type { CompletedSession } from '../../schemas/session'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowLeft, ArrowRight, ChevronDown, Menu } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { TrainingDayActions } from '../train/TrainingDayActions'
@@ -30,8 +32,11 @@ export function CalendarPage() {
   return <CalendarWorkspace key={snapshot.profile.id} profileId={snapshot.profile.id} />
 }
 function CalendarWorkspace({ profileId }: { profileId: string }) {
-  const { allowLeave } = useWorkspace(), { openScreen } = useScreenNavigation(), instant = useCurrentInstant()
+  const { allowLeave, snapshot } = useWorkspace(), { openScreen } = useScreenNavigation(), instant = useCurrentInstant()
   const [review, setReview] = useState<CompletedSession>()
+  const [sessionEdit, setSessionEdit] = useState<SavedSessionEdit>(), [editError, setEditError] = useState('')
+  const sessionPosition = useRef({ y: 0 }), summaryTrigger = useRef<HTMLElement | null>(null), restoreSummary = useRef(false)
+  useLayoutEffect(() => { if (restoreSummary.current && !sessionEdit) { restoreSummary.current = false; window.scrollTo(0,sessionPosition.current.y) } }, [sessionEdit])
   const [dayAction, setDayAction] = useState<{ event: CalendarEvent; run: Schedule; displayDate: string }>()
   const [selection, setSelection] = useState<string>(), [view, setView] = useState<CalendarView>(readCalendarView)
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches)
@@ -77,7 +82,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   const closeEditor = () => { setEditor(undefined); pendingFocus.current = () => restore(editorPosition.current) }
   const returnCalendar = () => { setDestination('calendar'); pendingFocus.current = () => restore(returnPosition.current) }
   const openEvent = async (activity: CalendarActivity) => {
-    if (activity.session) { setReview(activity.session); return }
+    if (activity.session) { sessionPosition.current = {y:window.scrollY}; summaryTrigger.current = document.activeElement as HTMLElement; setEditError(''); setReview(activity.session); return }
     const event = activity.event
     if (!event) return
     if (event.outcome && event.outcome.status !== 'pending') { const run = data?.schedules.find((item) => item.id === event.ref.scheduleId); if (run) setDayAction({ event, run, displayDate: activity.date }); return }
@@ -91,6 +96,15 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
   }
   const shift = (direction: number) => { try { setSelection(view === 'month' ? monthStart(date, direction) : addDays(date, direction * (view === 'week' ? 7 : 1))); setError('') } catch (error) { setError(message(error)) } }
   const dates = dateRange(range.start, range.end)
+  const openSavedEditor = async () => {
+    if (!review || lock.current) return; lock.current = true; setBusy(true); setEditError('')
+    try { setSessionEdit(await savedSessions.load(profileId,review.id)) }
+    catch (e) { setEditError(message(e)) }
+    finally { lock.current = false; setBusy(false) }
+  }
+  const closeSavedEditor = (updated?: CompletedSession) => {
+    restoreSummary.current = true; setReview(updated ?? data?.sessions.find(s=>s.id===review?.id)); setSessionEdit(undefined)
+  }
   const renderDay = (day: string) => <section key={day} className={`calendar-day${view === 'month' && day.slice(0, 7) !== date.slice(0, 7) ? ' adjacent-month' : ''}${day === date ? ' selected-date' : ''}`} aria-label={day} aria-current={day === today ? 'date' : undefined}>
     <h3><time dateTime={day}>{weekdays[weekday(day)]} {day.slice(5)}</time>{day === today && ' · Today'}</h3>
     {events?.filter((activity) => activity.date === day).map((activity) => {
@@ -100,7 +114,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
     {data?.schedules.filter((run) => run.kind !== 'unscheduled' && weekday(day) === 0 && run.excludedWeeks?.includes(day)).map((run) => <p className="muted" key={run.id}>{run.revisions.at(-1)?.planName}: Excluded week</p>)}
     {data?.schedules.filter((run) => run.kind !== 'unscheduled' && scheduleActiveOn(run, day)).map((run) => { const revision = revisionAt(run, day); return revision?.needsRepair ? <p className="muted" key={run.id}>{revision.planName}: mapping needs repair</p> : revision && !revision.unscheduled && events && !events.some((activity) => activity.event?.ref.scheduleId === run.id && activity.date === day && !activity.event.unscheduled) ? <p className="muted" key={run.id}>{revision.planName}: Rest</p> : null })}
   </section>
-  return <>
+  return <><div hidden={!!sessionEdit}>
     <div className="calendar-heading"><h1 id="calendar-heading" tabIndex={-1}>{editor ? ('schedule' in editor ? 'Edit Plan' : 'Add Plan') : destination === 'calendar' ? 'Calendar' : destination === 'current' ? 'Current Plans' : 'Previous Plans'}</h1>{!editor && (destination === 'calendar' ? <button id="calendar-menu" aria-label="Calendar menu" onClick={(event) => { returnPosition.current = { y: window.scrollY, trigger: event.currentTarget }; setMenu(true) }}><Menu aria-hidden="true" /></button> : destination === 'current' ? <button onClick={returnCalendar}>Back</button> : null)}</div>
     {(result?.error || library?.error) && <p role="alert">Could not load Calendar. {result?.error || library?.error} <button onClick={() => setAttempt((value) => value + 1)}>Retry calendar</button></p>}
     {editor && ('schedule' in editor ? <ScheduleEditor profileId={profileId} schedule={editor.schedule} onCancel={closeEditor} onSaved={closeEditor} /> : <AddPlans profileId={profileId} plans={data?.plans ?? []} activePlanIds={new Set((data?.schedules ?? []).filter((run) => !runLifecycle(run, data?.sessions ?? [], instant).previous).map((run) => run.planId))} startWeek={editor.startWeek} zone={editor.zone} onCancel={closeEditor} onSaved={closeEditor} />)}
@@ -119,7 +133,7 @@ function CalendarWorkspace({ profileId }: { profileId: string }) {
       {dayAction && <TrainingDayActions profileId={profileId} {...dayAction} onClose={() => setDayAction(undefined)} onOpened={(value) => { setDayAction(undefined); openScreen('train', { profileId, draftId: value.draft?.id, sessionId: value.session?.id }) }} />}
       {error && <p role="alert">{error}</p>}
     </>}
-    {review && <ActionDialog title="Completed workout" actions={<></>} onClose={() => setReview(undefined)}><SessionReview session={review} onClose={() => setReview(undefined)} backLabel="Close" /></ActionDialog>}
+    {review && !sessionEdit && <ActionDialog title="Completed workout" returnFocus={summaryTrigger} actions={<></>} onClose={() => { if (!busy) setReview(undefined) }}><SessionReview session={review} onClose={() => setReview(undefined)} backLabel="Close" busy={busy} onEdit={review.day.trainingType !== 'interval' ? () => void openSavedEditor() : undefined} />{editError && <p role="alert">{editError}</p>}</ActionDialog>}
     {menu && <ActionDialog title="Calendar menu" onClose={() => setMenu(false)} actions={<button onClick={() => setMenu(false)}>Cancel</button>}><div className="stacked-actions"><button onClick={() => openRuns('current')}>Current Plans</button><button onClick={() => openRuns('previous')}>Previous Plans</button></div></ActionDialog>}
-  </>
+  </div>{sessionEdit && <SavedSessionEditor key={sessionEdit.session.id} edit={sessionEdit} unit={snapshot.profile.weightUnit} onClose={() => closeSavedEditor()} onSaved={closeSavedEditor} />}</>
 }

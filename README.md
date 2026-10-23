@@ -60,6 +60,31 @@ Exercise menus now say Instructions and retain their details, video, Note and
 Replace actions. Interval pending-exercise editing is removed. New custom Interval
 creation is unavailable for now; existing custom Interval drafts remain usable.
 
+On Train workout pages, an exercise name is italic when its own Note dialog
+contains non-whitespace text, including inherited defaults. Repeated occurrences
+remain independent. Applying or clearing a note updates the styling; canceling
+does not. Instructions and workout notes do not trigger exercise italics.
+
+Calendar's saved Strength summary offers **Close / Edit**. Edit reuses the Train
+workout page with historical targets, instructions, notes and actual results,
+including separate Left/Right values, blanks and explicit zero. It supports saved
+plan, standalone, custom and partial workouts. Interval summaries and pending or
+manually marked occurrences retain their existing actions.
+
+Saved-workout editing stays in memory until Save, separately from live training.
+Save atomically replaces that session and its finalized input, preserving IDs,
+occurrence, original dates and completion count. It retains canonical precision
+when displayed units change. Revisions reject stale/deleted records; failures keep
+input available. Cancel discards only edits, with confirmation when changed.
+Clear affects only the editing copy until a valid Save; partial saves still need
+confirmation and at least one recorded set. Session additions/replacements never
+rewrite source templates. The Calendar summary, view, date, expanded weeks and
+scroll position return after Save/Cancel. Unsaved edits do not survive reload;
+the existing unload warning applies. Rest controls share the single timer slot
+and cannot take over another workout's timer. Corrected results feed Progress,
+History, eligible hints, future notes, analysis CSV and Profile Backup.
+See [saved Strength editing verification and owner checks](docs/saved-strength-edit-verification.md).
+
 The shared session footer matches Strength: Save, then Cancel/Clear. Initial
 per-circuit buttons say Start Circuit and remain wide; compact timer controls are unchanged. Create has centered type
 choosers, trailing 18px type icons, two-line mobile workout names with contained

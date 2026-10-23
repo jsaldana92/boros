@@ -572,3 +572,6 @@ button.metric-value { background: transparent; color: var(--text); border-color:
 
 /* Only contents of exercise action controls; preserve their existing layout. */
 .exercise-editor button, .exercise-actions-dialog button { text-align: center; justify-content: center; }
+
+/* Keep exercise title typography; a note adds only italics. */
+.training-session .exercise-has-note { font-style: italic; }

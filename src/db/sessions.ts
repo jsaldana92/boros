@@ -1,3 +1,4 @@
+import { sessionRest, changedRest } from '../lib/session-rest.ts'
 import { workoutResolver } from '../lib/workout-identity.ts'
 import { currentInstructions, currentPlanInstructions, currentScheduleInstructions } from './instructions.ts'
 import { inheritNotes } from '../lib/note-inheritance.ts'
@@ -14,7 +15,7 @@ import { workoutToInput } from '../schemas/workout.ts'
 import { duplicateDay } from '../schemas/plan.ts'
 import { nameKey } from '../schemas/profile.ts'
 import { browserZone } from '../lib/calendar-dates.ts'
-import { initialStructure, sessionRounds, validateAmendment, type SessionSnapshot } from '../schemas/session-structure.ts'
+import { initialStructure, replaceSessionExercise, validateAmendment, type SessionSnapshot } from '../schemas/session-structure.ts'
 import { planInstructionsSnapshot } from '../schemas/plan.ts'
 import { previousResults, instructionHistory } from '../lib/previous-results.ts'
 import { monday } from '../lib/calendar-dates.ts'
@@ -22,9 +23,9 @@ import type { WeightUnit } from '../schemas/profile.ts'
 import { createId } from '../lib/browser-crypto.ts'
 import { db, type BorosDatabase } from './database.ts'
 import { z } from 'zod'
-import { validatedDaySchema as daySchema, trainingBlocks } from '../schemas/plan.ts'
+import { validatedDaySchema as daySchema } from '../schemas/plan.ts'
 import { occurrences, occurrenceKey, dateSchema, programWeek } from '../schemas/schedule.ts'
-import { assessSession, blankSession, copiedExerciseInputs, timerEnd, validateDraftInput, type CompletedSession, type RestTimer, type SessionDraft, type SessionInput } from '../schemas/session.ts'
+import { assessSession, blankSession, copiedExerciseInputs, validateDraftInput, type CompletedSession, type SessionDraft, type SessionInput } from '../schemas/session.ts'
 
 export function sessionService(database: BorosDatabase) {
   const tables = [database.plans, database.activeWorkouts, database.profiles, database.drafts, database.sessions, database.restTimers, database.schedules, database.exercises, database.tags, database.workouts, database.deletedSources]
@@ -137,26 +138,8 @@ export function sessionService(database: BorosDatabase) {
         if (!source || source.archivedAt || source.mergedIntoId || source.revision !== exerciseRevision) throw new Error('This exercise changed. Reopen the picker before swapping. Your input is kept.')
         assertSameTrainingType(value.day, source)
         if (value.day.trainingType === 'interval') throw new Error('Use the Interval pending-exercise editor to preserve recorded phases.')
-        const index = value.day.exercises.findIndex((e) => e.id === occurrenceId)
-        if (index < 0) throw new Error('This occurrence is unavailable. Reload the saved draft.')
-        const next = structuredClone(value), old = next.day.exercises[index]
         const replacement = copyExercise(exerciseToInput(source, await database.tags.where('profileId').equals(profileId).toArray()), { kind: 'exercise', id: source.id })
-        // Keep the plan occurrence association; replace its movement/set identities.
-        replacement.id = old.id; if (old.groupId) replacement.groupId = old.groupId
-        next.day.exercises[index] = replacement
-        next.structure ??= initialStructure(value.day)
-        next.structure.amended = true
-        next.structure.exercises[index] = initialStructure({ ...next.day, exercises: [replacement] }).exercises[0]
-        // Preserve other members' stable set IDs/rounds, including appended rounds.
-        if (old.groupId) {
-          const others = next.day.exercises.filter(e => e.groupId === old.groupId && e.id !== old.id)
-          const used = new Set(others.flatMap(e => next.structure!.exercises.find(x => x.id === e.id)!.sets.map(s => s.round)))
-          const max = Math.max(0, ...used), gaps = Array.from({ length: max }, (_, r) => r + 1).filter(r => !used.has(r))
-          const rounds = [...gaps.slice(0, replacement.prescription.sets.length)]
-          for (let r = 1; rounds.length < replacement.prescription.sets.length; r++) if (!rounds.includes(r)) rounds.push(r)
-          rounds.sort((a,b) => a-b); next.structure.exercises[index].sets.forEach((set, i) => { set.round = rounds[i] })
-        }
-        next.input.exercises[index] = copiedExerciseInputs({ ...next.day, exercises: [replacement] }, profile.weightUnit)[0]
+        const next = replaceSessionExercise(value, occurrenceId, replacement, profile.weightUnit), old = value.day.exercises.find(e => e.id === occurrenceId)!
         next.revision++; next.updatedAt = new Date().toISOString()
         validateDraftInput(next.input, next.day)
         await database.drafts.put(next)
@@ -308,34 +291,19 @@ export function sessionService(database: BorosDatabase) {
     async startTimer(profileId: string, draftId: string, revision: number, exerciseId: string, setIndex: number, manualSeconds?: number) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId); const value = await draft(profileId, draftId); await editable(value, revision)
-        const index = value.day.exercises.findIndex((exercise) => exercise.id === exerciseId), exercise = value.day.exercises[index]
-        if (exercise?.groupId) throw new Error('Use the superset round rest, not a member rest.')
-        if (!exercise || !Number.isInteger(setIndex) || setIndex < 0 || setIndex >= exercise.prescription.sets.length) throw new Error('This rest position is unavailable.')
-        const afterExercise = setIndex === exercise.prescription.sets.length - 1
-        const seconds = (afterExercise ? exercise.prescription.restAfterSeconds : exercise.prescription.restBetweenSeconds) ?? manualSeconds
+        const timer = sessionRest(profileId, draftId, value, exerciseId, setIndex, false, manualSeconds)
         await assertTimerAvailable(database)
-        const startedAt = new Date().toISOString()
-        const timing = seconds === undefined ? { mode: 'countup' as const, startedAt } : { mode: 'countdown' as const, durationSeconds: seconds, endAt: timerEnd(seconds, Date.parse(startedAt)) }
-        if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
-        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, exerciseId, label: exercise.prescription.name, position: afterExercise ? 'Post-Exercise' : `Set ${setIndex + 1}`, ...timing }
-        await database.restTimers.put(timer); return timer
+        if (timer) await database.restTimers.put(timer); else await stopOwned(profileId, draftId)
+        return timer
       })
     },
     async startGroupTimer(profileId: string, draftId: string, revision: number, groupId: string, round: number, manualSeconds?: number) {
       return database.transaction('rw', tables, async () => {
         await owner(profileId); const value = await draft(profileId, draftId); await editable(value, revision)
-        const blocks = trainingBlocks(value.day), index = blocks.findIndex((block) => block.group?.id === groupId), block = blocks[index]
-        if (!block?.group || !Number.isInteger(round) || round < 0 || round >= sessionRounds(block.members, value.structure).length) throw new Error('This superset rest position is unavailable.')
-        const rounds = sessionRounds(block.members, value.structure), first = rounds[round][0]
-        const roundNumber = value.structure?.exercises.find(e => e.id === first.member.id)?.sets[first.index].round ?? round + 1
-        const after = round === rounds.length - 1
-        const seconds = (after ? block.group.restAfterGroupSeconds : block.group.restBetweenRoundsSeconds) ?? manualSeconds
+        const timer = sessionRest(profileId, draftId, value, groupId, round, true, manualSeconds)
         await assertTimerAvailable(database)
-        const startedAt = new Date().toISOString()
-        const timing = seconds === undefined ? { mode: 'countup' as const, startedAt } : { mode: 'countdown' as const, durationSeconds: seconds, endAt: timerEnd(seconds, Date.parse(startedAt)) }
-        if (seconds === 0) { await stopOwned(profileId, draftId); return undefined }
-        const timer: RestTimer = { id: 'active', token: createId(), profileId, draftId, groupId, label: `Superset ${block.group.number}`, position: after ? 'Post-Exercise' : `Set ${roundNumber}`, ...timing }
-        await database.restTimers.put(timer); return timer
+        if (timer) await database.restTimers.put(timer); else await stopOwned(profileId, draftId)
+        return timer
       })
     },
     async claimTimer(profileId: string, draftId: string, token: string) {
@@ -351,20 +319,9 @@ export function sessionService(database: BorosDatabase) {
         await owner(profileId); const value = await draft(profileId, draftId); await editable(value, value.revision)
         const timer = await database.restTimers.get('active')
         if (!timer || timer.profileId !== profileId || timer.draftId !== draftId || timer.token !== token) throw new Error('This timer changed or is unavailable in this session.')
-        if (action === 'stop') await database.restTimers.delete('active')
-        else if (action === 'pause') {
-          if (timer.mode !== 'countup' && !timer.pausedAt && Date.parse(timer.endAt) <= Date.now()) throw new Error('This timer finished.')
-          await assertTimerAvailable(database, undefined, token)
-          await database.restTimers.put({ ...timer, pausedAt: timer.pausedAt ?? new Date().toISOString() })
-        }
-        else if (action === 'resume' && timer.pausedAt) {
-          const delta = Date.now() - Date.parse(timer.pausedAt), shift = (at: string) => new Date(Date.parse(at) + delta).toISOString()
-          await database.restTimers.put({ ...timer, pausedAt: undefined, ...(timer.preparationEndAt ? { preparationEndAt: shift(timer.preparationEndAt) } : {}), ...(timer.mode === 'countup' ? { startedAt: shift(timer.startedAt) } : { endAt: shift(timer.endAt) }) })
-        } else if (action === 'reset') {
-          await assertTimerAvailable(database, undefined, token)
-          const startedAt = new Date().toISOString()
-          await database.restTimers.put({ ...timer, token: createId(), alertedAt: undefined, pausedAt: undefined, preparationEndAt: undefined, ...(timer.mode === 'countup' ? { startedAt } : { endAt: timerEnd(timer.durationSeconds, Date.parse(startedAt)) }) })
-        }
+        if (action !== 'stop') await assertTimerAvailable(database, undefined, token)
+        const next = changedRest(timer, action)
+        if (next) await database.restTimers.put(next); else await database.restTimers.delete('active')
       })
     },
   }

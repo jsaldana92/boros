@@ -76,3 +76,26 @@ export function appendSessionExercises(snapshot: SessionSnapshot, input: Session
   structure.amended = true
   return { day, structure, input: next }
 }
+
+// Used by live training and an isolated saved-session editing copy alike.
+export function replaceSessionExercise<T extends SessionSnapshot & { input: SessionInput }>(value: T, occurrenceId: string, replacement: PlanExercise, unit: WeightUnit): T {
+  const next = structuredClone(value), index = next.day.exercises.findIndex(e => e.id === occurrenceId)
+  if (index < 0) throw new Error('This exercise occurrence is unavailable.')
+  const old = next.day.exercises[index], copy = structuredClone(replacement)
+  assertSameTrainingType(next.day, copy.prescription)
+  copy.id = old.id; if (old.groupId) copy.groupId = old.groupId
+  next.day.exercises[index] = copy
+  next.structure ??= initialStructure(value.day)
+  next.structure.amended = true
+  next.structure.exercises[index] = initialStructure({ ...next.day, exercises: [copy] }).exercises[0]
+  if (old.groupId) {
+    const others = next.day.exercises.filter(e => e.groupId === old.groupId && e.id !== old.id)
+    const used = new Set(others.flatMap(e => next.structure!.exercises.find(x => x.id === e.id)!.sets.map(s => s.round)))
+    const max = Math.max(0, ...used), gaps = Array.from({ length: max }, (_, r) => r + 1).filter(r => !used.has(r))
+    const rounds = [...gaps.slice(0, copy.prescription.sets.length)]
+    for (let r = 1; rounds.length < copy.prescription.sets.length; r++) if (!rounds.includes(r)) rounds.push(r)
+    rounds.sort((a,b) => a-b); next.structure.exercises[index].sets.forEach((set, i) => { set.round = rounds[i] })
+  }
+  next.input.exercises[index] = copiedExerciseInputs({ ...next.day, exercises: [copy] }, unit)[0]
+  return next
+}

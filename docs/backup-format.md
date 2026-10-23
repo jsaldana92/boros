@@ -4,6 +4,16 @@ Current exports pair **backup v22 / database v16**; AI remains **v10**. Database
 `boros`, its stores/indexes and existing records are unchanged by v16. Errors
 abort and remain visible; upgrades never reset data or create a replacement DB.
 
+Saved Strength editing uses these existing contracts without a version bump.
+Save updates the session and its paired finalized draft in one transaction;
+both revisions increment and the draft's `updatedAt` records the edit time.
+Original session IDs, source/occurrence association, `startedAt`, `completedAt`,
+`loggedAt` and draft `finalizedAt` remain intact. JSON and CSV export the corrected
+snapshot/results/input, including Left/Right sides and blank/skip intent; checksums
+and restore validation remain unchanged. The in-memory editing copy is excluded
+from backups until explicitly saved. Missing or inconsistent finalized records
+produce an actionable editor error, never replacement records or guessed results.
+
 V22 extends the existing shared measurement record: optional `weightKg` (positive,
 at most 1000), optional `bodyFatPercentage` (finite, greater than 0 and less than
 100), with at least one present. Missing is absent, never zero or a previous value.
